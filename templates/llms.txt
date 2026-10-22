@@ -1,0 +1,21 @@
+# Project Name
+
+> High-impact, one-sentence executive summary of the product, tool, or service.
+
+## Core Capabilities
+
+- **Interactive Feature 1**: Brief description of the primary capability and input/output contracts.
+- **Interactive Feature 2**: Brief description of secondary tools or developer utilities.
+- **Data & APIs**: Information on real-time data feeds, public REST APIs, or MCP endpoints.
+
+## Documentation & Key Guides
+
+- [Getting Started](https://example.com/docs/getting-started/): Step-by-step developer integration tutorial.
+- [API Reference](https://example.com/docs/api/): Full endpoint schemas, authentication, and error codes.
+- [Interactive Tools Directory](https://example.com/tools/): Directory of free web-based developer calculators and utilities.
+- [Terms & Security](https://example.com/terms/): Privacy, terms of service, and enterprise data governance.
+
+## AI & Agent Access
+
+- [Full Machine-Readable Manifest](https://example.com/llms-full.txt): Complete uncompressed Markdown documentation for LLMs.
+- [OpenAPI Spec](https://example.com/api/openapi.json): Machine-readable API schema for agent tool calling.

@@ -1,0 +1,35 @@
+# Environments & Dependencies
+.venv/
+env/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# Data caches & databases
+.cache/
+*.db
+*.sqlite3
+cache.db
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local credentials & sensitive data
+.env
+.env.local
+*.key.json
+credentials.json
+token.json
+oauth.json
+
+# Outputs & temporary files
+tmp/
+dist/
+reports/
+*.tmp

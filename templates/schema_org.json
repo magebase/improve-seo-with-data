@@ -1,0 +1,93 @@
+{
+  "organization": {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Acme SaaS",
+    "url": "https://example.com",
+    "logo": "https://example.com/static/logos/logo.png",
+    "sameAs": [
+      "https://twitter.com/acme",
+      "https://github.com/acme"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "Customer Support",
+      "email": "support@example.com"
+    }
+  },
+  "website": {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Acme SaaS Platform",
+    "url": "https://example.com",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://example.com/search?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  },
+  "software_application": {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Acme Cloud Tool",
+    "operatingSystem": "All (Web-based)",
+    "applicationCategory": "DeveloperApplication",
+    "offers": {
+      "@type": "Offer",
+      "price": "0.00",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.9",
+      "ratingCount": "128"
+    }
+  },
+  "faq_page": {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How does the free tier work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The free tier includes access to all standard developer utilities with no credit card required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is there an API available for automated workflows?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, our REST and MCP endpoints allow complete programmatic access for developers and AI agents."
+        }
+      }
+    ]
+  },
+  "breadcrumbs": {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://example.com"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Developer Tools",
+        "item": "https://example.com/tools/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": "SMS Segment Calculator",
+        "item": "https://example.com/tools/sms-segment-calculator/"
+      }
+    ]
+  }
+}

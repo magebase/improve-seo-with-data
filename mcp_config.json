@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "seo": {
+      "command": "seo",
+      "args": ["mcp", "serve"],
+      "env": {
+        "GOOGLE_APPLICATION_CREDENTIALS": "${GOOGLE_APPLICATION_CREDENTIALS}"
+      }
+    }
+  }
+}
