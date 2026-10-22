@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DataSourceManifest",
+  "description": "Declares connection status, freshness, and capabilities across the SEO, analytics, and observability stack.",
+  "type": "object",
+  "required": ["site", "generated_at", "sources"],
+  "properties": {
+    "site": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "sources": {
+      "type": "object",
+      "required": ["gsc"],
+      "properties": {
+        "gsc": {
+          "type": "object",
+          "required": ["connected"],
+          "properties": {
+            "connected": { "type": "boolean" },
+            "property": { "type": ["string", "null"] },
+            "freshness_watermark": { "type": ["string", "null"] },
+            "days_available": { "type": "integer" },
+            "dimensions_available": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "ga4": {
+          "type": "object",
+          "required": ["connected"],
+          "properties": {
+            "connected": { "type": "boolean" },
+            "property_id": { "type": ["string", "null"] },
+            "conversion_events": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "freshness_watermark": { "type": ["string", "null"] }
+          }
+        },
+        "posthog": {
+          "type": "object",
+          "required": ["connected"],
+          "properties": {
+            "connected": { "type": "boolean" },
+            "funnels_tracked": { "type": "array", "items": { "type": "string" } },
+            "experiments_enabled": { "type": "boolean" }
+          }
+        },
+        "clarity": {
+          "type": "object",
+          "required": ["connected"],
+          "properties": {
+            "connected": { "type": "boolean" },
+            "project_id": { "type": ["string", "null"] },
+            "heatmaps_enabled": { "type": "boolean" }
+          }
+        },
+        "cloudflare": {
+          "type": "object",
+          "required": ["connected"],
+          "properties": {
+            "connected": { "type": "boolean" },
+            "zone_id": { "type": ["string", "null"] },
+            "logpush_enabled": { "type": "boolean" },
+            "workers_analytics_enabled": { "type": "boolean" }
+          }
+        },
+        "betterstack": {
+          "type": "object",
+          "required": ["connected"],
+          "properties": {
+            "connected": { "type": "boolean" },
+            "heartbeats_tracked": { "type": "integer" },
+            "active_incidents": { "type": "integer" }
+          }
+        },
+        "grafana": {
+          "type": "object",
+          "required": ["connected"],
+          "properties": {
+            "connected": { "type": "boolean" },
+            "rum_faro_enabled": { "type": "boolean" },
+            "cwv_telemetry_active": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

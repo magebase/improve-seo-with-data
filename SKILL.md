@@ -1,307 +1,222 @@
 ---
 name: improve-seo-with-data
 description: >-
-  Use this skill whenever you need to audit, diagnose, optimize, or scale a website's SEO, organic search visibility, or AI search footprint using real data. Triggers include "improve SEO", "SEO audit", "Search Console data", "ranking drop", "striking distance keywords", "CTR optimization", "cannibalization", "sitemap check", "robots.txt indexing", "programmatic SEO audit", "GEO / AI search readiness", "llms.txt", "observability stack", "clarity", "web vitals", or schema.org structured data. Connects to the SEO MCP server and local verification engines to turn raw metrics into actionable, evidence-backed code changes.
+  The authoritative, data-first SEO Growth & Conversion Operating System. Use this skill whenever you need to audit, diagnose, optimize, or scale a website's organic search visibility, conversion funnels, or AI search presence using real data. Automatically fetches and joins Google Search Console (GSC queries, pages, countries, devices, search appearance, and historical trends), Google Analytics 4 (GA4 landing-page conversions and revenue), PostHog (funnels and A/B experiments), Microsoft Clarity (heatmaps, rage clicks, and dead clicks), Cloudflare (edge delivery, 5xx/404 errors, and crawler logs), Better Stack (uptime incidents), and Grafana (Core Web Vitals). Formulates prioritized, effort-adjusted Action Queues and executes rigorous SEO matched-cohort and CRO experiments.
 ---
 
-# improve-seo-with-data
+# improve-seo-with-data: The SEO & Conversion Growth Operating System
 
-The authoritative, data-first SEO engineering and Generative Engine Optimization (GEO) skill for **Antigravity CLI (`agy`)**, **Claude Code**, and autonomous coding agents.
+An autonomous, data-first SEO engineering, conversion optimization, and Generative Engine Optimization (GEO) system for **Antigravity CLI (`agy`)**, **Claude Code**, and engineering fleets.
 
-This skill eliminates speculative "best practices" and guesswork. Every recommendation and code change is grounded in authentic, first-party data: **Google Search Console (GSC)** performance, **server & crawler access logs**, **live SERP snapshots**, and **LLM answer engine citations**.
+Eliminates speculative "best practices" and isolated dashboards. Turns multi-dimensional performance data into a prioritized, revenue-weighted growth engine that identifies where search visibility exists, diagnoses why it is not producing clicks or conversions, and continuously tests changes that compound business outcomes.
 
 ---
 
 ## Operating Invariants
 
-1. **Observability Precedes Optimization:** If a website cannot observe its organic search visitors, crawler hits, rage clicks, and conversion funnels, it is flying blind. Always audit and configure the observability stack before proceeding to keyword or template changes.
-2. **Evidence Before Action:** Never edit a title, canonical tag, or robots.txt file without first inspecting the data report.
-3. **Never Promise Specific Ranks:** Search algorithms and competitive landscapes fluctuate. Optimize for crawlability, user intent, click-through-rate (CTR), and topical depth—never guarantee a specific ranking.
-4. **Crawl Budget & Parameter Defense:** Guard crawler bandwidth by ensuring faceted query parameters (`?sort=`, `?filter=`, `?page=`) are governed by `Disallow: /*?*` in `robots.txt` and marked with `rel="nofollow"` on internal links, while keeping canonical URLs strictly static.
-5. **Programmatic Utility Over Thin Slop:** Programmatic SEO (pSEO) pages must deliver authentic, interactive utility (live calculators, converters, lookups, comparison matrices)—never low-value doorway text.
-6. **Generative Engine Optimization (GEO):** Ensure machine-readable documentation exists via [`llms.txt`](./templates/llms.txt), validated Schema.org JSON-LD is injected, and robots policies allow AI crawlers (`GPTBot`, `ClaudeBot`, `PerplexityBot`).
-7. **Closed-Loop Verification:** Always re-run the matching audit report or crawler after implementing code changes to verify 0 regressions.
+1. **Observability Precedes Optimization:** If a website cannot observe its organic search visitors, crawler hits, rage clicks, and conversion funnels, it is flying blind. Audit and configure the telemetry stack before modifying code or metadata.
+2. **The Growth Equation Over Vanity Metrics:**
+   $$\text{Impressions} \longrightarrow \text{Clicks} \longrightarrow \text{Qualified Visits} \longrightarrow \text{Conversions \& Revenue}$$
+   Every metric has a specific growth lever:
+   - *Impressions:* Indexation, topical depth, sitemap inclusion, semantic coverage, internal links.
+   - *Average Position:* Intent alignment, content depth, original calculation/data utility, authority.
+   - *CTR:* Title tags, meta descriptions, intent modifiers, Schema rich snippet eligibility.
+   - *Clicks:* Protecting winners, defending against cannibalization, expanding related clusters.
+   - *Conversions:* Landing page intent match, mobile UX, frictionless CTAs, value propositions.
+3. **Cross-Dimensional Synthesis (No Data Silos):** Never analyze queries, pages, countries, devices, search appearances, or dates in isolation. The highest-leverage opportunities emerge when you combine them (e.g., query cluster $\times$ landing page $\times$ device $\times$ GA4 conversion rate).
+4. **Traffic Change Decomposition:** Always decompose click changes between periods into underlying components before diagnosing drops:
+   $$\Delta C = (I_1 - I_0) R_0 + I_1 (R_1 - R_0)$$
+   Distinguish impression volume expansion/contraction from snippet engagement (CTR) shifts.
+5. **Separate SEO Experiments from CRO Experiments:**
+   - *SEO Experiments:* Matched URL cohorts evaluated via Difference-in-Differences (DiD). Never serve different HTML to Googlebot vs. human users.
+   - *Conversion Experiments:* Visitor-level randomized A/B tests managed through PostHog.
+6. **Query-Mix Adjustment:** Never infer sitewide snippet deterioration from an unadjusted drop in aggregate CTR. Hold query position, country, and device distributions constant to isolate true performance.
+7. **Crawl Budget & Parameter Defense:** Guard crawler bandwidth by ensuring faceted query parameters (`?sort=`, `?filter=`, `?page=`) are governed by `Disallow: /*?*` in `robots.txt` and marked with `rel="nofollow"` on internal links, while keeping canonical URLs strictly static.
+8. **Generative Engine Optimization (GEO):** Maintain machine-readable documentation via [`llms.txt`](./templates/llms.txt), validated Schema.org JSON-LD entity graphs, and explicit AI crawler permissions (`GPTBot`, `ClaudeBot`, `PerplexityBot`).
+9. **Auditable Action State Machine:** Every recommendation must enter a structured action queue (`seo-action.schema.json`) and transition through:
+   $$\text{Detected} \longrightarrow \text{Validated} \longrightarrow \text{Approved} \longrightarrow \text{Implemented} \longrightarrow \text{Evaluated} \longrightarrow \text{Learned}$$
+10. **Closed-Loop Verification:** Always re-run the matching audit report, crawler pass, or telemetry evaluator after implementing code changes to verify 0 regressions.
 
 ---
 
-## The 6-Phase Autonomous SEO Engine
+## System Architecture: 3 Data Planes & 1 Decision Engine
 
 ```
-[ Phase 0: Observability & Logging Stack Gate ]
-         │ (Audit GA4, Clarity, PostHog, IndexNow, RUM, Server Logs)
-         ▼
-[ Phase 1: Data Source & MCP Connect ]
-         │ (GSC OAuth / Service Account / Local Cache / 74 Reports)
-         ▼
-[ Phase 2: Technical & Crawl Health Audit ]
-         │ (site-crawl, canonicals, robots.txt, Core Web Vitals)
-         ▼
-[ Phase 3: Demand & Performance Analysis ]
-         │ (striking distance, CTR quick-wins, cannibalization, decay)
-         ▼
-[ Phase 4: Generative Engine Optimization (GEO) ]
-         │ (llms.txt, Schema.org JSON-LD, agent readiness)
-         ▼
-[ Phase 5: Code Remediation & Verification Loop ]
-           (templates, metadata, internal links, re-audit)
+┌────────────────────────────────────────────────────────────────────────┐
+│                        PLANE A: SEO & BUSINESS BI                      │
+│               GSC (Search Demand)  ·  GA4 (Conversions)               │
+│               PostHog (Funnels, Feature Adoption & A/B)                │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                        PLANE B: USER EXPERIENCE (UX)                   │
+│     Microsoft Clarity (Heatmaps, Rage Clicks, Dead Clicks, Scroll)     │
+│             PostHog Session Replay  ·  Browser Field RUM               │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                    PLANE C: TECHNICAL RELIABILITY                      │
+│   Cloudflare (Edge Status, Bot Logs, Latency, WAF, Workers Analytics)   │
+│       Better Stack (Uptime Incidents)  ·  Grafana / Faro (APM/CWV)     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                  CANONICAL SEO DECISION & ACTION ENGINE                │
+│       Detect  ──▶  Diagnose  ──▶  Score  ──▶  Approve  ──▶  Learn      │
+│                (Prioritized Auditable Action Queue)                    │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Phase 0: Observability & Logging Stack Health Gate
+## 7 Autonomous Operational Workflows
 
-Before auditing keywords or modifying code, verify that the website is in an **OPTIMAL data collection state**.
-
-### 0.1 Audit the Telemetry & Logging Stack
-Run the built-in observability scanner against the live site or the project codebase:
+### Workflow 1: Multi-Dimensional GSC & GA4 Opportunity Discovery
+Run the automated growth intelligence orchestrator to ingest GSC, GA4, and telemetry data:
 
 ```bash
-# Audit a live URL
-python3 scripts/setup_observability.py --url https://example.com
+# Automated live analysis against GSC property
+python3 scripts/seo_growth_intelligence.py --site sc-domain:example.com
 
-# Or audit local project source code/templates
-python3 scripts/setup_observability.py --scan-dir ./templates/
+# Or ingest historical GSC + GA4 exports with custom conversion values
+python3 scripts/seo_growth_intelligence.py \
+    --gsc-file /path/to/gsc_export.json \
+    --ga4-file /path/to/ga4_export.json \
+    --telemetry-file /path/to/telemetry.json \
+    --conv-value 25.0 \
+    --output-json /tmp/action_queue.json \
+    --output-md /tmp/action_queue.md
 ```
 
-The script evaluates the 6 critical pillars of modern SEO telemetry:
-1. **Web Analytics:** Google Analytics 4 (GA4) with GSC property linking.
-2. **Session Replay & Heatmaps:** Microsoft Clarity (unlimited free heatmaps, scroll depth, and rage-click tracking).
-3. **Product & Conversion Attribution:** PostHog capturing `initial_referrer`, `utm_source`, and landing page on signups.
-4. **Real User Monitoring (RUM):** Core Web Vitals (LCP, INP, CLS) captured in production.
-5. **Instant Search Indexing:** IndexNow protocol key file (`/<key>.txt`).
-6. **Error & Crawler Logging:** Sentry/Better Stack and server access log streaming for crawler analysis.
+The orchestrator executes the **5 Specialized Opportunity Detectors**:
+- **Detector A (CTR Opportunities):** Identifies positions 1–10 underperforming benchmark CTR:
+  $$\Delta C_{\text{CTR}} = I \times \max(0, \text{CTR}_{\text{benchmark}} - \text{CTR}_{\text{current}})$$
+- **Detector B (Ranking Opportunities):** Targets striking distance queries (positions 5.0 to 20.0) with high organic impressions.
+- **Detector C (Conversion Leakage):** Flags organic landing pages earning clicks but converting below 50% of cluster average, or displaying high PostHog dropoff / Clarity rage clicks.
+- **Detector D (Technical Risk):** Detects Cloudflare 5xx spikes, Better Stack downtime, or failing Core Web Vitals (LCP > 2.5s, INP > 200ms, CLS > 0.1).
+- **Detector E (Content Expansion & Cannibalization):** Resolves queries split across multiple URLs and identifies rising query clusters lacking authoritative pages.
 
-### 0.2 Remediate Suboptimal Observability
-If the state is `SUBOPTIMAL` or `UNCOLLECTED`, take immediate corrective action:
-
-1. **Deploy Drop-in Telemetry Snippet:**
-   Export and inject [`templates/telemetry_snippet.html`](./templates/telemetry_snippet.html) into the base HTML template:
-   ```bash
-   python3 scripts/setup_observability.py --export-snippet ./templates/telemetry_snippet.html
-   ```
-   This lightweight (<5KB) snippet initializes Microsoft Clarity, GA4, PostHog attribution, and Web Vitals RUM with zero external dependencies.
-
-2. **Generate IndexNow Key:**
-   To instantly alert search engines when new content publishes:
-   ```bash
-   python3 scripts/setup_observability.py --generate-indexnow-key --output-dir ./static/
-   ```
-   Ensure `/<key>.txt` is served at the web root.
-
-3. **Stream Server Access Logs for Crawler Auditing:**
-   Configure your web server (Nginx, Caddy, Cloudflare Logpush) to preserve user-agent strings. Stream access logs into the SEO MCP server:
-   ```bash
-   seo reports run server-log-analysis --params '{"logFile": "/var/log/nginx/access.log"}' --json
-   ```
-   This exposes exactly which pages `Googlebot`, `GPTBot`, `ClaudeBot`, and `PerplexityBot` are crawling or ignoring.
+Every action item is prioritized via:
+$$V = \Delta C \times r \times v \qquad\text{Priority Score } P = \frac{V \times q}{E + \text{Risk}}$$
 
 ---
 
-## Phase 1: Connection & MCP Health Verification
+### Workflow 2: Period-over-Period Traffic Change Decomposition
+When diagnosing traffic gains or declines across 7-day, 28-day, or 90-day intervals:
 
-Verify that the **`seo`** MCP server and CLI are connected and functioning.
-
-### 1.1 Verify MCP Availability in Antigravity
-The `seo` MCP server provides 74 structured reports. Test the connection:
-```python
-# Call via Antigravity MCP tool
-call_mcp_tool(ServerName="seo", ToolName="seo_list_reports", Arguments={})
-```
-
-Alternatively, run the automated verification script:
 ```bash
-python3 scripts/verify_mcp.py
+python3 scripts/gsc_analyzer.py --compare-periods period0_baseline.json period1_recent.json
 ```
 
-### 1.2 Check CLI & Auth Status
-Run the doctor command to inspect local database cache and Google credentials:
-```bash
-seo doctor --json
-```
+Separates impression volume changes from snippet engagement changes:
+$$\Delta C = (I_1 - I_0) R_0 + I_1 (R_1 - R_0)$$
 
-- When auditing a **live or local site without Search Console access**, crawl reports work out-of-the-box (`seo report --url <URL>`).
-- When Search Console is connected, pass `--site sc-domain:<domain>` or `--site https://<domain>/`.
+- **Impression Effect $> 0$, CTR Effect $\ge 0$:** Organic demand or indexation expansion.
+- **Impression Effect $\ge 0$, CTR Effect $< 0$:** Snippet appeal deterioration or SERP layout displacement.
+- **Impression Effect $< 0$, CTR Effect $\ge 0$:** Broader search demand contraction or lost keyword rankings.
+- **Compound Decline:** Critical algorithmic or technical indexation penalty.
 
 ---
 
-## Phase 2: Technical & Crawl Health Audit
+### Workflow 3: Conversion Leakage & UX Friction Diagnosis
+When search clicks fail to convert:
 
-Technical integrity is the foundation of all organic indexing. A page blocked by a misplaced `noindex`, broken canonical, or redirect chain will never rank.
-
-### 2.1 Run Full Site or Single URL Audit
-To audit a site and capture high-priority technical findings:
-```bash
-# Full technical crawl (zero third-party dependencies required)
-seo report --url https://example.com --actions-only --json > /tmp/seo_audit.json
-
-# Or audit specific high-priority URLs:
-python3 scripts/run_audit.py --url https://example.com
-```
-
-With MCP:
-```python
-call_mcp_tool(
-    ServerName="seo",
-    ToolName="seo_run_report",
-    Arguments={
-        "id": "site-crawl",
-        "params": {"url": "https://example.com", "maxPages": 250}
-    }
-)
-```
-
-### 2.2 Inspect Critical Technical Signals
-1. **HTTP Status Codes:** Identify 404s, 500s, and 301/302 redirect hops using the `redirect-trace` report.
-2. **Canonical Consistency:** Ensure `canonical` tags are self-referential on primary pages and never point to redirected or 404 targets.
-3. **Indexation Guards:** Verify `<meta name="robots" content="index, follow">` is present on public pages and `noindex, nofollow` is restricted to administrative/auth routes.
-4. **Facet Crawl Budget Shield:** Ensure query parameter facets are prevented from creating infinite duplicate URLs:
-   ```txt
-   # robots.txt standard
-   User-agent: *
-   Disallow: /*?*
-   Disallow: /admin/
-   Disallow: /api/
-   Sitemap: https://example.com/sitemap.xml
-   ```
+1. **GA4 Audit:** Locate landing pages where organic session volume is high but conversion rate ($r$) is depressed.
+2. **PostHog Funnel Scan:** Inspect step-by-step drop-offs to determine where users abandon the journey.
+3. **Clarity Friction Investigation:**
+   - Filter Clarity session recordings by the affected landing page and device category (`MOBILE` vs. `DESKTOP`).
+   - Inspect **Rage Clicks** (repeated rapid clicks on unresponsive controls) and **Dead Clicks** (clicks on unlinked cards or non-interactive headings).
+   - Inspect **Scroll Depth**: check if the primary value proposition or CTA is placed below the 50% scroll dropoff line.
+4. **Formulate CRO Intervention:** Simplify mobile inputs, sticky-position the primary CTA, or reconcile mismatched search intent.
 
 ---
 
-## Phase 3: Demand & Performance Analysis (Search Console)
+### Workflow 4: Technical Reliability & Incident Correlation
+Correlate operational failures with search crawl and ranking anomalies:
 
-Translate first-party Search Console impressions and click metrics into direct ranking gains.
-
-Run the automated GSC performance analyzer:
-```bash
-python3 scripts/gsc_analyzer.py --site sc-domain:example.com
-```
-
-### 3.1 Striking Distance Keywords (Positions 11 to 20)
-Pages averaging positions 11 to 20 are on Google's Page 2. A modest relevance boost can push them to Page 1, creating exponential click gains.
-
-- **MCP Report:** `striking-distance`
-  ```python
-  call_mcp_tool(
-      ServerName="seo",
-      ToolName="seo_run_report",
-      Arguments={
-          "id": "striking-distance",
-          "params": {"site": "sc-domain:example.com", "minImpressions": 50}
-      }
-  )
-  ```
-- **Remediation Action:**
-  - Inject the exact query phrasing into `<h2>` subheadings or opening paragraphs.
-  - Add contextual internal links with matching anchor text from high-authority authority pages (e.g. homepage, category hubs).
-  - Expand the section to directly answer secondary intent questions.
-
-### 3.2 Low-CTR Quick Wins (High Impressions, Low Clicks)
-Pages ranking in positions 1 to 5 with click-through-rates significantly below industry benchmarks (e.g. <3% on Pos 2-3) suffer from weak titles or snippets.
-
-- **MCP Report:** `quick-wins`
-- **Remediation Action:**
-  - Rewrite `<title>` tags to include high-converting intent modifiers (`Best`, `Free`, `Calculator`, `Online`, Current Year).
-  - Add emotional or utilitarian hooks in `<meta name="description">`.
-  - Add Schema.org `FAQPage` or `SoftwareApplication` markup to trigger rich snippet real estate in SERPs.
-
-### 3.3 Query Cannibalization
-When multiple URLs rank for the identical query, Google divides page authority, causing both to underperform.
-
-- **MCP Report:** `cannibalisation`
-- **Remediation Action:**
-  - Determine the single canonical owner for the topic.
-  - Consolidate thin competing pages into the primary authority URL via 301 redirect or explicit canonical link.
-  - Differentiate secondary pages by reframing their focus to distinct sub-topics.
-
-### 3.4 Decaying Content Refresh
-Identify pages whose 90-day search traffic has dropped $>20\%$ compared to the previous period.
-
-- **MCP Report:** `decaying-pages`
-- **Remediation Action:**
-  - Refresh outdated data, statistics, and broken outbound references.
-  - Add updated sections addressing current market changes.
+1. **Cloudflare Edge Logs:**
+   - Monitor 5xx response spikes and 404 error clusters.
+   - Verify Googlebot identity using official IP reverse DNS lookups; never trust raw User-Agent headers alone.
+2. **Better Stack Downtime Correlation:**
+   - Map outage start and end timestamps against GSC crawl activity and impression trendlines.
+3. **Core Web Vitals Telemetry (Grafana / Faro):**
+   - Ensure LCP $\le 2.5\text{s}$, INP $\le 200\text{ms}$, and CLS $\le 0.1$.
+   - Prioritize speed fixes on high-impression commercial pages first.
 
 ---
 
-## Phase 4: Generative Engine Optimization (GEO) & AI Search Readiness
+### Workflow 5: Multi-Market & Device Gap Optimization
+Segment performance across `country` and `device` dimensions:
 
-Modern SEO requires optimizing not just for traditional crawler bots, but for LLM-powered answer engines: **Perplexity**, **ChatGPT Search**, **Claude**, and **Google AI Overviews**.
-
-Run the AI readiness evaluator:
 ```bash
+python3 scripts/gsc_analyzer.py --export gsc_multi_dimensional.json
+```
+
+- **Geographic Arbitrage:**
+  - *High impressions, low CTR in Country X:* Localize snippets, currencies, and vernacular terminology.
+  - *High clicks, low conversions in Country X:* Evaluate local pricing elasticity, payment gateway availability, or shipping/language mismatches.
+  - *High conversions, modest traffic in Country X:* Prime target for international directory expansion or dedicated localized subdomains.
+- **Device Ergonomics:**
+  - If mobile CTR is $>25\%$ lower than desktop for the identical query position, audit mobile SERP snippet length (Google truncates mobile titles at ~480px vs ~580px desktop).
+  - If mobile conversion rate collapses while desktop thrives, audit responsive form inputs, sticky overlays, and touch target sizes (minimum 44x44px).
+
+---
+
+### Workflow 6: Experiment Design & Evaluation
+Never guess whether an SEO or CRO change worked. Use structured experiment protocols:
+
+1. **SEO Experiments (Matched URL Cohorts):**
+   - Select 20 comparable URLs; assign 10 to **Treatment** and 10 to **Control (Holdout)**.
+   - Apply title, schema, or content changes exclusively to the Treatment group.
+   - Evaluate after 28 days using **Difference-in-Differences**:
+     $$\text{Net Treatment Lift} = (\text{Treatment}_{t1} - \text{Treatment}_{t0}) - (\text{Control}_{t1} - \text{Control}_{t0})$$
+2. **CRO Experiments (Visitor-Level A/B Tests):**
+   - Use PostHog to randomize human visitors 50/50 across Control and Variant layouts.
+   - Keep underlying HTML markup, headings, and indexable text identical for search crawlers.
+   - Measure signup/purchase conversion lift at $p < 0.05$.
+
+---
+
+### Workflow 7: Generative Engine Optimization (GEO) & Machine-Readable Discovery
+Ensure search visibility across LLM answer engines (**ChatGPT Search**, **Perplexity**, **Claude**, **Google AI Overviews**):
+
+```bash
+# Validate AI search readiness
 python3 scripts/geo_evaluator.py --url https://example.com
 ```
 
-### 4.1 Deploy `llms.txt` and `llms-full.txt`
-Place a standardized [`llms.txt`](./templates/llms.txt) in the site root (`/llms.txt`). This provides an authoritative, structured index for AI agents crawling the site.
-- Include core company value proposition.
-- Outline key products, tools, and programmatic endpoints.
-- Provide clean links to full documentation and markdown resources.
+1. **Deploy [`llms.txt`](./templates/llms.txt):** Serve a standardized, markdown-formatted directory at `/llms.txt` and `/llms-full.txt` detailing capabilities, products, and calculation APIs.
+2. **Permit AI Crawlers in `robots.txt`:**
+   ```txt
+   User-agent: GPTBot
+   Allow: /
 
-### 4.2 Verify Robots.txt AI Bot Permissions
-Ensure your `robots.txt` explicitly allows or configures access for AI user agents:
-```txt
-User-agent: GPTBot
-Allow: /
+   User-agent: ClaudeBot
+   Allow: /
 
-User-agent: ClaudeBot
-Allow: /
-
-User-agent: PerplexityBot
-Allow: /
-```
-
-### 4.3 Schema.org JSON-LD Structured Data
-Inject rich JSON-LD markup on every template. See [`templates/schema_org.json`](./templates/schema_org.json) for:
-- `Organization` & `WebSite` (with Sitelinks Searchbox) on the homepage.
-- `SoftwareApplication` or `Product` on SaaS landing pages.
-- `FAQPage` on landing and comparison pages.
-- `BreadcrumbList` across all hierarchical routes.
+   User-agent: PerplexityBot
+   Allow: /
+   ```
+3. **Structured Schema.org Entity Graphs:**
+   - Homepage: Injected unified `@graph` containing `Organization`, `WebSite` with `SearchAction` sitelinks template, and `SoftwareApplication`.
+   - Tool & Content Pages: Dynamic `BreadcrumbList` hierarchy and `FAQPage` JSON-LD schema matching visible, accessible FAQ accordions.
 
 ---
 
-## Phase 5: Code Remediation & Verification Loop
+## Tool & Script Inventory
 
-Once findings are identified, execute precise code modifications across the application layers:
-
-### Step 1: Data Contracts & Templates
-Update HTML templates, Django views, or frontend components to fix meta tags, headings, schema markup, or internal links.
-- Preserve semantic HTML (`<main>`, `<article>`, `<header>`, `<footer>`).
-- Ensure all images have descriptive `alt` tags and explicit dimensions (`width`, `height`).
-- Replace Unicode emojis with clean IconKit vector SVGs (`aria-hidden="true"`).
-
-### Step 2: Local Verification & Build Check
-Before deploying or committing:
-1. Verify template syntax and rendering:
-   ```bash
-   python manage.py check --deploy
-   ```
-2. Re-run local crawler against the development build:
-   ```bash
-   seo report --url http://127.0.0.1:8000 --actions-only --json
-   ```
-3. Re-run the observability and GEO evaluators:
-   ```bash
-   python3 scripts/setup_observability.py --scan-dir ./templates/
-   python3 scripts/geo_evaluator.py --url http://127.0.0.1:8000
-   ```
-4. Confirm that previously flagged defects are resolved (`fixed`).
-
----
-
-## Tool & Script Reference
-
-| Tool / Script | Purpose |
-|---------------|---------|
-| [`scripts/setup_observability.py`](./scripts/setup_observability.py) | Audits, configures, and heals the telemetry, logging, and IndexNow stack. |
-| [`scripts/verify_mcp.py`](./scripts/verify_mcp.py) | Verifies MCP server connection, available reports, and credentials. |
-| [`scripts/run_audit.py`](./scripts/run_audit.py) | Runs technical crawl and single-page audits with action item extraction. |
-| [`scripts/gsc_analyzer.py`](./scripts/gsc_analyzer.py) | Analyzes Search Console for striking distance, quick wins, and decay. |
-| [`scripts/geo_evaluator.py`](./scripts/geo_evaluator.py) | Validates AI readiness, `llms.txt`, and structured data. |
-| [`references/observability_stack_guide.md`](./references/observability_stack_guide.md) | Modern $0 Observability & Telemetry Architecture manual. |
-| [`references/mcp_catalog.md`](./references/mcp_catalog.md) | Exhaustive catalog of all 74 MCP reports across 9 categories. |
-| [`references/geo_playbook.md`](./references/geo_playbook.md) | Comprehensive Generative Engine Optimization guide. |
-| [`references/gsc_optimization_runbook.md`](./references/gsc_optimization_runbook.md) | Query clustering, striking distance, and CTR tuning manual. |
-| [`templates/telemetry_snippet.html`](./templates/telemetry_snippet.html) | High-performance multi-provider analytics & RUM snippet. |
-| [`templates/llms.txt`](./templates/llms.txt) | Production-ready `llms.txt` template. |
-| [`templates/schema_org.json`](./templates/schema_org.json) | Tested Schema.org JSON-LD templates. |
-| [`templates/audit_report_template.html`](./templates/audit_report_template.html) | Standalone, accessible client audit report template. |
+| Tool / Script | Authoritative Function |
+| :--- | :--- |
+| [`scripts/seo_growth_intelligence.py`](./scripts/seo_growth_intelligence.py) | **The Master Engine:** Ingests multi-source telemetry, executes 5 opportunity detectors, computes expected values, and emits prioritized Action Queues. |
+| [`scripts/gsc_analyzer.py`](./scripts/gsc_analyzer.py) | Multi-dimensional Search Console analyzer for queries, pages, countries, devices, and period-over-period traffic decomposition. |
+| [`scripts/setup_observability.py`](./scripts/setup_observability.py) | Scans, validates, heals, and exports telemetry manifests (`DataSourceManifest`) and drop-in tracking snippets. |
+| [`scripts/geo_evaluator.py`](./scripts/geo_evaluator.py) | Scores AI agent readiness, evaluates `llms.txt`, and validates Schema.org JSON-LD structured data. |
+| [`scripts/run_audit.py`](./scripts/run_audit.py) | High-speed technical crawler pass for status codes, canonical consistency, and crawl budget parameter defense. |
+| [`schemas/seo-action.schema.json`](./schemas/seo-action.schema.json) | Standardized JSON Schema for prioritized, auditable SEO and CRO action cards. |
+| [`schemas/data-source-manifest.schema.json`](./schemas/data-source-manifest.schema.json) | Declares connection status, freshness watermarks, and capabilities across all 7 telemetry platforms. |
+| [`references/gsc_multidimensional_playbook.md`](./references/gsc_multidimensional_playbook.md) | Exhaustive guide on extracting maximum value from GSC dimensions, decomposition math, and query clustering. |
+| [`references/seo_growth_os_architecture.md`](./references/seo_growth_os_architecture.md) | The 3-plane system architecture, Cloudflare hybrid storage model, and tool responsibility boundaries. |
+| [`references/conversion_diagnosis_and_experimentation.md`](./references/conversion_diagnosis_and_experimentation.md) | Joining search demand to conversions, PostHog funnels, Clarity heuristics, and matched-cohort experimentation. |
+| [`templates/seo_action_queue.md`](./templates/seo_action_queue.md) | Executive markdown template for the prioritized action queue. |
+| [`templates/experiment_plan.md`](./templates/experiment_plan.md) | Pre-formatted test plan for SEO matched-cohort and CRO visitor-level experiments. |
