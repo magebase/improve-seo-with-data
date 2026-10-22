@@ -70,6 +70,75 @@ Eliminates speculative "best practices" and isolated dashboards. Turns multi-dim
 
 ---
 
+## The Core Mission: Turn SEO Data into Page-Level Decisions
+
+When an agent is asked to **improve a domain or website**, its primary mission is to translate every meaningful pattern across GSC, GA4, PostHog, Clarity, and technical telemetry into one of **six mutually exclusive page-level actions**:
+
+1. **Improve an existing page**
+2. **Create a new page**
+3. **Improve a shared template**
+4. **Build a new template**
+5. **Consolidate overlapping pages**
+6. **Make no change**
+
+### 1. The Decision Matrix
+
+| What the Data Tells You | What to Change (The Action) | What NOT to Do |
+| :--- | :--- | :--- |
+| A page ranks for relevant queries around positions 5–20. | **Improve the existing page's** usefulness, intent coverage, internal links, and result presentation. | Automatically create another page for the same topic. |
+| High impressions but low CTR versus comparable results. | **Investigate and test the title**, page messaging, and snippet relevance on the existing page. | Change titles based only on a sitewide CTR benchmark. |
+| A cluster of related queries is growing and existing page already addresses intent. | **Add useful sections, examples, comparisons, or an interactive tool** to the existing URL. | Split every keyword variation into a separate URL. |
+| A valuable query cluster has a distinct intent and no suitable landing page. | **Create a new, purpose-built page** passing the 7-factor quality gate. | Create a thin page that merely rephrases an existing one. |
+| Hundreds of pages share the same structural or component problem. | **Improve the shared template**, after testing the change on a matched cohort. | Manually patch hundreds of URLs one at a time. |
+| Several URLs target essentially the same search intent. | **Differentiate their purpose or consolidate** overlapping content via canonical/301. | Redirect pages just because their impressions are low. |
+| Visitors click but rarely convert (high traffic, weak conversions). | **Improve the landing experience, offer, or funnel** (CTA, mobile layout, inputs). | Publish more informational articles to solve a conversion problem. |
+| Pages are inaccessible, incorrectly canonicalized, or failing to render. | **Fix the underlying delivery, rendering, or technical defect**. | Keep generating pages that have the same technical blocker. |
+| A page has no meaningful demand, unique value, or business purpose. | **Reassess its role; improve, consolidate, retire, or leave it alone**. | Keep expanding the site merely to increase URL count. |
+
+### 2. The Existing-Page Improvement Workflow
+For each important URL, check and edit these 6 areas in strict order:
+1. **Title & Search-Result Messaging:** Align `<title>`, `<meta name="description">`, and visible `<h1>`. Use accurate intent modifiers (`Free`, `Online`, `Calculator`, `Instant`, Current Year). *Do not inject FAQPage schema expecting FAQ rich snippets (Google removed FAQ rich snippets).*
+2. **The First Screen of Content (Above the Fold):** Deliver immediate clarity—can visitors instantly see what the tool does, who it is for, and how to get the answer?
+3. **Missing Topic Coverage:** Ingest GSC's actual query variations to add unanswered sub-topics, parameters, or edge-case explanations.
+4. **Original Value & Interactive Utility:** Provide what competitors lack: a working deterministic calculator, verified data tables, comparison criteria, or proprietary benchmarks.
+5. **Internal Links:** Add crawlable HTML links (`<a href="...">`) with concise, natural anchor text from relevant category hubs.
+6. **Conversion Experience:** Fix mobile input reflow, remove dead/rage clicks identified in Clarity, and streamline the primary CTA.
+
+### 3. The New-Page Decision Process & 7-Factor Quality Gate
+> **The unit of page creation is a distinct search intent and user task, NOT an individual keyword query.**
+
+A new page is created **ONLY** when an unmet query cluster exists and passes all 7 quality factors:
+1. *Demand:* Verified relevant impressions in GSC.
+2. *Intent Gap:* No existing page properly satisfies this specific user task.
+3. *Business Value:* The audience has a clear, valuable next step (signup, calculation, checkout).
+4. *Unique Value:* Adds original proprietary data, code, or interactive tool.
+5. *Differentiation:* Distinct from existing URLs; zero cannibalization risk.
+6. *Cost & Maintenance:* Can be maintained when underlying data shifts.
+7. *Risk & Quality:* Zero thin doorway text; passes Google spam & helpful content standards.
+
+### 4. The 5 Standard Template Archetypes
+1. *Editorial / Guide Template:* For informational queries (answers, context, author, citations).
+2. *Comparison Template:* For "A vs B" & "Best Alternative" queries (decision criteria, comparison matrix).
+3. *Tool / Calculator Template:* For functional calculation queries (interactive inputs, instant outputs).
+4. *Directory / Category Template:* For browsing and discovery queries (structured filters, crawlable detail links).
+5. *Localized / Market-Specific Template:* For real regional differences (currencies, regulations, service areas).
+
+### 5. Priority Execution Order & The 5 Mandatory Questions
+Always execute in this sequence:
+1. **P1: Technical Blockers First** (5xx errors, broken canonicals, robots indexation shields).
+2. **P2: Valuable Existing Pages Second** (CTR gaps, striking-distance positions 5–20).
+3. **P3: Shared Templates Third** (Fix component speed, layout shifts, or mobile UX across hundreds of pages).
+4. **P4: New Pages & Tools Fourth** (Genuinely missing intents passing the 7-factor quality gate).
+
+Every recommendation emitted must answer:
+1. *Target Scope:* Which specific URL, page cohort, or shared template should change?
+2. *Page-Level Action:* Which of the 6 actions is being executed?
+3. *Supporting Evidence:* Which GSC, GA4, PostHog, Clarity, or Cloudflare telemetry data supports this?
+4. *Measurable Target Metric:* What exact measurable outcome should improve?
+5. *Scale / Rollback Protocol:* How will you determine whether to scale, revise, or reverse the intervention?
+
+---
+
 ## 7 Autonomous Operational Workflows
 
 ### Workflow 1: Multi-Dimensional GSC & GA4 Opportunity Discovery

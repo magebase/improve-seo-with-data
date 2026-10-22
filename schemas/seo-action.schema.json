@@ -8,6 +8,7 @@
     "site",
     "target_urls",
     "opportunity_type",
+    "page_level_action",
     "evidence_sources",
     "hypothesis",
     "proposed_action",
@@ -46,6 +47,28 @@
         "content_expansion_or_consolidation"
       ],
       "description": "Which of the 5 core opportunity detectors generated this item."
+    },
+    "page_level_action": {
+      "type": "string",
+      "enum": [
+        "improve_existing_page",
+        "create_new_page",
+        "improve_shared_template",
+        "build_new_template",
+        "consolidate_overlapping_pages",
+        "no_change"
+      ],
+      "description": "The exact page-level decision executed."
+    },
+    "decision_framework": {
+      "type": "object",
+      "properties": {
+        "target_scope": { "type": "string", "description": "1. Which specific URL, cohort, or template changes?" },
+        "action_type": { "type": "string", "description": "2. Should the action be an edit, new page, new template, consolidation, or fix?" },
+        "supporting_evidence": { "type": "string", "description": "3. Which evidence supports that decision?" },
+        "measurable_outcome": { "type": "string", "description": "4. What measurable outcome should improve?" },
+        "scale_or_rollback_protocol": { "type": "string", "description": "5. How will you determine whether to scale, revise, or reverse?" }
+      }
     },
     "evidence_sources": {
       "type": "array",

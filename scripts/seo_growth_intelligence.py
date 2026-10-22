@@ -189,6 +189,14 @@ def detect_ctr_opportunities(
                     "page_group": "high_intent_calculators",
                     "target_urls": [page],
                     "opportunity_type": "ctr_improvement",
+                    "page_level_action": "improve_existing_page",
+                    "decision_framework": {
+                        "target_scope": f"URL: {page}",
+                        "action_type": "improve_existing_page",
+                        "supporting_evidence": f"Query '{query}' at position {pos:.1f} achieved {ctr*100:.1f}% CTR vs expected benchmark {benchmark_ctr*100:.1f}% ({impressions} impressions).",
+                        "measurable_outcome": f"Recoverable click lift (+{incremental_clicks:.0f} clicks) from restoring CTR to {benchmark_ctr*100:.1f}%.",
+                        "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched URL holdout cohort.",
+                    },
                     "evidence_sources": ["gsc"],
                     "evidence_details": [{
                         "source": "gsc",
@@ -261,6 +269,14 @@ def detect_ranking_opportunities(
                 "page_group": "striking_distance",
                 "target_urls": [page],
                 "opportunity_type": "ranking_opportunity",
+                "page_level_action": "improve_existing_page",
+                "decision_framework": {
+                    "target_scope": f"URL: {page}",
+                    "action_type": "improve_existing_page",
+                    "supporting_evidence": f"Striking distance query '{query}' averages position {pos:.1f} with {impressions} impressions.",
+                    "measurable_outcome": f"Position lift to top 3 and incremental qualified click volume (+{potential_clicks:.0f} clicks).",
+                    "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched control cohort.",
+                },
                 "evidence_sources": ["gsc"],
                 "evidence_details": [{
                     "source": "gsc",
@@ -272,7 +288,7 @@ def detect_ranking_opportunities(
                         "impressions": impressions,
                     },
                 }],
-                "hypothesis": f"Target page has established topical authority but lacks dedicated H2 section and contextual internal links for '{query}'. Adding targeted semantic content will lift position to Page 1.",
+                "hypothesis": f"Target page has established topical authority but lacks dedicated H2 section, original computational utility, and contextual internal links for '{query}'. Adding targeted semantic content will lift position to Page 1.",
                 "expected_impact": {
                     "incremental_clicks_low": round(potential_clicks * 0.5, 0),
                     "incremental_clicks_high": round(potential_clicks * 1.5, 0),
@@ -285,7 +301,7 @@ def detect_ranking_opportunities(
                 "effort": "medium",
                 "risk": "low",
                 "priority_score": p_score,
-                "proposed_action": f"Expand {page} with dedicated H2 explaining '{query}', inject FAQPage schema, and link from relevant category hubs.",
+                "proposed_action": f"Expand {page} with dedicated H2 and original utility for '{query}', link from relevant category hubs, and align visible title/H1 tags.",
                 "experiment_method": "matched_url_cohort",
                 "status": "detected",
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -354,6 +370,14 @@ def detect_conversion_leakage(
                 "page_group": "conversion_funnels",
                 "target_urls": [page],
                 "opportunity_type": "conversion_leakage",
+                "page_level_action": "improve_existing_page",
+                "decision_framework": {
+                    "target_scope": f"URL: {page}",
+                    "action_type": "improve_existing_page",
+                    "supporting_evidence": f"GA4 conversion rate is {c_rate*100:.2f}% (benchmark: {avg_conv_rate*100:.2f}%) across {sessions} organic sessions.",
+                    "measurable_outcome": f"Incremental conversions (+{recoverable_conversions:.1f}) from lifting landing page conversion rate.",
+                    "scale_or_rollback_protocol": "Visitor-level PostHog A/B test evaluated at 95% statistical significance.",
+                },
                 "evidence_sources": [e["source"] for e in evidence],
                 "evidence_details": evidence,
                 "hypothesis": f"Landing page satisfies initial search curiosity but friction in CTA clarity, mobile layout, or input latency prevents visitors from completing conversion.",
@@ -400,6 +424,14 @@ def detect_technical_risks(
                 "page_group": "edge_delivery",
                 "target_urls": affected_routes,
                 "opportunity_type": "technical_risk",
+                "page_level_action": "improve_shared_template",
+                "decision_framework": {
+                    "target_scope": f"Routes: {', '.join(affected_routes)}",
+                    "action_type": "improve_shared_template",
+                    "supporting_evidence": f"Cloudflare recorded {status_5xx} HTTP 5xx edge errors across routes.",
+                    "measurable_outcome": "Zero 5xx errors and normal search crawler HTTP 200 response rate.",
+                    "scale_or_rollback_protocol": "Real-time edge log monitoring and automated canary rollback on 5xx breach.",
+                },
                 "evidence_sources": ["cloudflare"],
                 "evidence_details": [{
                     "source": "cloudflare",
@@ -434,6 +466,14 @@ def detect_technical_risks(
                 "page_group": "uptime",
                 "target_urls": [url],
                 "opportunity_type": "technical_risk",
+                "page_level_action": "improve_shared_template",
+                "decision_framework": {
+                    "target_scope": f"URL: {url}",
+                    "action_type": "improve_shared_template",
+                    "supporting_evidence": f"Better Stack detected downtime lasting {duration_min} minutes.",
+                    "measurable_outcome": "99.99% uptime availability and zero crawler dropouts.",
+                    "scale_or_rollback_protocol": "Synthetic uptime checks every 60 seconds with instant failover.",
+                },
                 "evidence_sources": ["betterstack"],
                 "evidence_details": [{
                     "source": "betterstack",
@@ -465,6 +505,14 @@ def detect_technical_risks(
                     "page_group": "web_vitals",
                     "target_urls": [page],
                     "opportunity_type": "technical_risk",
+                    "page_level_action": "improve_shared_template",
+                    "decision_framework": {
+                        "target_scope": f"Page/Template: {page}",
+                        "action_type": "improve_shared_template",
+                        "supporting_evidence": f"Core Web Vitals failing: LCP={lcp:.2f}s, INP={inp}ms, CLS={cls:.3f}.",
+                        "measurable_outcome": "Pass Core Web Vitals assessment (LCP <= 2.5s, INP <= 200ms, CLS <= 0.1).",
+                        "scale_or_rollback_protocol": "Synthetic Lighthouse and real-user RUM monitoring post-deploy.",
+                    },
                     "evidence_sources": ["grafana"],
                     "evidence_details": [{
                         "source": "grafana",
@@ -524,6 +572,14 @@ def detect_content_expansion_and_cannibalization(
                     "page_group": "cannibalization_clusters",
                     "target_urls": urls,
                     "opportunity_type": "content_expansion_or_consolidation",
+                    "page_level_action": "consolidate_overlapping_pages",
+                    "decision_framework": {
+                        "target_scope": f"Competing URLs: {', '.join(urls)}",
+                        "action_type": "consolidate_overlapping_pages",
+                        "supporting_evidence": f"Query '{q}' is split across {len(urls)} URLs ({total_imp} impressions, {total_clicks} clicks).",
+                        "measurable_outcome": "Unification of split click volume on primary canonical URL and elimination of keyword cannibalization.",
+                        "scale_or_rollback_protocol": "Monitor rank consolidation over 28 days via GSC.",
+                    },
                     "evidence_sources": ["gsc"],
                     "evidence_details": [{
                         "source": "gsc",
@@ -643,6 +699,11 @@ def orchestrate_seo_growth(
     all_actions.sort(key=lambda x: x["priority_score"], reverse=True)
 
     # Manifest
+    page_action_counts = {}
+    for a in all_actions:
+        p_act = a.get("page_level_action", "improve_existing_page")
+        page_action_counts[p_act] = page_action_counts.get(p_act, 0) + 1
+
     manifest = {
         "site": site,
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -654,6 +715,7 @@ def orchestrate_seo_growth(
             "technical_risk": len(tech_actions),
             "content_expansion_or_consolidation": len(expansion_actions),
         },
+        "page_level_decisions": page_action_counts,
         "actions": all_actions,
     }
     return manifest
@@ -665,34 +727,43 @@ def format_markdown_report(manifest: Dict[str, Any]) -> str:
     md.append(f"# SEO Growth Intelligence & Action Queue: {manifest['site']}")
     md.append(f"**Generated:** {manifest['generated_at']} | **Total Actions:** {manifest['total_actions_detected']}\n")
 
-    md.append("## Opportunity Distribution")
+    md.append("## 1. Page-Level Decision Breakdown")
+    for act_name, count in manifest.get("page_level_decisions", {}).items():
+        label = act_name.replace('_', ' ').title()
+        md.append(f"- **{label}:** {count} action(s)")
+    md.append("")
+
+    md.append("## 2. Opportunity Detector Distribution")
     for act_type, count in manifest["actions_by_type"].items():
         md.append(f"- **{act_type.replace('_', ' ').title()}:** {count}")
     md.append("")
 
-    md.append("## Prioritized SEO & Conversion Action Queue")
-    md.append("| Priority | Action ID | Type | Target URL | Expected Val | Confidence | Proposed Action |")
+    md.append("## 3. Prioritized SEO & Conversion Action Queue")
+    md.append("| Priority | Action ID | Decision | Target URL | Expected Val | Confidence | Proposed Action |")
     md.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
 
     for a in manifest["actions"]:
         p_score = a["priority_score"]
         a_id = a["action_id"]
-        o_type = a["opportunity_type"]
+        decision = a.get("page_level_action", "improve_existing_page").replace('_', ' ').title()
         target = a["target_urls"][0] if a["target_urls"] else "/"
         exp_val = a["expected_impact"].get("expected_incremental_value", 0.0)
         conf = a["confidence"]
         prop = a["proposed_action"]
-        md.append(f"| **{p_score:.1f}** | `{a_id}` | `{o_type}` | `{target}` | ${exp_val:.2f} | {conf} | {prop} |")
+        md.append(f"| **{p_score:.1f}** | `{a_id}` | `{decision}` | `{target}` | ${exp_val:.2f} | {conf} | {prop} |")
 
-    md.append("\n## Detailed Action Briefs")
+    md.append("\n## 4. Detailed Action Briefs (5 Mandatory Questions Answered)")
     for a in manifest["actions"][:10]:
-        md.append(f"### `{a['action_id']}` — {a['proposed_action']}")
-        md.append(f"- **Opportunity Type:** {a['opportunity_type']}")
-        md.append(f"- **Target URLs:** {', '.join(a['target_urls'])}")
-        md.append(f"- **Priority Score:** {a['priority_score']} (Effort: {a['effort']}, Risk: {a['risk']})")
-        md.append(f"- **Hypothesis:** {a['hypothesis']}")
-        md.append(f"- **Evaluation Method:** `{a['experiment_method']}`")
-        md.append("- **Evidence:**")
+        df = a.get("decision_framework", {})
+        md.append(f"### [`{a['action_id']}`] {a['proposed_action']}")
+        md.append(f"- **1. Target Scope:** `{df.get('target_scope', ', '.join(a['target_urls']))}`")
+        md.append(f"- **2. Page-Level Action:** `{a.get('page_level_action', 'improve_existing_page')}`")
+        md.append(f"- **3. Supporting Evidence:** {df.get('supporting_evidence', a['hypothesis'])}")
+        md.append(f"- **4. Measurable Target Metric:** {df.get('measurable_outcome', 'Organic Clicks / Conversions')}")
+        md.append(f"- **5. Scale / Rollback Protocol:** {df.get('scale_or_rollback_protocol', '28-day Difference-in-Differences against holdout cohort')}")
+        md.append(f"- **Priority Score:** {a['priority_score']} (Effort: `{a['effort']}`, Risk: `{a['risk']}`, Confidence: `{a['confidence']}`)")
+        md.append(f"- **Underlying Hypothesis:** {a['hypothesis']}")
+        md.append("- **Raw Telemetry Evidence:**")
         for ev in a["evidence_details"]:
             md.append(f"  - `[{ev['source'].upper()}]` {ev['observation']}")
         md.append("")
