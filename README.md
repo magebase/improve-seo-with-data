@@ -4,17 +4,20 @@
 [![Antigravity Compatible](https://img.shields.io/badge/Antigravity-Skill-purple.svg)](https://github.com/magebase/improve-seo-with-data)
 [![MCP Server: seo](https://img.shields.io/badge/MCP-74%20Reports-green.svg)](references/mcp_catalog.md)
 
-Autonomous, data-driven SEO engineering and Generative Engine Optimization (GEO) skill for **Google Antigravity CLI (`agy`)**, **Claude Code**, **Cursor**, and multi-agent developer fleets.
+Autonomous, data-driven SEO engineering, Observability, and Generative Engine Optimization (GEO) skill for **Google Antigravity CLI (`agy`)**, **Claude Code**, **Cursor**, and multi-agent developer fleets.
 
-Eliminates superficial "best practice" checklists and speculative keyword guessing. Every audit, diagnosis, and code modification is backed by authentic first-party data: **Google Search Console (GSC)** performance, **technical crawler logs**, **live SERP rankings**, and **LLM answer engine citations**.
+Eliminates superficial "best practice" checklists and speculative keyword guessing. Every audit, diagnosis, and code modification is backed by authentic first-party data: **Google Search Console (GSC)** performance, **real user monitoring (RUM)**, **server & crawler access logs**, **live SERP rankings**, and **LLM answer engine citations**.
 
 ---
 
-## Architecture: The 5-Phase Closed Loop
+## Architecture: The 6-Phase Closed Loop
 
 ```
+[ Phase 0: Observability & Logging Stack Gate ]
+         │ (Audit GA4, Clarity, PostHog, IndexNow, RUM, Server Logs)
+         ▼
 [ Phase 1: Data Source & MCP Connect ]
-         │ (GSC OAuth / Service Account / Local Cache)
+         │ (GSC OAuth / Service Account / Local Cache / 74 Reports)
          ▼
 [ Phase 2: Technical & Crawl Health Pass ]
          │ (site-crawl, canonicals, robots.txt, Core Web Vitals)
@@ -33,12 +36,13 @@ Eliminates superficial "best practice" checklists and speculative keyword guessi
 
 ## Key Capabilities
 
-1. **Striking Distance Optimization (Positions 11 to 20):** Identifies keywords sitting on Google Page 2 that have high impressions and delivers targeted subheading, topical content, and internal link improvements to push them to Page 1.
-2. **Low-CTR Quick Wins:** Discovers pages ranking in positions 1 to 7 with CTR below position benchmarks and optimizes title tag hooks, meta descriptions, and rich snippet markup.
-3. **Generative Engine Optimization (GEO):** Audits and optimizes discoverability across Perplexity, ChatGPT Search, Claude, and Google AI Overviews using structured [`llms.txt`](templates/llms.txt), validated Schema.org JSON-LD, and AI crawler permissions.
-4. **Crawl Budget & Facet Defense:** Protects search index health by ensuring faceted query parameters (`?filter=`, `?page=`) are blocked via `Disallow: /*?*` and flagged with `rel="nofollow"`, eliminating index bloat.
-5. **Programmatic SEO (pSEO) Quality Gates:** Enforces interactive, high-utility tools (calculators, formatters, diagnostic lookups) over thin doorway content.
-6. **Query Cannibalization Resolution:** Detects multiple URLs competing for identical queries and provides clean 301 consolidation or canonical ownership runbooks.
+1. **Observability & Logging Stack Setup (`scripts/setup_observability.py`):** Audits whether the web application is collecting optimal telemetry (GA4, Microsoft Clarity, PostHog attribution, Core Web Vitals RUM, IndexNow, Sentry/BetterStack). Automatically generates drop-in templates and IndexNow keys if uncollected.
+2. **Striking Distance Optimization (Positions 11 to 20):** Identifies keywords sitting on Google Page 2 that have high impressions and delivers targeted subheading, topical content, and internal link improvements to push them to Page 1.
+3. **Low-CTR Quick Wins:** Discovers pages ranking in positions 1 to 7 with CTR below position benchmarks and optimizes title tag hooks, meta descriptions, and rich snippet markup.
+4. **Generative Engine Optimization (GEO):** Audits and optimizes discoverability across Perplexity, ChatGPT Search, Claude, and Google AI Overviews using structured [`llms.txt`](templates/llms.txt), validated Schema.org JSON-LD, and AI crawler permissions.
+5. **Crawl Budget & Facet Defense:** Protects search index health by ensuring faceted query parameters (`?filter=`, `?page=`) are blocked via `Disallow: /*?*` and flagged with `rel="nofollow"`, eliminating index bloat.
+6. **Programmatic SEO (pSEO) Quality Gates:** Enforces interactive, high-utility tools (calculators, formatters, diagnostic lookups) over thin doorway content.
+7. **Query Cannibalization Resolution:** Detects multiple URLs competing for identical queries and provides clean 301 consolidation or canonical ownership runbooks.
 
 ---
 
@@ -101,6 +105,21 @@ claude mcp add seo seo mcp serve
 
 ## CLI & Automation Quickstarts
 
+### 0. Audit & Setup the Observability Stack
+```bash
+# Scan a live website
+python3 scripts/setup_observability.py --url https://example.com
+
+# Or scan local template codebase
+python3 scripts/setup_observability.py --scan-dir ./templates/
+
+# Export drop-in high-performance telemetry snippet
+python3 scripts/setup_observability.py --export-snippet ./templates/telemetry_snippet.html
+
+# Generate an IndexNow key for instant search submission
+python3 scripts/setup_observability.py --generate-indexnow-key --output-dir ./static/
+```
+
 ### 1. Verify Environment & MCP Health
 ```bash
 python3 scripts/verify_mcp.py
@@ -140,15 +159,18 @@ improve-seo-with-data/
 ├── LICENSE                           # MIT License
 ├── mcp_config.json                   # MCP server definition schema
 ├── scripts/
+│   ├── setup_observability.py        # Observability & telemetry stack auditor & setup tool
 │   ├── verify_mcp.py                 # MCP and CLI diagnostic runner
 │   ├── run_audit.py                  # Technical crawl & single-page audit engine
 │   ├── gsc_analyzer.py               # GSC performance, striking distance & CTR tool
 │   └── geo_evaluator.py              # AI search readiness & llms.txt validator
 ├── references/
+│   ├── observability_stack_guide.md  # Modern $0 Observability & Telemetry architecture manual
 │   ├── mcp_catalog.md                # Complete 74-report catalog and schemas
 │   ├── geo_playbook.md               # Generative Engine Optimization manual
 │   └── gsc_optimization_runbook.md   # Query clustering & CTR tuning runbook
 └── templates/
+    ├── telemetry_snippet.html        # High-performance multi-provider analytics & RUM snippet
     ├── llms.txt                      # Production-grade AI agent documentation
     ├── schema_org.json               # Validated JSON-LD rich snippet templates
     └── audit_report_template.html    # Standalone, clean client audit deliverable
@@ -158,6 +180,7 @@ improve-seo-with-data/
 
 ## Core Invariants
 
+- **Observability First:** If a site is in an uncollected state, configure telemetry before attempting optimization.
 - **Evidence-First:** Every recommendation links to an authentic finding ID, URL inventory, or Search Console metric.
 - **Never Promise Ranks:** Algorithms and competitors fluctuate; optimize for crawlability, intent, and CTR.
 - **No Unicode Emojis in UI:** Production web interfaces and reports strictly use clean vector SVGs or text markers.

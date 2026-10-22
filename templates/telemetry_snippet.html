@@ -1,0 +1,100 @@
+<!-- ================================================================= -->
+<!-- Antigravity High-Fidelity $0 Observability & Telemetry Suite        -->
+<!-- Components: Microsoft Clarity, GA4, PostHog Attribution, WebVitals -->
+<!-- ================================================================= -->
+
+<!-- 1. Microsoft Clarity (Unlimited Free Session Replay & Rage Clicks) -->
+<script type="text/javascript">
+  (function(c,l,a,r,i,t,y){
+    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+  })(window, document, "clarity", "script", "{{ CLARITY_PROJECT_ID|default:'XXXXXXXXXX' }}");
+</script>
+
+<!-- 2. Google Analytics 4 (Organic Search & Referrer Performance) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ GA4_MEASUREMENT_ID|default:'G-XXXXXXXXXX' }}"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', '{{ GA4_MEASUREMENT_ID|default:"G-XXXXXXXXXX" }}', {
+    send_page_view: true,
+    cookie_flags: 'SameSite=None;Secure'
+  });
+</script>
+
+<!-- 3. PostHog Organic Landing & Campaign Attribution Helper -->
+<script>
+  !(function (t, e) {
+    var o, n, p, r;
+    e.__SV ||
+      ((window.posthog = e),
+      (e._i = []),
+      (e.init = function (i, s, a) {
+        function g(t, e) {
+          var o = e.split(".");
+          2 == o.length && ((t = t[o[0]]), (e = o[1])),
+            (t[e] = function () {
+              t.push([e].concat(Array.prototype.slice.call(arguments, 0)));
+            });
+        }
+        ((p = t.createElement("script")).type = "text/javascript"),
+          (p.async = !0),
+          (p.src = s.api_host + "/static/array.js"),
+          (r = t.getElementsByTagName("script")[0]).parentNode.insertBefore(p, r);
+        var u = e;
+        for (
+          void 0 !== a ? (u = e[a] = []) : (a = "posthog"),
+            u.people = u.people || [],
+            u.toString = function (t) {
+              var e = "posthog";
+              return "posthog" !== a && (e += "." + a), t || (e += " (stub)"), e;
+            },
+            u.people.toString = function () {
+              return u.toString(1) + ".people (stub)";
+            },
+            o = "init capture register register_once identify".split(" "),
+            n = 0;
+          n < o.length;
+          n++
+        )
+          g(u, o[n]);
+        e._i.push([i, s, a]);
+      }),
+      (e.__SV = 1));
+  })(document, window.posthog || []);
+
+  posthog.init('{{ POSTHOG_API_KEY|default:"phc_XXXXXXXXXX" }}', {
+    api_host: '{{ POSTHOG_HOST|default:"https://us.i.posthog.com" }}',
+    autocapture: true,
+    capture_pageview: true,
+    capture_pageleave: true,
+    persistence: 'localStorage'
+  });
+</script>
+
+<!-- 4. Core Web Vitals RUM Telemetry (LCP, INP, CLS) -->
+<script type="module">
+  import { onCLS, onINP, onLCP } from 'https://unpkg.com/web-vitals@4/dist/web-vitals.attribution.js?module';
+  function sendToTelemetry(metric) {
+    if (window.gtag) {
+      window.gtag('event', metric.name, {
+        value: Math.round(metric.name === 'CLS' ? metric.value * 1000 : metric.value),
+        event_category: 'Web Vitals',
+        event_label: metric.id,
+        non_interaction: true,
+      });
+    }
+    if (window.posthog && window.posthog.capture) {
+      window.posthog.capture('web_vital_metric', {
+        metric_name: metric.name,
+        metric_value: metric.value,
+        metric_rating: metric.rating,
+      });
+    }
+  }
+  onCLS(sendToTelemetry);
+  onINP(sendToTelemetry);
+  onLCP(sendToTelemetry);
+</script>

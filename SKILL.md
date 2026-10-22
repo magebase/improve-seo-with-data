@@ -1,33 +1,37 @@
 ---
 name: improve-seo-with-data
 description: >-
-  Use this skill whenever you need to audit, diagnose, optimize, or scale a website's SEO, organic search visibility, or AI search footprint using real data. Triggers include "improve SEO", "SEO audit", "Search Console data", "ranking drop", "striking distance keywords", "CTR optimization", "cannibalization", "sitemap check", "robots.txt indexing", "programmatic SEO audit", "GEO / AI search readiness", "llms.txt", or schema.org structured data. Connects to the SEO MCP server and local verification engines to turn raw metrics into actionable, evidence-backed code changes.
+  Use this skill whenever you need to audit, diagnose, optimize, or scale a website's SEO, organic search visibility, or AI search footprint using real data. Triggers include "improve SEO", "SEO audit", "Search Console data", "ranking drop", "striking distance keywords", "CTR optimization", "cannibalization", "sitemap check", "robots.txt indexing", "programmatic SEO audit", "GEO / AI search readiness", "llms.txt", "observability stack", "clarity", "web vitals", or schema.org structured data. Connects to the SEO MCP server and local verification engines to turn raw metrics into actionable, evidence-backed code changes.
 ---
 
 # improve-seo-with-data
 
-The authoritative, data-first SEO engineering skill for **Antigravity CLI (`agy`)**, **Claude Code**, and autonomous coding agents.
+The authoritative, data-first SEO engineering and Generative Engine Optimization (GEO) skill for **Antigravity CLI (`agy`)**, **Claude Code**, and autonomous coding agents.
 
-This skill eliminates speculative "best practices" and guesswork. Every recommendation and code change is grounded in authentic, first-party data: **Google Search Console (GSC)** performance, **technical crawler logs**, **live SERP snapshots**, and **AI search citations (GEO)**.
+This skill eliminates speculative "best practices" and guesswork. Every recommendation and code change is grounded in authentic, first-party data: **Google Search Console (GSC)** performance, **server & crawler access logs**, **live SERP snapshots**, and **LLM answer engine citations**.
 
 ---
 
 ## Operating Invariants
 
-1. **Evidence Before Action:** Never edit a title, canonical tag, or robots.txt file without first inspecting the data report.
-2. **Never Promise Specific Ranks:** Search algorithms and competitive landscapes fluctuate. Optimize for crawlability, user intent, click-through-rate (CTR), and topical depth—never guarantee a specific ranking.
-3. **Crawl Budget & Parameter Defense:** Guard crawler bandwidth by ensuring faceted query parameters (`?sort=`, `?filter=`, `?page=`) are governed by `Disallow: /*?*` in `robots.txt` and marked with `rel="nofollow"` on internal links, while keeping canonical URLs strictly static.
-4. **Programmatic Utility Over Thin Slop:** Programmatic SEO (pSEO) pages must deliver authentic, interactive utility (live calculators, converters, lookups, comparison matrices)—never low-value doorway text.
-5. **Generative Engine Optimization (GEO):** Ensure machine-readable documentation exists via [`llms.txt`](./templates/llms.txt), validated Schema.org JSON-LD is injected, and robots policies allow AI crawlers (`GPTBot`, `ClaudeBot`, `PerplexityBot`).
-6. **Closed-Loop Verification:** Always re-run the matching audit report or crawler after implementing code changes to verify 0 regressions.
+1. **Observability Precedes Optimization:** If a website cannot observe its organic search visitors, crawler hits, rage clicks, and conversion funnels, it is flying blind. Always audit and configure the observability stack before proceeding to keyword or template changes.
+2. **Evidence Before Action:** Never edit a title, canonical tag, or robots.txt file without first inspecting the data report.
+3. **Never Promise Specific Ranks:** Search algorithms and competitive landscapes fluctuate. Optimize for crawlability, user intent, click-through-rate (CTR), and topical depth—never guarantee a specific ranking.
+4. **Crawl Budget & Parameter Defense:** Guard crawler bandwidth by ensuring faceted query parameters (`?sort=`, `?filter=`, `?page=`) are governed by `Disallow: /*?*` in `robots.txt` and marked with `rel="nofollow"` on internal links, while keeping canonical URLs strictly static.
+5. **Programmatic Utility Over Thin Slop:** Programmatic SEO (pSEO) pages must deliver authentic, interactive utility (live calculators, converters, lookups, comparison matrices)—never low-value doorway text.
+6. **Generative Engine Optimization (GEO):** Ensure machine-readable documentation exists via [`llms.txt`](./templates/llms.txt), validated Schema.org JSON-LD is injected, and robots policies allow AI crawlers (`GPTBot`, `ClaudeBot`, `PerplexityBot`).
+7. **Closed-Loop Verification:** Always re-run the matching audit report or crawler after implementing code changes to verify 0 regressions.
 
 ---
 
-## 5-Phase Autonomous SEO Engine
+## The 6-Phase Autonomous SEO Engine
 
 ```
+[ Phase 0: Observability & Logging Stack Gate ]
+         │ (Audit GA4, Clarity, PostHog, IndexNow, RUM, Server Logs)
+         ▼
 [ Phase 1: Data Source & MCP Connect ]
-         │ (GSC OAuth / Service Account / Local Cache)
+         │ (GSC OAuth / Service Account / Local Cache / 74 Reports)
          ▼
 [ Phase 2: Technical & Crawl Health Audit ]
          │ (site-crawl, canonicals, robots.txt, Core Web Vitals)
@@ -44,9 +48,58 @@ This skill eliminates speculative "best practices" and guesswork. Every recommen
 
 ---
 
+## Phase 0: Observability & Logging Stack Health Gate
+
+Before auditing keywords or modifying code, verify that the website is in an **OPTIMAL data collection state**.
+
+### 0.1 Audit the Telemetry & Logging Stack
+Run the built-in observability scanner against the live site or the project codebase:
+
+```bash
+# Audit a live URL
+python3 scripts/setup_observability.py --url https://example.com
+
+# Or audit local project source code/templates
+python3 scripts/setup_observability.py --scan-dir ./templates/
+```
+
+The script evaluates the 6 critical pillars of modern SEO telemetry:
+1. **Web Analytics:** Google Analytics 4 (GA4) with GSC property linking.
+2. **Session Replay & Heatmaps:** Microsoft Clarity (unlimited free heatmaps, scroll depth, and rage-click tracking).
+3. **Product & Conversion Attribution:** PostHog capturing `initial_referrer`, `utm_source`, and landing page on signups.
+4. **Real User Monitoring (RUM):** Core Web Vitals (LCP, INP, CLS) captured in production.
+5. **Instant Search Indexing:** IndexNow protocol key file (`/<key>.txt`).
+6. **Error & Crawler Logging:** Sentry/Better Stack and server access log streaming for crawler analysis.
+
+### 0.2 Remediate Suboptimal Observability
+If the state is `SUBOPTIMAL` or `UNCOLLECTED`, take immediate corrective action:
+
+1. **Deploy Drop-in Telemetry Snippet:**
+   Export and inject [`templates/telemetry_snippet.html`](./templates/telemetry_snippet.html) into the base HTML template:
+   ```bash
+   python3 scripts/setup_observability.py --export-snippet ./templates/telemetry_snippet.html
+   ```
+   This lightweight (<5KB) snippet initializes Microsoft Clarity, GA4, PostHog attribution, and Web Vitals RUM with zero external dependencies.
+
+2. **Generate IndexNow Key:**
+   To instantly alert search engines when new content publishes:
+   ```bash
+   python3 scripts/setup_observability.py --generate-indexnow-key --output-dir ./static/
+   ```
+   Ensure `/<key>.txt` is served at the web root.
+
+3. **Stream Server Access Logs for Crawler Auditing:**
+   Configure your web server (Nginx, Caddy, Cloudflare Logpush) to preserve user-agent strings. Stream access logs into the SEO MCP server:
+   ```bash
+   seo reports run server-log-analysis --params '{"logFile": "/var/log/nginx/access.log"}' --json
+   ```
+   This exposes exactly which pages `Googlebot`, `GPTBot`, `ClaudeBot`, and `PerplexityBot` are crawling or ignoring.
+
+---
+
 ## Phase 1: Connection & MCP Health Verification
 
-Before running reports, verify that the **`seo`** MCP server and CLI are connected and functioning.
+Verify that the **`seo`** MCP server and CLI are connected and functioning.
 
 ### 1.1 Verify MCP Availability in Antigravity
 The `seo` MCP server provides 74 structured reports. Test the connection:
@@ -132,7 +185,7 @@ Pages averaging positions 11 to 20 are on Google's Page 2. A modest relevance bo
       ToolName="seo_run_report",
       Arguments={
           "id": "striking-distance",
-          "params": {"site": "sc-domain:example.com", "minImpressions": 100}
+          "params": {"site": "sc-domain:example.com", "minImpressions": 50}
       }
   )
   ```
@@ -226,7 +279,12 @@ Before deploying or committing:
    ```bash
    seo report --url http://127.0.0.1:8000 --actions-only --json
    ```
-3. Confirm that previously flagged defects are resolved (`fixed`).
+3. Re-run the observability and GEO evaluators:
+   ```bash
+   python3 scripts/setup_observability.py --scan-dir ./templates/
+   python3 scripts/geo_evaluator.py --url http://127.0.0.1:8000
+   ```
+4. Confirm that previously flagged defects are resolved (`fixed`).
 
 ---
 
@@ -234,13 +292,16 @@ Before deploying or committing:
 
 | Tool / Script | Purpose |
 |---------------|---------|
+| [`scripts/setup_observability.py`](./scripts/setup_observability.py) | Audits, configures, and heals the telemetry, logging, and IndexNow stack. |
 | [`scripts/verify_mcp.py`](./scripts/verify_mcp.py) | Verifies MCP server connection, available reports, and credentials. |
 | [`scripts/run_audit.py`](./scripts/run_audit.py) | Runs technical crawl and single-page audits with action item extraction. |
 | [`scripts/gsc_analyzer.py`](./scripts/gsc_analyzer.py) | Analyzes Search Console for striking distance, quick wins, and decay. |
 | [`scripts/geo_evaluator.py`](./scripts/geo_evaluator.py) | Validates AI readiness, `llms.txt`, and structured data. |
+| [`references/observability_stack_guide.md`](./references/observability_stack_guide.md) | Modern $0 Observability & Telemetry Architecture manual. |
 | [`references/mcp_catalog.md`](./references/mcp_catalog.md) | Exhaustive catalog of all 74 MCP reports across 9 categories. |
 | [`references/geo_playbook.md`](./references/geo_playbook.md) | Comprehensive Generative Engine Optimization guide. |
 | [`references/gsc_optimization_runbook.md`](./references/gsc_optimization_runbook.md) | Query clustering, striking distance, and CTR tuning manual. |
+| [`templates/telemetry_snippet.html`](./templates/telemetry_snippet.html) | High-performance multi-provider analytics & RUM snippet. |
 | [`templates/llms.txt`](./templates/llms.txt) | Production-ready `llms.txt` template. |
 | [`templates/schema_org.json`](./templates/schema_org.json) | Tested Schema.org JSON-LD templates. |
 | [`templates/audit_report_template.html`](./templates/audit_report_template.html) | Standalone, accessible client audit report template. |
