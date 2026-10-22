@@ -31,31 +31,65 @@ from typing import Any, Dict
 STACK_SIGNATURES = {
     "google_analytics": {
         "name": "Google Analytics 4 (GA4)",
-        "patterns": [r"googletagmanager\.com/gtag/js", r"G-[A-Z0-9]{8,12}", r"gtag\s*\(\s*['\"]config['\"]"],
+        "patterns": [
+            r"googletagmanager\.com/gtag/js",
+            r"G-[A-Z0-9]{8,12}",
+            r"gtag\s*\(\s*['\"]config['\"]",
+            r"\{\{\s*observability_head\s*\}\}",
+            r"\{%\s*observability_head\s*%\}",
+        ],
         "category": "Web Analytics",
         "free_tier": "Free (Unlimited standard events)",
     },
     "microsoft_clarity": {
         "name": "Microsoft Clarity",
-        "patterns": [r"clarity\.ms/tag/", r"c\.queue\.push", r"clarity\s*\(\s*['\"]set['\"]"],
+        "patterns": [
+            r"clarity\.ms/tag/",
+            r"c\.queue\.push",
+            r"clarity\s*\(\s*['\"]set['\"]",
+            r"\{\{\s*observability_head\s*\}\}",
+            r"\{%\s*observability_head\s*%\}",
+        ],
         "category": "Session Replay & Heatmaps",
         "free_tier": "100% Free (Unlimited recordings, heatmaps, rage clicks)",
     },
     "posthog": {
         "name": "PostHog Product Analytics",
-        "patterns": [r"posthog\.init", r"us\.i\.posthog\.com", r"eu\.i\.posthog\.com", r"posthog-js"],
+        "patterns": [
+            r"posthog\.init",
+            r"us\.i\.posthog\.com",
+            r"eu\.i\.posthog\.com",
+            r"posthog-js",
+            r"\{\{\s*observability_head\s*\}\}",
+            r"\{%\s*observability_head\s*%\}",
+        ],
         "category": "Product Analytics & Funnels",
         "free_tier": "Free (1,000,000 events/month)",
     },
     "core_web_vitals": {
         "name": "Core Web Vitals Telemetry (RUM)",
-        "patterns": [r"web-vitals", r"onLCP", r"onINP", r"onCLS", r"PerformanceObserver.*largest-contentful-paint"],
+        "patterns": [
+            r"web-vitals",
+            r"onLCP",
+            r"onINP",
+            r"onCLS",
+            r"PerformanceObserver.*largest-contentful-paint",
+            r"\{\{\s*observability_head\s*\}\}",
+            r"\{%\s*observability_head\s*%\}",
+        ],
         "category": "Performance RUM",
         "free_tier": "Open Source / Browser API",
     },
     "sentry_or_betterstack": {
         "name": "Sentry / Better Stack Error Logging",
-        "patterns": [r"@sentry/browser", r"sentry\.io", r"betterstack\.com", r"uptime\.betterstack"],
+        "patterns": [
+            r"@sentry/browser",
+            r"sentry\.io",
+            r"betterstack\.com",
+            r"uptime\.betterstack",
+            r"\{\{\s*observability_head\s*\}\}",
+            r"\{%\s*observability_head\s*%\}",
+        ],
         "category": "Error & Uptime Tracking",
         "free_tier": "Free tiers available",
     },
@@ -106,7 +140,20 @@ def scan_local_directory(scan_dir: str) -> Dict[str, Dict[str, Any]]:
     file_extensions = (".html", ".htm", ".js", ".jsx", ".ts", ".tsx", ".vue", ".svelte", ".py")
 
     for root, _, files in os.walk(scan_dir):
-        if any(skip in root for skip in ("node_modules", ".git", ".venv", "dist", "build", "cache")):
+        if any(
+            skip in root
+            for skip in (
+                "node_modules",
+                ".git",
+                ".venv",
+                "dist",
+                "build",
+                "cache",
+                ".svelte-kit",
+                "target",
+                ".lighthouseci",
+            )
+        ):
             continue
         for f in files:
             if f.endswith(file_extensions):
