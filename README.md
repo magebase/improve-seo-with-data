@@ -43,6 +43,7 @@ Eliminates superficial "best practice" checklists and speculative keyword guessi
 5. **Crawl Budget & Facet Defense:** Protects search index health by ensuring faceted query parameters (`?filter=`, `?page=`) are blocked via `Disallow: /*?*` and flagged with `rel="nofollow"`, eliminating index bloat.
 6. **Programmatic SEO (pSEO) Quality Gates:** Enforces interactive, high-utility tools (calculators, formatters, diagnostic lookups) over thin doorway content.
 7. **Query Cannibalization Resolution:** Detects multiple URLs competing for identical queries and provides clean 301 consolidation or canonical ownership runbooks.
+8. **Direct Empirical Data Traceability:** Every action in an action queue, report, or executive summary explicitly cites and tracks back to a direct observation in data (GSC query/impression/CTR delta, crawl issue date/URL, GA4 conversion rate, PostHog funnel dropoff, or Clarity rage clicks). Speculative actions lacking empirical data are strictly prohibited.
 
 ---
 

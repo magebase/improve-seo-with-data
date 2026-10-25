@@ -20,10 +20,10 @@
 
 ## Action Queue Backlog
 
-| Rank | Action ID | Type | Target URL | Expected Impact | Confidence | Effort | Proposed Action |
+| Rank | Action ID | Type | Target URL | Direct Data Observation | Proposed Action | Expected Impact | Confidence |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 {% for a in actions %}
-| **{{ loop.index }}** | `{{ a.action_id }}` | `{{ a.opportunity_type }}` | `{{ a.target_urls[0] }}` | ${{ a.expected_impact.expected_incremental_value }} | {{ a.confidence }} | {{ a.effort }} | {{ a.proposed_action }} |
+| **{{ loop.index }}** | `{{ a.action_id }}` | `{{ a.opportunity_type }}` | `{{ a.target_urls[0] }}` | {{ a.direct_observation }} | {{ a.proposed_action }} | ${{ a.expected_impact.expected_incremental_value }} | {{ a.confidence }} |
 {% endfor %}
 
 ---
@@ -33,6 +33,7 @@
 {% for a in actions %}
 ### [`{{ a.action_id }}`] {{ a.proposed_action }}
 
+- **Direct Data Observation:** {{ a.direct_observation }}
 - **Target URLs:** `{{ a.target_urls | join(', ') }}`
 - **Opportunity Type:** `{{ a.opportunity_type }}`
 - **Priority Score:** **{{ a.priority_score }}** (Confidence: `{{ a.confidence }}`, Effort: `{{ a.effort }}`, Risk: `{{ a.risk }}`)

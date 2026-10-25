@@ -100,7 +100,15 @@ def evaluate_html_page(html: str) -> Dict[str, Any]:
         except Exception:
             pass
 
-    schema_types = [b.get("@type") for b in json_ld_blocks if isinstance(b, dict) and "@type" in b]
+    schema_types: List[str] = []
+    for b in json_ld_blocks:
+        if isinstance(b, dict):
+            if "@type" in b and isinstance(b["@type"], str):
+                schema_types.append(b["@type"])
+            if "@graph" in b and isinstance(b["@graph"], list):
+                for item in b["@graph"]:
+                    if isinstance(item, dict) and "@type" in item and isinstance(item["@type"], str):
+                        schema_types.append(item["@type"])
 
     # Meta tags
     has_og_title = bool(re.search(r'<meta[^>]*property=[\'"]og:title[\'"]', html, re.IGNORECASE))

@@ -123,13 +123,19 @@ Diagnose the root cause scale before writing code:
 
 ## 6. The 5 Mandatory Questions Every Recommendation Must Answer
 
-Every SEO and conversion recommendation emitted by the system must answer five questions:
+Every SEO and conversion recommendation and summary action emitted by the system must answer five questions:
 
 1. **Target Scope:** Which specific URL, page cohort, or shared template should change?
 2. **Page-Level Action:** Which of the 6 actions is being executed (`improve_existing_page`, `create_new_page`, `improve_shared_template`, `build_new_template`, `consolidate_overlapping_pages`, `no_change`)?
-3. **Supporting Evidence:** Which GSC, GA4, PostHog, Clarity, or Cloudflare telemetry data supports this decision?
+3. **Direct Data Observation & Supporting Evidence:** What exact empirical data observation (telemetry source, metric value, date/period, baseline vs benchmark) triggered this action?
 4. **Measurable Target Metric:** What exact measurable outcome should improve (clicks, CTR, conversion rate, position, 5xx rate)?
 5. **Scale / Rollback Protocol:** How will you determine whether to scale, revise, or reverse the intervention (e.g., 28-day Difference-in-Differences against holdout cohort)?
+
+> [!IMPORTANT]
+> **Summary Action Traceability Mandate:**
+> All summary tables, action queue backlogs, and audit reports MUST include a dedicated `Direct Data Observation` column. Every action row must cite its empirical observation directly:
+>
+> `| Priority | Action ID | Decision | Target URL | Direct Data Observation | Proposed Action | Target Metric |`
 
 ---
 

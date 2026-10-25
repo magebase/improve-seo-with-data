@@ -9,6 +9,7 @@
     "target_urls",
     "opportunity_type",
     "page_level_action",
+    "direct_observation",
     "evidence_sources",
     "hypothesis",
     "proposed_action",
@@ -22,6 +23,10 @@
       "type": "string",
       "pattern": "^seo_[a-z0-9_]+$",
       "description": "Unique identifier for the action item."
+    },
+    "direct_observation": {
+      "type": "string",
+      "description": "The exact empirical data observation that triggered this action (e.g. specific GSC query, impressions, CTR vs benchmark, crawl error code, or GA4 dropoff rate)."
     },
     "site": {
       "type": "string",

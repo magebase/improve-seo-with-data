@@ -36,6 +36,7 @@ Eliminates speculative "best practices" and isolated dashboards. Turns multi-dim
 9. **Auditable Action State Machine:** Every recommendation must enter a structured action queue (`seo-action.schema.json`) and transition through:
    $$\text{Detected} \longrightarrow \text{Validated} \longrightarrow \text{Approved} \longrightarrow \text{Implemented} \longrightarrow \text{Evaluated} \longrightarrow \text{Learned}$$
 10. **Closed-Loop Verification:** Always re-run the matching audit report, crawler pass, or telemetry evaluator after implementing code changes to verify 0 regressions.
+11. **Direct Empirical Data Traceability (Zero Speculative Actions):** Every summary action, backlog card, queue item, and recommendation MUST track directly back to an empirical observation in data (e.g., specific GSC query, impressions, position, CTR vs benchmark, GSC issue report with date/URL, GA4 landing page session count & conversion rate, PostHog funnel step drop-off %, Clarity rage/dead click counts and target element, Cloudflare edge 5xx/404 counts or CWV LCP/INP/CLS metrics). Speculative "best practices", subjective design opinions, or orphan actions lacking a cited empirical data observation are strictly banned across all reports, queue tables, and code edits.
 
 ---
 
@@ -130,12 +131,22 @@ Always execute in this sequence:
 3. **P3: Shared Templates Third** (Fix component speed, layout shifts, or mobile UX across hundreds of pages).
 4. **P4: New Pages & Tools Fourth** (Genuinely missing intents passing the 7-factor quality gate).
 
-Every recommendation emitted must answer:
+Every recommendation and summary action emitted must answer:
 1. *Target Scope:* Which specific URL, page cohort, or shared template should change?
 2. *Page-Level Action:* Which of the 6 actions is being executed?
-3. *Supporting Evidence:* Which GSC, GA4, PostHog, Clarity, or Cloudflare telemetry data supports this?
+3. *Direct Data Observation & Supporting Evidence:* What exact empirical data observation (telemetry source, metric value, date/period, baseline vs benchmark) triggered this action?
 4. *Measurable Target Metric:* What exact measurable outcome should improve?
 5. *Scale / Rollback Protocol:* How will you determine whether to scale, revise, or reverse the intervention?
+
+> [!IMPORTANT]
+> **Summary Action Traceability Mandate:**
+> Every action in an Executive Summary table, Action Queue, or audit report MUST include a dedicated `Direct Data Observation` column and track back to an explicit empirical data point. An action row without a direct data observation is strictly prohibited:
+>
+> | Priority | Action ID | Decision | Target URL | Direct Data Observation | Proposed Action | Target Metric |
+> | :---: | :--- | :--- | :--- | :--- | :--- | :--- |
+> | **P1** | `SEO-TECH-001` | `Consolidate Overlapping` | `www.example.com/*` | GSC 2026-10-18: 7 duplicate URLs in "Alternative page with proper canonical tag" | Enforce permanent 301 redirect to apex canonical | 0 duplicate warnings; consolidated authority |
+> | **P1** | `SEO-TECH-002` | `Improve Existing Page` | `/receive-sms/pl/` | GSC 2026-10-23: Unparsable structured data (ContactPoint in ItemList) | Convert ContactPoint to ListItem schema | Zero syntax errors; rich result eligibility |
+> | **P2** | `SEO-CTR-001` | `Improve Existing Page` | `/calculators/fmcg/` | GSC 28d: query 'fmcg calc' pos 2.1, 1000 imp, CTR 5.0% vs benchmark 15.0% (-10% gap) | Front-load intent modifier in `<title>` & snippet | +100 qualified organic clicks |
 
 ---
 

@@ -190,6 +190,7 @@ def detect_ctr_opportunities(
                     "target_urls": [page],
                     "opportunity_type": "ctr_improvement",
                     "page_level_action": "improve_existing_page",
+                    "direct_observation": f"GSC: Query '{query}' at pos {pos:.1f} has {impressions} imp, CTR {ctr*100:.1f}% vs benchmark {benchmark_ctr*100:.1f}% (-{ctr_gap*100:.1f}% gap)",
                     "decision_framework": {
                         "target_scope": f"URL: {page}",
                         "action_type": "improve_existing_page",
@@ -245,6 +246,7 @@ def detect_ranking_opportunities(
     for row in query_page_rows:
         pos = float(row.get("position", row.get("avg_position", 99.0)))
         impressions = int(row.get("impressions", 0))
+        clicks = int(row.get("clicks", 0))
 
         if 5.0 <= pos <= 20.0 and impressions >= 15:
             # Model moving from current position to top 3 (benchmark ~10% CTR)
@@ -270,6 +272,7 @@ def detect_ranking_opportunities(
                 "target_urls": [page],
                 "opportunity_type": "ranking_opportunity",
                 "page_level_action": "improve_existing_page",
+                "direct_observation": f"GSC: Striking distance query '{query}' at pos {pos:.1f} with {impressions} impressions and {clicks} clicks",
                 "decision_framework": {
                     "target_scope": f"URL: {page}",
                     "action_type": "improve_existing_page",
@@ -371,6 +374,11 @@ def detect_conversion_leakage(
                 "target_urls": [page],
                 "opportunity_type": "conversion_leakage",
                 "page_level_action": "improve_existing_page",
+                "direct_observation": (
+                    f"GA4: {sessions} organic sessions converting at {c_rate*100:.2f}% (benchmark: {avg_conv_rate*100:.2f}%)"
+                    + (f"; Clarity: {rage_clicks} rage clicks" if rage_clicks else "")
+                    + (f"; PostHog: {dropoff_rate*100:.1f}% funnel dropoff" if dropoff_rate else "")
+                ),
                 "decision_framework": {
                     "target_scope": f"URL: {page}",
                     "action_type": "improve_existing_page",
@@ -425,6 +433,7 @@ def detect_technical_risks(
                 "target_urls": affected_routes,
                 "opportunity_type": "technical_risk",
                 "page_level_action": "improve_shared_template",
+                "direct_observation": f"Cloudflare: Recorded {status_5xx} HTTP 5xx edge errors across routes: {', '.join(affected_routes)}",
                 "decision_framework": {
                     "target_scope": f"Routes: {', '.join(affected_routes)}",
                     "action_type": "improve_shared_template",
@@ -467,6 +476,7 @@ def detect_technical_risks(
                 "target_urls": [url],
                 "opportunity_type": "technical_risk",
                 "page_level_action": "improve_shared_template",
+                "direct_observation": f"Better Stack: Downtime incident lasting {duration_min} minutes on {url}",
                 "decision_framework": {
                     "target_scope": f"URL: {url}",
                     "action_type": "improve_shared_template",
@@ -506,6 +516,7 @@ def detect_technical_risks(
                     "target_urls": [page],
                     "opportunity_type": "technical_risk",
                     "page_level_action": "improve_shared_template",
+                    "direct_observation": f"Grafana CWV: Poor Core Web Vitals on {page} (LCP={lcp:.2f}s, INP={inp}ms, CLS={cls:.3f})",
                     "decision_framework": {
                         "target_scope": f"Page/Template: {page}",
                         "action_type": "improve_shared_template",
@@ -573,6 +584,7 @@ def detect_content_expansion_and_cannibalization(
                     "target_urls": urls,
                     "opportunity_type": "content_expansion_or_consolidation",
                     "page_level_action": "consolidate_overlapping_pages",
+                    "direct_observation": f"GSC: Query '{q}' split across {len(urls)} competing URLs ({', '.join(urls)}) with {total_imp} impressions and {total_clicks} clicks",
                     "decision_framework": {
                         "target_scope": f"Competing URLs: {', '.join(urls)}",
                         "action_type": "consolidate_overlapping_pages",
@@ -627,6 +639,12 @@ def orchestrate_seo_growth(
         with open(gsc_file, "r", encoding="utf-8") as f:
             raw = json.load(f)
             query_page_rows = raw if isinstance(raw, list) else raw.get("rows", raw.get("data", []))
+            for r in query_page_rows:
+                if "keys" in r and isinstance(r["keys"], list) and len(r["keys"]) >= 2:
+                    if "query" not in r:
+                        r["query"] = r["keys"][0]
+                    if "page" not in r:
+                        r["page"] = r["keys"][1]
     else:
         # Fetch live data directly via CLI / MCP reports (striking-distance and quick-wins)
         sd_res = run_seo_cli("striking-distance", site, {"minImpressions": 1, "limit": 100})
@@ -739,7 +757,7 @@ def format_markdown_report(manifest: Dict[str, Any]) -> str:
     md.append("")
 
     md.append("## 3. Prioritized SEO & Conversion Action Queue")
-    md.append("| Priority | Action ID | Decision | Target URL | Expected Val | Confidence | Proposed Action |")
+    md.append("| Priority | Action ID | Decision | Target URL | Direct Data Observation | Proposed Action | Expected Val |")
     md.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
 
     for a in manifest["actions"]:
@@ -748,14 +766,16 @@ def format_markdown_report(manifest: Dict[str, Any]) -> str:
         decision = a.get("page_level_action", "improve_existing_page").replace('_', ' ').title()
         target = a["target_urls"][0] if a["target_urls"] else "/"
         exp_val = a["expected_impact"].get("expected_incremental_value", 0.0)
-        conf = a["confidence"]
         prop = a["proposed_action"]
-        md.append(f"| **{p_score:.1f}** | `{a_id}` | `{decision}` | `{target}` | ${exp_val:.2f} | {conf} | {prop} |")
+        direct_obs = a.get("direct_observation") or (a["evidence_details"][0]["observation"] if a.get("evidence_details") else "N/A")
+        md.append(f"| **{p_score:.1f}** | `{a_id}` | `{decision}` | `{target}` | {direct_obs} | {prop} | ${exp_val:.2f} |")
 
     md.append("\n## 4. Detailed Action Briefs (5 Mandatory Questions Answered)")
     for a in manifest["actions"][:10]:
         df = a.get("decision_framework", {})
+        direct_obs = a.get("direct_observation") or (a["evidence_details"][0]["observation"] if a.get("evidence_details") else "N/A")
         md.append(f"### [`{a['action_id']}`] {a['proposed_action']}")
+        md.append(f"- **Direct Data Observation:** {direct_obs}")
         md.append(f"- **1. Target Scope:** `{df.get('target_scope', ', '.join(a['target_urls']))}`")
         md.append(f"- **2. Page-Level Action:** `{a.get('page_level_action', 'improve_existing_page')}`")
         md.append(f"- **3. Supporting Evidence:** {df.get('supporting_evidence', a['hypothesis'])}")
