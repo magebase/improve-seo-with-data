@@ -6,7 +6,22 @@
 
 Autonomous, data-driven SEO engineering, Observability, and Generative Engine Optimization (GEO) skill for **Google Antigravity CLI (`agy`)**, **Claude Code**, **Cursor**, and multi-agent developer fleets.
 
-Eliminates superficial "best practice" checklists and speculative keyword guessing. Every audit, diagnosis, and code modification is backed by authentic first-party data: **Google Search Console (GSC)** performance, **real user monitoring (RUM)**, **server & crawler access logs**, **live SERP rankings**, and **LLM answer engine citations**.
+Governed by the **SEO Outcome Maximization Contract**: eliminates superficial "best practice" checklists and speculative keyword guessing. Every audit, diagnosis, code modification, and page generation is backed by authentic first-party data: **Google Search Console (GSC)** performance, **real user monitoring (RUM)**, **server & crawler access logs**, **live SERP rankings**, and **LLM answer engine citations**.
+
+---
+
+## The SEO Outcome Maximization Contract
+
+The system optimizes strictly for **incremental organic search clicks and meaningful business conversions**, never for pages published, changes made, tests passed, or words written:
+
+1. **Exhaustive Opportunity Discovery:** Low volume is uncertainty, not a rejection threshold. Every detected opportunity results in a concrete action, a defined diagnostic step, or an explicit evidence-backed decision to defer.
+2. **Diagnose Before Choosing an Intervention:** Classify failure modes using the 8-State Page-Level Diagnostic Decision Tree before choosing code or content edits.
+3. **URL Ownership Model & Anti-Cannibalization Gate:** Query clusters are mapped to intended URL owners. If an existing non-hub URL ranks $\le 15.0$, creating a new competing page is strictly forbidden; route to Track 1 existing page improvement (Recipe A).
+4. **Quantified Expected Value:** Prioritize via $EV(a) = P(\text{success} \mid a) \times V(a) - Cost(a) - Risk(a)$ and Priority $P = \frac{\max(0.1, EV) \times \text{Confidence}}{\text{Effort} + \text{Risk}}$ with sample size uncertainty dampening.
+5. **Content Evidence System & Factual Verification:** Require source verification for domain concepts (e.g. telecom operators vs mobile money), carrier health, and competitor pricing before publication.
+6. **Production Indexing Funnel Tracking:** Track pages through `Published -> Discovered & Crawled -> Eligible & Indexed -> Impressions -> Clicks -> Conversions`. Automated unit/BDD tests prove regression safety; they do NOT prove SEO ranking growth.
+7. **Title Display-Width Heuristics:** Replace rigid character thresholds with SERP rendering physics (~580px desktop, ~480px mobile).
+8. **Sitemap `lastmod` Integrity:** Advance `<lastmod>` timestamps only on substantive content, functional, or pricing changes, never on routine cron runs.
 
 ---
 
@@ -34,16 +49,41 @@ Eliminates superficial "best practice" checklists and speculative keyword guessi
 
 ---
 
-## Key Capabilities
+## The 8-State Page-Level Diagnostic Decision Tree
 
-1. **Observability & Logging Stack Setup (`scripts/setup_observability.py`):** Audits whether the web application is collecting optimal telemetry (GA4, Microsoft Clarity, PostHog attribution, Core Web Vitals RUM, IndexNow, Sentry/BetterStack). Automatically generates drop-in templates and IndexNow keys if uncollected.
-2. **Striking Distance Optimization (Positions 11 to 20):** Identifies keywords sitting on Google Page 2 that have high impressions and delivers targeted subheading, topical content, and internal link improvements to push them to Page 1.
-3. **Low-CTR Quick Wins:** Discovers pages ranking in positions 1 to 7 with CTR below position benchmarks and optimizes title tag hooks, meta descriptions, and rich snippet markup.
-4. **Generative Engine Optimization (GEO):** Audits and optimizes discoverability across Perplexity, ChatGPT Search, Claude, and Google AI Overviews using structured [`llms.txt`](templates/llms.txt), validated Schema.org JSON-LD, and AI crawler permissions.
-5. **Crawl Budget & Facet Defense:** Protects search index health by ensuring faceted query parameters (`?filter=`, `?page=`) are blocked via `Disallow: /*?*` and flagged with `rel="nofollow"`, eliminating index bloat.
-6. **Programmatic SEO (pSEO) Quality Gates:** Enforces interactive, high-utility tools (calculators, formatters, diagnostic lookups) over thin doorway content.
-7. **Query Cannibalization Resolution:** Detects multiple URLs competing for identical queries and provides clean 301 consolidation or canonical ownership runbooks.
-8. **Direct Empirical Data Traceability:** Every action in an action queue, report, or executive summary explicitly cites and tracks back to a direct observation in data (GSC query/impression/CTR delta, crawl issue date/URL, GA4 conversion rate, PostHog funnel dropoff, or Clarity rage clicks). Speculative actions lacking empirical data are strictly prohibited.
+| State | Search State Diagnosis | Primary Underlying Cause | Prescribed Action Family | Implementation Contract Type |
+| :---: | :--- | :--- | :--- | :--- |
+| **State 1** | **Discovered / Crawled, Not Indexed** | Technical blockage, canonical mismatch, 404/5xx error, or low perceived value. | Technical & Delivery Remediation | `technical_fix` |
+| **State 2** | **Indexed, Zero Impressions** | No search demand, or page buried too deep in crawl architecture. | Reassess Role / Internal Links / Consolidate | `internal_link_update` or `content_consolidation` |
+| **State 3** | **Impressions, Position > 30** | Weak topical relevance, low domain authority, or mismatched search intent. | Topic Re-architecture or Specialized Page Creation | `content_expansion` or `new_page_creation` |
+| **State 4** | **Striking Distance Stage 2 (Pos 11–30)** | Page has baseline relevance but lacks topical depth, edge cases, or authority. | Topical Depth & Sub-Topic Coverage | `content_expansion` |
+| **State 5** | **Striking Distance Stage 1 (Pos 4–10)** | Page ranks on Page 1 but is held back by missing computational utility or internal links. | Add Original Calculator/Utility & Hub Links | `content_expansion` & `internal_link_update` |
+| **State 6** | **Top 3, Below Benchmark CTR** | Snippet is underperforming; title or description fails to match searcher promise. | Title & SERP Snippet Optimization | `title_optimization` |
+| **State 7** | **Good Traffic, Low Conversions** | Search intent satisfied but landing UX, mobile layout, or CTA is broken. | Conversion Funnel Optimization (CRO) | `content_expansion` (UX/Funnel) |
+| **State 8** | **Multi-URL Cannibalization** | Multiple URLs compete for identical queries, splitting authority and ranking. | Canonical Designation & Content Differentiation | `content_consolidation` |
+
+---
+
+## 7 Standard Typed Action Contracts
+
+Every emitted SEO action follows a strict implementation contract:
+
+1. `title_optimization`: Optimizes title tags within display width (~580px desktop, ~480px mobile) to front-load intent modifiers while aligning with visible `<h1>`.
+2. `content_expansion`: Deepens topic coverage with answers to real GSC query variations and original interactive calculation tools.
+3. `internal_link_update`: Adds crawlable standard HTML links (`<a href="...">`) from high-authority category hubs with descriptive anchor text.
+4. `technical_fix`: Remediates edge 5xx/404 errors, canonical tag inconsistencies, or failing Core Web Vitals.
+5. `new_page_creation`: Builds purpose-built pages for unmet query clusters passing the 7-factor quality gate and URL ownership check.
+6. `content_consolidation`: Resolves multi-URL keyword cannibalization by designating canonical topic owners and 301-redirecting thin duplicates.
+7. `measurement_only`: Sets up telemetry observation windows for uncertain hypotheses where premature code modification carries downside risk.
+
+---
+
+## 4 Core Operational Recipes
+
+- **Recipe A — Improve Rankings for Existing Pages (Positions 4–20):** Extract top query clusters, inspect live SERP formats (calculators, tools, directories, guides), add missing computational logic or verified benchmarks, link contextually from relevant category hubs, and deploy the smallest change that directly closes the gap.
+- **Recipe B — Improve CTR Without Sacrificing Relevance:** Segment impressions by device and country, verify title display width (~580px desktop, ~480px mobile), align visible H1 with title, and evaluate over 28-day Difference-in-Differences against matched URL cohort.
+- **Recipe C — Recover Pages That Are Not Gaining Impressions:** Classify in indexing funnel (Not Discovered vs Crawled Not Indexed vs Duplicate Canonical vs No Demand); deploy technical fixes for canonicals, add unique utility for weak content, or add internal links for isolated pages.
+- **Recipe D — Scale Content That Has Demonstrated Value:** Track page-family health (% indexed, % receiving impressions, % generating clicks). If a page family succeeds, expand it using the same validated mechanisms and verified data; if it underperforms, fix the template defect before generating more URLs.
 
 ---
 
@@ -82,72 +122,42 @@ ln -sf /home/aqua/skills/improve-seo-with-data .agents/skills/improve-seo-with-d
 
 ---
 
-## Claude Code & Cursor Setup
-
-### Claude Code
-Add the MCP server via CLI:
-```bash
-claude mcp add seo seo mcp serve
-```
-
-### Cursor (`~/.cursor/mcp.json`)
-```json
-{
-  "mcpServers": {
-    "seo": {
-      "command": "seo",
-      "args": ["mcp", "serve"]
-    }
-  }
-}
-```
-
----
-
 ## CLI & Automation Quickstarts
 
-### 0. Audit & Setup the Observability Stack
+### 0. Run the Master Growth Intelligence Engine
 ```bash
-# Scan a live website
-python3 scripts/setup_observability.py --url https://example.com
+# Live analysis against GSC property with EV scoring & diagnostic state classification
+python3 scripts/seo_growth_intelligence.py --site sc-domain:example.com
 
-# Or scan local template codebase
-python3 scripts/setup_observability.py --scan-dir ./templates/
-
-# Export drop-in high-performance telemetry snippet
-python3 scripts/setup_observability.py --export-snippet ./templates/telemetry_snippet.html
-
-# Generate an IndexNow key for instant search submission
-python3 scripts/setup_observability.py --generate-indexnow-key --output-dir ./static/
+# Ingest historical GSC + GA4 exports with custom conversion values
+python3 scripts/seo_growth_intelligence.py \
+    --gsc-file gsc_export.json \
+    --ga4-file ga4_export.json \
+    --telemetry-file telemetry_export.json \
+    --conv-value 25.0 \
+    --output-json /tmp/action_queue.json \
+    --output-md /tmp/action_queue.md
 ```
 
-### 1. Verify Environment & MCP Health
+### 1. Audit & Setup the Observability Stack
+```bash
+python3 scripts/setup_observability.py --url https://example.com
+```
+
+### 2. Verify Environment & MCP Health
 ```bash
 python3 scripts/verify_mcp.py
 ```
-Validates the local database cache, Google credentials, and verifies that all 74 reports across 9 categories are ready to run.
 
-### 2. Run Technical Crawl Audit
+### 3. Run Technical Crawl Audit
 ```bash
 python3 scripts/run_audit.py --url https://example.com --output /tmp/audit.json
 ```
-Performs a fast sitemap health pass and technical crawl, categorizing findings into High, Medium, and Low severity with copy-paste remediation actions.
-
-### 3. Analyze Search Console Performance
-```bash
-# Live Search Console query
-python3 scripts/gsc_analyzer.py --site sc-domain:example.com
-
-# Offline / exported JSON or CSV
-python3 scripts/gsc_analyzer.py --export gsc_export.json
-```
-Extracts Page 2 striking distance queries and low-CTR quick wins.
 
 ### 4. Evaluate AI Search Readiness (GEO)
 ```bash
 python3 scripts/geo_evaluator.py --url https://example.com
 ```
-Audits `/llms.txt`, `robots.txt` AI crawler rules (GPTBot, ClaudeBot, PerplexityBot), Schema.org JSON-LD completeness, and semantic HTML structure.
 
 ---
 
@@ -159,13 +169,18 @@ improve-seo-with-data/
 ├── README.md                         # Architecture & quickstart guide
 ├── LICENSE                           # MIT License
 ├── mcp_config.json                   # MCP server definition schema
+├── schemas/
+│   ├── seo-action.schema.json        # Schema with typed actions, EV math, and diagnostic states
+│   └── data-source-manifest.schema.json
 ├── scripts/
+│   ├── seo_growth_intelligence.py    # Master engine with EV scoring, URL ownership & 8 diagnostic states
 │   ├── setup_observability.py        # Observability & telemetry stack auditor & setup tool
 │   ├── verify_mcp.py                 # MCP and CLI diagnostic runner
 │   ├── run_audit.py                  # Technical crawl & single-page audit engine
 │   ├── gsc_analyzer.py               # GSC performance, striking distance & CTR tool
 │   └── geo_evaluator.py              # AI search readiness & llms.txt validator
 ├── references/
+│   ├── page_level_decision_engine.md # 8-state tree, 7 typed actions, URL ownership & 4 recipes
 │   ├── observability_stack_guide.md  # Modern $0 Observability & Telemetry architecture manual
 │   ├── mcp_catalog.md                # Complete 74-report catalog and schemas
 │   ├── geo_playbook.md               # Generative Engine Optimization manual
@@ -176,16 +191,6 @@ improve-seo-with-data/
     ├── schema_org.json               # Validated JSON-LD rich snippet templates
     └── audit_report_template.html    # Standalone, clean client audit deliverable
 ```
-
----
-
-## Core Invariants
-
-- **Observability First:** If a site is in an uncollected state, configure telemetry before attempting optimization.
-- **Evidence-First:** Every recommendation links to an authentic finding ID, URL inventory, or Search Console metric.
-- **Never Promise Ranks:** Algorithms and competitors fluctuate; optimize for crawlability, intent, and CTR.
-- **No Unicode Emojis in UI:** Production web interfaces and reports strictly use clean vector SVGs or text markers.
-- **Closed-Loop Verification:** Always re-run the matching report after editing code to prove zero regressions.
 
 ---
 
