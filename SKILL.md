@@ -37,6 +37,10 @@ Eliminates speculative "best practices" and isolated dashboards. Turns multi-dim
    $$\text{Detected} \longrightarrow \text{Validated} \longrightarrow \text{Approved} \longrightarrow \text{Implemented} \longrightarrow \text{Evaluated} \longrightarrow \text{Learned}$$
 10. **Closed-Loop Verification:** Always re-run the matching audit report, crawler pass, or telemetry evaluator after implementing code changes to verify 0 regressions.
 11. **Direct Empirical Data Traceability (Zero Speculative Actions):** Every summary action, backlog card, queue item, and recommendation MUST track directly back to an empirical observation in data (e.g., specific GSC query, impressions, position, CTR vs benchmark, GSC issue report with date/URL, GA4 landing page session count & conversion rate, PostHog funnel step drop-off %, Clarity rage/dead click counts and target element, Cloudflare edge 5xx/404 counts or CWV LCP/INP/CLS metrics). Speculative "best practices", subjective design opinions, or orphan actions lacking a cited empirical data observation are strictly banned across all reports, queue tables, and code edits.
+12. **Dual-Track Execution Mandate (Improve Existing AND Create New Every Run):** Every single invocation of this skill MUST execute BOTH tracks in parallel:
+    - **Track 1: Improve Existing Pages:** Title compression ($\le 65$ characters / 580px desktop, 480px mobile), snippet appeal, content depth/utility, Schema.org rich data, internal links, and conversion CTA streamlining for existing URLs with impressions or CTR gaps.
+    - **Track 2: Create New Pages:** Detect unmet query clusters (queries landing on generic hubs like `/`, `/articles/`, `/compare/`, `/tools/`, or queries with no dedicated target URL) that pass the 7-factor quality gate. Automatically build and register them into production models, views, templates, sitemaps, and Gherkin acceptance specs across the 5 Standard Template Archetypes.
+    Stopping after only improving existing pages, or only creating new pages without improving existing winners, is strictly prohibited. Every run must deliver both.
 
 ---
 
@@ -73,13 +77,13 @@ Eliminates speculative "best practices" and isolated dashboards. Turns multi-dim
 
 ## The Core Mission: Turn SEO Data into Page-Level Decisions
 
-When an agent is asked to **improve a domain or website**, its primary mission is to translate every meaningful pattern across GSC, GA4, PostHog, Clarity, and technical telemetry into one of **six mutually exclusive page-level actions**:
+When an agent is asked to **improve a domain or website**, its primary mission is governed by the **Dual-Track Execution Mandate**: systematically improving existing pages while concurrently discovering and building new pages for unmet search queries across **six page-level actions**:
 
-1. **Improve an existing page**
-2. **Create a new page**
-3. **Improve a shared template**
-4. **Build a new template**
-5. **Consolidate overlapping pages**
+1. **Improve an existing page** *(Track 1)*
+2. **Create a new page** *(Track 2)*
+3. **Improve a shared template** *(Track 1)*
+4. **Build a new template** *(Track 2)*
+5. **Consolidate overlapping pages** *(Track 1)*
 6. **Make no change**
 
 ### 1. The Decision Matrix
@@ -124,12 +128,16 @@ A new page is created **ONLY** when an unmet query cluster exists and passes all
 4. *Directory / Category Template:* For browsing and discovery queries (structured filters, crawlable detail links).
 5. *Localized / Market-Specific Template:* For real regional differences (currencies, regulations, service areas).
 
-### 5. Priority Execution Order & The 5 Mandatory Questions
-Always execute in this sequence:
-1. **P1: Technical Blockers First** (5xx errors, broken canonicals, robots indexation shields).
-2. **P2: Valuable Existing Pages Second** (CTR gaps, striking-distance positions 5–20).
-3. **P3: Shared Templates Third** (Fix component speed, layout shifts, or mobile UX across hundreds of pages).
-4. **P4: New Pages & Tools Fourth** (Genuinely missing intents passing the 7-factor quality gate).
+### 5. Priority Execution Order (Dual-Track Parallel Execution) & The 5 Mandatory Questions
+Every single run MUST execute both tracks concurrently (stopping after only improving existing pages is strictly banned):
+
+- **Track 1 (Existing Pages & Templates):**
+  1. **P1: Technical Blockers First** (5xx errors, broken canonicals, robots indexation shields).
+  2. **P2: Valuable Existing Pages Second** (CTR gaps, striking-distance positions 5–20, title compression $\le 65$ chars, conversion leakage).
+  3. **P3: Shared Templates Third** (Fix component speed, layout shifts, or mobile UX across hundreds of pages).
+
+- **Track 2 (New Pages & Unmet Demand):**
+  4. **P4: New Pages & Tools Fourth** (Genuinely missing intents passing the 7-factor quality gate, implemented across the 5 Standard Template Archetypes with full data models, views, templates, sitemaps, Gherkin specs, and tests).
 
 Every recommendation and summary action emitted must answer:
 1. *Target Scope:* Which specific URL, page cohort, or shared template should change?
@@ -169,13 +177,16 @@ python3 scripts/seo_growth_intelligence.py \
     --output-md /tmp/action_queue.md
 ```
 
-The orchestrator executes the **5 Specialized Opportunity Detectors**:
-- **Detector A (CTR Opportunities):** Identifies positions 1–10 underperforming benchmark CTR:
-  $$\Delta C_{\text{CTR}} = I \times \max(0, \text{CTR}_{\text{benchmark}} - \text{CTR}_{\text{current}})$$
-- **Detector B (Ranking Opportunities):** Targets striking distance queries (positions 5.0 to 20.0) with high organic impressions.
-- **Detector C (Conversion Leakage):** Flags organic landing pages earning clicks but converting below 50% of cluster average, or displaying high PostHog dropoff / Clarity rage clicks.
-- **Detector D (Technical Risk):** Detects Cloudflare 5xx spikes, Better Stack downtime, or failing Core Web Vitals (LCP > 2.5s, INP > 200ms, CLS > 0.1).
-- **Detector E (Content Expansion & Cannibalization):** Resolves queries split across multiple URLs and identifies rising query clusters lacking authoritative pages.
+The orchestrator executes the **Dual-Track Growth Detectors**:
+- **Track 1 Detectors (Improve Existing Pages & Shared Templates):**
+  - **Detector A (CTR Opportunities):** Identifies positions 1–10 underperforming benchmark CTR:
+    $$\Delta C_{\text{CTR}} = I \times \max(0, \text{CTR}_{\text{benchmark}} - \text{CTR}_{\text{current}})$$
+  - **Detector B (Ranking Opportunities):** Targets striking distance queries (positions 5.0 to 20.0) with high organic impressions.
+  - **Detector C (Conversion Leakage):** Flags organic landing pages earning clicks but converting below 50% of cluster average, or displaying high PostHog dropoff / Clarity rage clicks.
+  - **Detector D (Technical Risk):** Detects Cloudflare 5xx spikes, Better Stack downtime, or failing Core Web Vitals (LCP > 2.5s, INP > 200ms, CLS > 0.1).
+  - **Detector E (Cannibalization Consolidation):** Resolves queries split across multiple URLs and unifies split ranking authority.
+- **Track 2 Detector (Create New Pages for Unmet Search Demand):**
+  - **Detector F (Unmet Query & Template Archetype Synthesis):** Identifies high-intent queries landing on generic hubs (`/`, `/articles/`, `/compare/`, `/tools/`) lacking a dedicated URL, maps them to one of the 5 standard template archetypes (Tool, Comparison, Guide, Directory, Localized), enforces the 7-factor quality gate, and generates end-to-end page delivery specifications.
 
 Every action item is prioritized via:
 $$V = \Delta C \times r \times v \qquad\text{Priority Score } P = \frac{V \times q}{E + \text{Risk}}$$

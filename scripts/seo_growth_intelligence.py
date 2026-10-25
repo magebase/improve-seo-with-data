@@ -29,9 +29,12 @@ import datetime
 import json
 import math
 import os
+import re
 import shutil
+import sqlite3
 import subprocess
 import sys
+import urllib.parse
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -97,6 +100,75 @@ def run_seo_cli(report_id: str, site: str, params: Optional[Dict[str, Any]] = No
         return {"ok": False, "error": str(e)}
 
 
+def load_gsc_from_mcp_cache(site: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Loads multi-dimensional GSC data directly from the local MCP database cache (~/.cache/seo/cache.db)."""
+    cache_path = os.path.expanduser("~/.cache/seo/cache.db")
+    if not os.path.exists(cache_path):
+        return [], {}
+    try:
+        conn = sqlite3.connect(cache_path)
+        c = conn.cursor()
+        clean_domain = site.replace("sc-domain:", "").replace("https://", "").replace("http://", "").strip("/")
+        possible_sites = [f"sc-domain:{clean_domain}", f"https://{clean_domain}/", clean_domain]
+
+        qp_rows = []
+        dim_data = {"devices": [], "countries": [], "pages": [], "queries": [], "dates": []}
+
+        # Query x Page rows
+        for s in possible_sites:
+            c.execute("""
+            SELECT response_json FROM gsc_cache 
+            WHERE site_url = ? AND request_json LIKE '%"query","page"%' AND length(response_json) > 10
+            ORDER BY fetched_at DESC LIMIT 1;
+            """, (s,))
+            r = c.fetchone()
+            if r:
+                raw = json.loads(r[0])
+                for it in raw:
+                    keys = it.get("keys", [])
+                    if len(keys) >= 2:
+                        qp_rows.append({
+                            "site": clean_domain,
+                            "query": keys[0],
+                            "page": keys[1],
+                            "impressions": int(it.get("impressions", 0)),
+                            "clicks": int(it.get("clicks", 0)),
+                            "ctr": float(it.get("ctr", 0.0)),
+                            "position": float(it.get("position", 0.0)),
+                            "device": "UNKNOWN",
+                        })
+                break
+
+        # Load specific dimensions: device, country, page, query, date
+        for s in possible_sites:
+            c.execute("""
+            SELECT request_json, response_json FROM gsc_cache 
+            WHERE site_url = ? AND length(response_json) > 10
+            ORDER BY fetched_at DESC;
+            """, (s,))
+            for req_str, resp_str in c.fetchall():
+                try:
+                    req_obj = json.loads(req_str)
+                    dims = req_obj.get("dimensions", [])
+                    resp_obj = json.loads(resp_str)
+                    if dims == ["device"] and not dim_data["devices"]:
+                        dim_data["devices"] = resp_obj
+                    elif dims == ["country"] and not dim_data["countries"]:
+                        dim_data["countries"] = resp_obj
+                    elif dims == ["page"] and not dim_data["pages"]:
+                        dim_data["pages"] = resp_obj
+                    elif dims == ["query"] and not dim_data["queries"]:
+                        dim_data["queries"] = resp_obj
+                    elif dims == ["date"] and not dim_data["dates"]:
+                        dim_data["dates"] = resp_obj
+                except Exception:
+                    continue
+        conn.close()
+        return qp_rows, dim_data
+    except Exception:
+        return [], {}
+
+
 # --- Traffic Change Decomposition ---
 def decompose_traffic_change(i0: int, r0: float, i1: int, r1: float) -> Dict[str, float]:
     """
@@ -150,13 +222,22 @@ def detect_ctr_opportunities(
     query_page_rows: List[Dict[str, Any]],
     default_conversion_rate: float = 0.02,
     default_conversion_value: float = 10.0,
+    min_impressions: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Detector A: High-impression queries underperforming position/device CTR benchmarks."""
     actions = []
     idx = 1
+    total_site_imp = sum(int(r.get("impressions", 0)) for r in query_page_rows)
+    if min_impressions is None:
+        effective_min_imp = 5 if total_site_imp < 500 else 20
+        min_clicks_threshold = 0.5 if total_site_imp < 500 else 5.0
+    else:
+        effective_min_imp = min_impressions
+        min_clicks_threshold = 0.5 if effective_min_imp < 20 else 5.0
+
     for row in query_page_rows:
         impressions = int(row.get("impressions", 0))
-        if impressions < 20:
+        if impressions < effective_min_imp:
             continue
 
         clicks = int(row.get("clicks", 0))
@@ -172,7 +253,7 @@ def detect_ctr_opportunities(
         if pos <= 10.0 and ctr < benchmark_ctr:
             ctr_gap = benchmark_ctr - ctr
             incremental_clicks = impressions * ctr_gap
-            if incremental_clicks >= 5:
+            if incremental_clicks >= min_clicks_threshold:
                 p_score, exp_val, exp_conv = calculate_priority_score(
                     incremental_clicks=incremental_clicks,
                     conversion_rate=default_conversion_rate,
@@ -239,16 +320,20 @@ def detect_ranking_opportunities(
     query_page_rows: List[Dict[str, Any]],
     default_conversion_rate: float = 0.02,
     default_conversion_value: float = 10.0,
+    min_impressions: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Detector B: Striking Distance keywords (positions 5.0 to 20.0) with high organic demand."""
     actions = []
     idx = 1
+    total_site_imp = sum(int(r.get("impressions", 0)) for r in query_page_rows)
+    effective_min_imp = (3 if total_site_imp < 500 else 15) if min_impressions is None else min_impressions
+
     for row in query_page_rows:
         pos = float(row.get("position", row.get("avg_position", 99.0)))
         impressions = int(row.get("impressions", 0))
         clicks = int(row.get("clicks", 0))
 
-        if 5.0 <= pos <= 20.0 and impressions >= 15:
+        if 5.0 <= pos <= 20.0 and impressions >= effective_min_imp:
             # Model moving from current position to top 3 (benchmark ~10% CTR)
             current_ctr = float(row.get("ctr", 0.01))
             target_ctr = 0.08
@@ -549,10 +634,13 @@ def detect_content_expansion_and_cannibalization(
     query_page_rows: List[Dict[str, Any]],
     default_conversion_rate: float = 0.02,
     default_conversion_value: float = 10.0,
+    min_impressions: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Detector E: Detects keyword cannibalization (split clicks across multiple URLs) and topic cluster expansion opportunities."""
     actions = []
     idx = 1
+    total_site_imp = sum(int(r.get("impressions", 0)) for r in query_page_rows)
+    effective_min_imp = (2 if total_site_imp < 500 else 30) if min_impressions is None else min_impressions
 
     # Group queries by text to detect cannibalization
     query_map: Dict[str, List[Dict[str, Any]]] = {}
@@ -568,7 +656,7 @@ def detect_content_expansion_and_cannibalization(
             total_imp = sum(int(r.get("impressions", 0)) for r in rows)
             total_clicks = sum(int(r.get("clicks", 0)) for r in rows)
 
-            if len(urls) >= 2 and total_imp >= 30:
+            if len(urls) >= 2 and total_imp >= effective_min_imp:
                 p_score, exp_val, exp_conv = calculate_priority_score(
                     incremental_clicks=total_clicks * 0.40,
                     conversion_rate=default_conversion_rate,
@@ -619,6 +707,207 @@ def detect_content_expansion_and_cannibalization(
     return actions
 
 
+def detect_new_page_opportunities(
+    query_page_rows: List[Dict[str, Any]],
+    default_conversion_rate: float = 0.02,
+    default_conversion_value: float = 10.0,
+    min_impressions: Optional[int] = None,
+    site: str = "site",
+) -> List[Dict[str, Any]]:
+    """Detector for Track 2: Identifies unmet search demand (queries landing on generic hubs or lacking a dedicated target page) and maps them to one of the 5 standard template archetypes."""
+    actions = []
+    idx = 1
+    total_site_imp = sum(int(r.get("impressions", 0)) for r in query_page_rows)
+    effective_min_imp = (1 if total_site_imp < 500 else 10) if min_impressions is None else min_impressions
+
+    # Extract site domain brand name for filtering brand navigational queries
+    clean_site = site.replace("sc-domain:", "").replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
+    brand_tokens = [t for t in re.split(r"[.\-_]", clean_site.lower()) if t and t not in ["com", "net", "org", "io", "co", "app", "dev", "www"]]
+    brand_regex = r"\b(" + "|".join(re.escape(b) for b in brand_tokens) + r")\b" if brand_tokens else None
+
+    # Common generic hub paths where queries land when no dedicated page exists
+    generic_hubs = {
+        "/", "", "/articles/", "/articles", "/guides/", "/guides",
+        "/tools/", "/tools", "/compare/", "/compare", "/services/",
+        "/services", "/directory/", "/directory", "/locations/",
+        "/locations", "/blog/", "/blog", "/resources/", "/resources"
+    }
+
+    # Aggregate by query to find total demand and current landing URLs
+    query_agg: Dict[str, Dict[str, Any]] = {}
+    for r in query_page_rows:
+        q = r.get("query", "").strip().lower()
+        if not q:
+            continue
+        # Filter pure brand navigational queries (e.g. "smsriver", "sms river", "smsriver login")
+        if brand_regex and re.search(brand_regex, q):
+            query_words = set(q.split())
+            if query_words.issubset(set(brand_tokens + ["login", "app", "sign", "in", "up", "dashboard", "home", "website", "official"])):
+                continue
+
+        p = r.get("page", "/")
+        imp = int(r.get("impressions", 0))
+        cl = int(r.get("clicks", 0))
+        pos = float(r.get("position", r.get("avg_position", 99.0)))
+
+        if q not in query_agg:
+            query_agg[q] = {
+                "query": q,
+                "impressions": 0,
+                "clicks": 0,
+                "positions": [],
+                "landing_pages": set(),
+                "site": r.get("site", site),
+            }
+        query_agg[q]["impressions"] += imp
+        query_agg[q]["clicks"] += cl
+        query_agg[q]["positions"].append((pos, imp))
+        query_agg[q]["landing_pages"].add(p)
+
+    # Keyword classifiers for the 5 High-Converting Template Archetypes
+    tool_keywords = [
+        "calc", "calculator", "generator", "checker", "validator", "tester",
+        "estimator", "simulator", "converter", "lookup", "decoder", "encoder",
+        "tool", "widget", "pricing calculator"
+    ]
+    competitor_keywords = [
+        "vs", "versus", "alternative", "alternatives", "competitor", "comparison",
+        "sinch", "telnyx", "twilio", "smspool", "textnow", "quackr", "receive-sms",
+        "daisysms", "pvapins", "textverified", "anonymisms", "tiger-sms", "5sim",
+        "stripe", "braintree", "adyen", "paddle", "lemonsqueezy"
+    ]
+    guide_keywords = [
+        "how to", "guide", "tutorial", "interworking", "protocol", "spec",
+        "architecture", "ss7", "diameter", "smpp", "webhook", "api",
+        "troubleshoot", "setup", "fix", "error", "bypass", "security",
+        "privacy", "compliance", "ctia", "carrier", "mno", "mvno"
+    ]
+    directory_keywords = [
+        "directory", "list", "services", "providers", "platforms", "vendors",
+        "catalog", "options", "supported"
+    ]
+    geo_keywords = [
+        "canada", "united states", "usa", "uk", "united kingdom", "germany",
+        "france", "brazil", "india", "philippines", "australia", "poland",
+        "netherlands", "spain", "italy", "mexico", "japan", "korea"
+    ]
+
+    for q, data in query_agg.items():
+        total_imp = data["impressions"]
+        if total_imp < effective_min_imp:
+            continue
+
+        landing_pages = list(data["landing_pages"])
+        clean_landing_pages = [urllib.parse.urlparse(p).path for p in landing_pages]
+        lands_on_hub = any(lp in generic_hubs or lp.rstrip("/") in generic_hubs for lp in clean_landing_pages)
+
+        # Check if query keywords appear in current landing URL path
+        query_slug_tokens = [w for w in re.findall(r"[a-z0-9]+", q) if len(w) > 2 and w not in ["the", "and", "for", "with"]]
+        has_dedicated_page = False
+        for lp in clean_landing_pages:
+            lp_lower = lp.lower()
+            matching_tokens = [t for t in query_slug_tokens if t in lp_lower]
+            if len(matching_tokens) >= max(1, len(query_slug_tokens) * 0.6):
+                has_dedicated_page = True
+                break
+
+        if lands_on_hub or not has_dedicated_page:
+            # Weighted average position
+            total_weighted_pos = sum(pos * imp for pos, imp in data["positions"])
+            avg_pos = total_weighted_pos / total_imp if total_imp else 50.0
+
+            # Determine Template Archetype and Proposed URL
+            slug_base = "-".join(re.findall(r"[a-z0-9]+", q))
+            primary_brand = brand_tokens[0] if brand_tokens else "smspool"
+
+            if any(k in q for k in tool_keywords):
+                archetype = "tool_calculator"
+                proposed_url = f"/tools/{slug_base}/"
+            elif any(k in q for k in competitor_keywords):
+                archetype = "comparison_matrix"
+                found_comp = next((k for k in competitor_keywords if k in q and k not in ["vs", "versus", "alternative", "alternatives"]), None)
+                if found_comp:
+                    proposed_url = f"/compare/{primary_brand}-vs-{found_comp}/"
+                else:
+                    proposed_url = f"/compare/{slug_base}/"
+            elif any(k in q for k in geo_keywords):
+                archetype = "geographic_directory"
+                proposed_url = f"/receive-sms/{slug_base}/"
+            elif any(k in q for k in directory_keywords):
+                archetype = "directory_catalog"
+                proposed_url = f"/directory/{slug_base}/"
+            else:
+                archetype = "technical_guide"
+                proposed_url = f"/articles/{slug_base}/"
+
+            # Benchmark CTR for page-1 rank (position 4-5 ~ 6.5%)
+            benchmark_target_ctr = POSITION_CTR_BENCHMARKS.get(4, 0.065)
+            incremental_clicks = max(1.0, total_imp * benchmark_target_ctr)
+
+            p_score, exp_val, exp_conv = calculate_priority_score(
+                incremental_clicks=incremental_clicks,
+                conversion_rate=default_conversion_rate,
+                value_per_conversion=default_conversion_value,
+                confidence_level="high" if total_imp >= 10 else "medium",
+                effort_level="medium",
+                risk_level="low",
+            )
+
+            primary_landing = clean_landing_pages[0] if clean_landing_pages else "/"
+            archetype_label = archetype.replace('_', ' ').title()
+
+            actions.append({
+                "action_id": f"seo_new_{idx:03d}",
+                "site": data["site"],
+                "page_group": f"unmet_{archetype}",
+                "target_urls": [proposed_url],
+                "opportunity_type": "unmet_search_demand",
+                "page_level_action": "create_new_page",
+                "direct_observation": f"GSC: Query '{q}' with {total_imp} impressions (pos {avg_pos:.1f}) lands on generic '{primary_landing}' due to missing dedicated page",
+                "decision_framework": {
+                    "target_scope": f"New Page: {proposed_url}",
+                    "action_type": "create_new_page",
+                    "supporting_evidence": f"Search query '{q}' generated {total_imp} impressions (avg pos {avg_pos:.1f}) currently landing on generic hub '{primary_landing}'. Creating a dedicated {archetype_label} page captures high-intent organic demand.",
+                    "measurable_outcome": f"Achieve top-10 ranking (pos <= 10.0) and capture +{incremental_clicks:.1f} clicks / +{exp_conv:.1f} conversions.",
+                    "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC.",
+                },
+                "evidence_sources": ["gsc"],
+                "evidence_details": [{
+                    "source": "gsc",
+                    "observation": f"Query '{q}' generated {total_imp} impressions and {data['clicks']} clicks (avg pos {avg_pos:.1f}) landing on '{primary_landing}'.",
+                    "metrics": {
+                        "query": q,
+                        "impressions": total_imp,
+                        "clicks": data["clicks"],
+                        "position": round(avg_pos, 1),
+                        "current_landing": primary_landing,
+                        "template_archetype": archetype,
+                    },
+                }],
+                "hypothesis": f"Searchers querying '{q}' seek specific {archetype_label} utility. The current landing page '{primary_landing}' does not address this specific user task. Building '{proposed_url}' with Schema.org markup and interactive content will capture top-5 rankings.",
+                "expected_impact": {
+                    "incremental_clicks_low": round(incremental_clicks * 0.7, 1),
+                    "incremental_clicks_high": round(incremental_clicks * 1.3, 1),
+                    "incremental_conversions_low": round(exp_conv * 0.7, 1),
+                    "incremental_conversions_high": round(exp_conv * 1.3, 1),
+                    "expected_incremental_value": exp_val,
+                    "currency": "USD",
+                },
+                "confidence": "high" if total_imp >= 10 else "medium",
+                "effort": "medium",
+                "risk": "low",
+                "priority_score": p_score,
+                "proposed_action": f"Create new {archetype_label} page at {proposed_url} targeting '{q}' with verified data, schema, and interactive elements.",
+                "experiment_method": "matched_url_cohort",
+                "status": "detected",
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            })
+            idx += 1
+
+    actions.sort(key=lambda a: a["priority_score"], reverse=True)
+    return actions
+
+
 # --- Master Orchestrator ---
 
 def orchestrate_seo_growth(
@@ -629,10 +918,11 @@ def orchestrate_seo_growth(
     conversion_value: float = 10.0,
     conversion_rate: float = 0.02,
 ) -> Dict[str, Any]:
-    """Runs the 5-detector growth intelligence engine and outputs prioritized Action Queue."""
+    """Runs the growth intelligence engine across Track 1 (Improve Existing) and Track 2 (Create New) and outputs prioritized Action Queue."""
     query_page_rows = []
     ga4_data = {}
     telemetry_data = {}
+    dim_data = {}
 
     # 1. Ingest GSC data
     if gsc_file and os.path.exists(gsc_file):
@@ -646,33 +936,39 @@ def orchestrate_seo_growth(
                     if "page" not in r:
                         r["page"] = r["keys"][1]
     else:
-        # Fetch live data directly via CLI / MCP reports (striking-distance and quick-wins)
-        sd_res = run_seo_cli("striking-distance", site, {"minImpressions": 1, "limit": 100})
-        if isinstance(sd_res, dict) and sd_res.get("items"):
-            for it in sd_res["items"]:
-                query_page_rows.append({
-                    "site": site,
-                    "query": it.get("query", ""),
-                    "page": it.get("url", "/"),
-                    "impressions": int(it.get("impressions", 0)),
-                    "clicks": int(it.get("clicks", 0)),
-                    "ctr": float(it.get("ctr", 0.0)),
-                    "position": float(it.get("position", 0.0)),
-                    "device": "DESKTOP",
-                })
-        qw_res = run_seo_cli("quick-wins", site, {"minImpressions": 1, "limit": 100})
-        if isinstance(qw_res, dict) and qw_res.get("items"):
-            for it in qw_res["items"]:
-                query_page_rows.append({
-                    "site": site,
-                    "query": it.get("query", ""),
-                    "page": it.get("url", "/"),
-                    "impressions": int(it.get("impressions", 0)),
-                    "clicks": int(it.get("clicks", 0)),
-                    "ctr": float(it.get("ctr", 0.0)),
-                    "position": float(it.get("position", 0.0)),
-                    "device": "MOBILE",
-                })
+        # First attempt to load multi-dimensional GSC data directly from local MCP cache (~/.cache/seo/cache.db)
+        cached_rows, cached_dims = load_gsc_from_mcp_cache(site)
+        if cached_rows:
+            query_page_rows = cached_rows
+            dim_data = cached_dims
+        else:
+            # Fetch live data directly via CLI / MCP reports (striking-distance and quick-wins)
+            sd_res = run_seo_cli("striking-distance", site, {"minImpressions": 1, "limit": 100})
+            if isinstance(sd_res, dict) and sd_res.get("items"):
+                for it in sd_res["items"]:
+                    query_page_rows.append({
+                        "site": site,
+                        "query": it.get("query", ""),
+                        "page": it.get("url", "/"),
+                        "impressions": int(it.get("impressions", 0)),
+                        "clicks": int(it.get("clicks", 0)),
+                        "ctr": float(it.get("ctr", 0.0)),
+                        "position": float(it.get("position", 0.0)),
+                        "device": "DESKTOP",
+                    })
+            qw_res = run_seo_cli("quick-wins", site, {"minImpressions": 1, "limit": 100})
+            if isinstance(qw_res, dict) and qw_res.get("items"):
+                for it in qw_res["items"]:
+                    query_page_rows.append({
+                        "site": site,
+                        "query": it.get("query", ""),
+                        "page": it.get("url", "/"),
+                        "impressions": int(it.get("impressions", 0)),
+                        "clicks": int(it.get("clicks", 0)),
+                        "ctr": float(it.get("ctr", 0.0)),
+                        "position": float(it.get("position", 0.0)),
+                        "device": "MOBILE",
+                    })
 
     # 2. Ingest GA4 data
     if ga4_file and os.path.exists(ga4_file):
@@ -695,7 +991,7 @@ def orchestrate_seo_growth(
             {"site": site, "query": "trip cost estimator", "page": "/tools/solar-trip-cost/", "impressions": 35, "clicks": 0, "position": 21.5, "device": "MOBILE"},
         ]
 
-    # Run Detectors
+    # Run Track 1 Detectors (Improve Existing Pages & Shared Templates)
     ctr_actions = detect_ctr_opportunities(query_page_rows, conversion_rate, conversion_value)
     rank_actions = detect_ranking_opportunities(query_page_rows, conversion_rate, conversion_value)
     cro_actions = detect_conversion_leakage(
@@ -713,7 +1009,10 @@ def orchestrate_seo_growth(
     )
     expansion_actions = detect_content_expansion_and_cannibalization(query_page_rows, conversion_rate, conversion_value)
 
-    all_actions = ctr_actions + rank_actions + cro_actions + tech_actions + expansion_actions
+    # Run Track 2 Detector (Create New Pages for Unmet Search Demand)
+    new_page_actions = detect_new_page_opportunities(query_page_rows, conversion_rate, conversion_value, site=site)
+
+    all_actions = ctr_actions + rank_actions + cro_actions + tech_actions + expansion_actions + new_page_actions
     all_actions.sort(key=lambda x: x["priority_score"], reverse=True)
 
     # Manifest
@@ -732,8 +1031,21 @@ def orchestrate_seo_growth(
             "conversion_leakage": len(cro_actions),
             "technical_risk": len(tech_actions),
             "content_expansion_or_consolidation": len(expansion_actions),
+            "unmet_search_demand": len(new_page_actions),
         },
         "page_level_decisions": page_action_counts,
+        "tracks": {
+            "track1_improve_existing": [a for a in all_actions if a.get("page_level_action") != "create_new_page"],
+            "track2_create_new": [a for a in all_actions if a.get("page_level_action") == "create_new_page"],
+        },
+        "dimensions": {
+            "total_query_page_rows": len(query_page_rows),
+            "devices": dim_data.get("devices", []),
+            "countries": dim_data.get("countries", []),
+            "pages": dim_data.get("pages", []),
+            "queries": dim_data.get("queries", []),
+            "dates": dim_data.get("dates", []),
+        },
         "actions": all_actions,
     }
     return manifest
@@ -751,26 +1063,74 @@ def format_markdown_report(manifest: Dict[str, Any]) -> str:
         md.append(f"- **{label}:** {count} action(s)")
     md.append("")
 
-    md.append("## 2. Opportunity Detector Distribution")
-    for act_type, count in manifest["actions_by_type"].items():
-        md.append(f"- **{act_type.replace('_', ' ').title()}:** {count}")
+    dims = manifest.get("dimensions", {})
+    if dims.get("devices") or dims.get("countries") or dims.get("pages"):
+        md.append("## 2. Multi-Dimensional Search Telemetry (GSC Dimensions)")
+        if dims.get("devices"):
+            md.append("### Device Breakdown")
+            md.append("| Device | Clicks | Impressions | CTR | Position |")
+            md.append("| :--- | :---: | :---: | :---: | :---: |")
+            for d in dims["devices"]:
+                dev_name = d.get("keys", ["UNKNOWN"])[0]
+                cl = d.get("clicks", 0)
+                imp = d.get("impressions", 0)
+                ctr = d.get("ctr", 0.0) * 100
+                pos = d.get("position", 0.0)
+                md.append(f"| **{dev_name}** | {cl} | {imp} | {ctr:.2f}% | {pos:.1f} |")
+            md.append("")
+
+        if dims.get("countries"):
+            md.append("### Top Geographic Markets")
+            md.append("| Country | Clicks | Impressions | CTR | Position |")
+            md.append("| :--- | :---: | :---: | :---: | :---: |")
+            sorted_countries = sorted(dims["countries"], key=lambda x: (x.get("clicks", 0), x.get("impressions", 0)), reverse=True)[:10]
+            for c in sorted_countries:
+                c_name = c.get("keys", ["UNKNOWN"])[0].upper()
+                cl = c.get("clicks", 0)
+                imp = c.get("impressions", 0)
+                ctr = c.get("ctr", 0.0) * 100
+                pos = c.get("position", 0.0)
+                md.append(f"| `{c_name}` | {cl} | {imp} | {ctr:.2f}% | {pos:.1f} |")
+            md.append("")
+
+        if dims.get("pages"):
+            md.append("### Top Landing Pages by Search Volume")
+            md.append("| Page URL | Clicks | Impressions | CTR | Position |")
+            md.append("| :--- | :---: | :---: | :---: | :---: |")
+            sorted_pages = sorted(dims["pages"], key=lambda x: (x.get("impressions", 0), x.get("clicks", 0)), reverse=True)[:10]
+            for p in sorted_pages:
+                p_url = p.get("keys", ["/"])[0]
+                cl = p.get("clicks", 0)
+                imp = p.get("impressions", 0)
+                ctr = p.get("ctr", 0.0) * 100
+                pos = p.get("position", 0.0)
+                md.append(f"| `{p_url}` | {cl} | {imp} | {ctr:.2f}% | {pos:.1f} |")
+            md.append("")
+
+    md.append("## 3. Dual-Track Execution Summary")
+    track1_count = len(manifest.get("tracks", {}).get("track1_improve_existing", []))
+    track2_count = len(manifest.get("tracks", {}).get("track2_create_new", []))
+    md.append(f"- **Track 1 (Improve Existing Pages & Templates):** {track1_count} action(s)")
+    md.append(f"- **Track 2 (Create New Pages from Unmet Queries):** {track2_count} action(s)")
     md.append("")
 
-    md.append("## 3. Prioritized SEO & Conversion Action Queue")
-    md.append("| Priority | Action ID | Decision | Target URL | Direct Data Observation | Proposed Action | Expected Val |")
-    md.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
+    md.append("## 4. Prioritized SEO & Conversion Action Queue")
+    md.append("| Priority | Action ID | Track | Decision | Target URL | Direct Data Observation | Proposed Action | Target Metric |")
+    md.append("| :---: | :--- | :---: | :--- | :--- | :--- | :--- | :--- |")
 
     for a in manifest["actions"]:
         p_score = a["priority_score"]
         a_id = a["action_id"]
+        track_label = "Track 2" if a.get("page_level_action") == "create_new_page" else "Track 1"
         decision = a.get("page_level_action", "improve_existing_page").replace('_', ' ').title()
         target = a["target_urls"][0] if a["target_urls"] else "/"
         exp_val = a["expected_impact"].get("expected_incremental_value", 0.0)
         prop = a["proposed_action"]
         direct_obs = a.get("direct_observation") or (a["evidence_details"][0]["observation"] if a.get("evidence_details") else "N/A")
-        md.append(f"| **{p_score:.1f}** | `{a_id}` | `{decision}` | `{target}` | {direct_obs} | {prop} | ${exp_val:.2f} |")
+        metric = a["decision_framework"].get("measurable_outcome", f"+${exp_val:.2f} value")
+        md.append(f"| **{p_score:.1f}** | `{a_id}` | `{track_label}` | `{decision}` | `{target}` | {direct_obs} | {prop} | {metric} |")
 
-    md.append("\n## 4. Detailed Action Briefs (5 Mandatory Questions Answered)")
+    md.append("\n## 5. Detailed Action Briefs (5 Mandatory Questions Answered)")
     for a in manifest["actions"][:10]:
         df = a.get("decision_framework", {})
         direct_obs = a.get("direct_observation") or (a["evidence_details"][0]["observation"] if a.get("evidence_details") else "N/A")

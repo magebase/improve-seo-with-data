@@ -49,7 +49,8 @@
         "ranking_opportunity",
         "conversion_leakage",
         "technical_risk",
-        "content_expansion_or_consolidation"
+        "content_expansion_or_consolidation",
+        "unmet_search_demand"
       ],
       "description": "Which of the 5 core opportunity detectors generated this item."
     },
