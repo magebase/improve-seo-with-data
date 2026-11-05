@@ -6,50 +6,82 @@
 
 Autonomous, data-driven SEO engineering, Observability, and Generative Engine Optimization (GEO) skill for **Google Antigravity CLI (`agy`)**, **Claude Code**, **Cursor**, and multi-agent developer fleets.
 
-Governed by the **SEO Outcome Maximization Contract**: eliminates superficial "best practice" checklists and speculative keyword guessing. Every audit, diagnosis, code modification, and page generation is backed by authentic first-party data: **Google Search Console (GSC)** performance, **real user monitoring (RUM)**, **server & crawler access logs**, **live SERP rankings**, and **LLM answer engine citations**.
+Governed by the **SEO Outcome Maximization Contract**: eliminates superficial "best practice" checklists and speculative keyword guessing. Every audit, diagnosis, code modification, and page generation is backed by authentic first-party data: **Google Search Console (GSC)** performance, **Microsoft Clarity** UX telemetry, **PostHog** conversion funnels, **Cloudflare** edge performance & Core Web Vitals, and **live SERP competitor DOMs**.
 
 ---
 
-## The SEO Outcome Maximization Contract
+## 1. Where Most "Data-Driven" SEO Skills Fail
 
-The system optimizes strictly for **incremental organic search clicks and meaningful business conversions**, never for pages published, changes made, tests passed, or words written:
-
-1. **Exhaustive Opportunity Discovery:** Low volume is uncertainty, not a rejection threshold. Every detected opportunity results in a concrete action, a defined diagnostic step, or an explicit evidence-backed decision to defer.
-2. **Diagnose Before Choosing an Intervention:** Classify failure modes using the 8-State Page-Level Diagnostic Decision Tree before choosing code or content edits.
-3. **URL Ownership Model & Anti-Cannibalization Gate:** Query clusters are mapped to intended URL owners. If an existing non-hub URL ranks $\le 15.0$, creating a new competing page is strictly forbidden; route to Track 1 existing page improvement (Recipe A).
-4. **Quantified Expected Value:** Prioritize via $EV(a) = P(\text{success} \mid a) \times V(a) - Cost(a) - Risk(a)$ and Priority $P = \frac{\max(0.1, EV) \times \text{Confidence}}{\text{Effort} + \text{Risk}}$ with sample size uncertainty dampening.
-5. **Content Evidence System & Factual Verification:** Require source verification for domain concepts (e.g. telecom operators vs mobile money), carrier health, and competitor pricing before publication.
-6. **Production Indexing Funnel Tracking:** Track pages through `Published -> Discovered & Crawled -> Eligible & Indexed -> Impressions -> Clicks -> Conversions`. Automated unit/BDD tests prove regression safety; they do NOT prove SEO ranking growth.
-7. **Title Display-Width Heuristics:** Replace rigid character thresholds with SERP rendering physics (~580px desktop, ~480px mobile).
-8. **Sitemap `lastmod` Integrity:** Advance `<lastmod>` timestamps only on substantive content, functional, or pricing changes, never on routine cron runs.
+This skill is engineered to eliminate the 5 critical structural flaws common in automated SEO tools:
+1. **Aggregating by Page or Query Alone:** Queries joint `["page", "query", "device"]` to detect multi-URL cannibalization and intent mismatch.
+2. **Naive CTR Thresholds:** Replaces flat CTR filters with a mathematical **Position-Adjusted CTR Curve** ($Pos \le 1.0: 30\%, 2.0: 18\%, 3.0: 12\%, 5.0: 7\%, 10.0: 3\%$).
+3. **Ignoring Period-over-Period Deltas:** Isolates decaying money pages via traffic change decomposition ($\Delta C = (I_1 - I_0) R_0 + I_1 (R_1 - R_0)$).
+4. **Optimizing Blind Without Competitor Context:** Scrapes live top 5 SERP titles, headings, and schema to find semantic gaps.
+5. **No Verification Loop:** Logs baselines, timestamps deployment dates, and tracks 14-to-28-day post-change GSC rank consolidation.
 
 ---
 
-## Architecture: The 6-Phase Closed Loop
+## 2. The 4 High-Leverage Data Pipelines
+
+| Target Metric | Pipeline Name | Exact Filter & Logic | Automated Action Taken |
+| :--- | :--- | :--- | :--- |
+| **CTR & Clicks** | **Pipeline 1: Position-Adjusted CTR Underperformers** | $Pos \le 5.5, Imp \ge 500, CTR < Expected \times 0.70$ | Rewrite `<title>` & description; frontload query tokens; audit competitor hooks; verify FAQ/Product schema. |
+| **Position & Clicks** | **Pipeline 2: Striking-Distance Semantic Gaps** | $Pos 6.0–15.5, Imp \ge 200$, query absent from headings | Inject dedicated `<h2>` section answering query directly; extract missing competitor entities; add hub links. |
+| **Impressions** | **Pipeline 3: Zero-Click / Emerging Cluster Expansion** | $Pos 16.0–35.0, +50\%$ MoM velocity, $\le 5$ clicks | Evaluate SERP overlap: $>60\%$ shared URLs = expand existing page; $<40\%$ = create new spoke page. |
+| **Position & CTR** | **Pipeline 4: Cannibalization & Decay Triage** | Multiple URLs with $\ge 15\%$ impression share, or $>20\%$ click drop | Consolidate competing pages via 301/canonical; differentiate H1 targeting; refresh stale content. |
+
+---
+
+## 3. Multi-Platform Telemetry Fusion Architecture
 
 ```
-[ Phase 0: Observability & Logging Stack Gate ]
-         │ (Audit GA4, Clarity, PostHog, IndexNow, RUM, Server Logs)
-         ▼
-[ Phase 1: Data Source & MCP Connect ]
-         │ (GSC OAuth / Service Account / Local Cache / 74 Reports)
-         ▼
-[ Phase 2: Technical & Crawl Health Pass ]
-         │ (site-crawl, canonicals, robots.txt, Core Web Vitals)
-         ▼
-[ Phase 3: Demand & Performance Analysis ]
-         │ (striking distance, CTR quick-wins, cannibalization, decay)
-         ▼
-[ Phase 4: Generative Engine Optimization (GEO) ]
-         │ (llms.txt, Schema.org JSON-LD, agent readiness)
-         ▼
-[ Phase 5: Code Remediation & Verification Loop ]
-           (templates, metadata, internal links, re-audit)
+┌────────────────────────────────────────────────────────────────────────┐
+│                        PLANE A: SEO & BUSINESS BI                      │
+│   Google Search Console (SERP Demand, joint Page+Query, Indexation)   │
+│   PostHog (Organic Conversion Funnels, Event Drop-offs, Activation)   │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                        PLANE B: USER EXPERIENCE (UX)                   │
+│   Microsoft Clarity (Heatmaps, Rage Clicks, Dead Clicks, Scroll Depth) │
+│   PostHog Session Replay (User Journey Recordings, Rage Clicks)        │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                    PLANE C: TECHNICAL RELIABILITY                      │
+│   Cloudflare Edge (TTFB, LCP, INP, CLS, Edge 5xx/404, Worker Logs)     │
+│   Better Stack (Uptime Incidents) · Grafana / Faro (Field RUM)         │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│               UNIFIED MULTI-PLATFORM OPTIMIZATION ENGINE               │
+│                   (scripts/seo_optimizer_engine.py)                    │
+│      Detect  ──▶  Diagnose  ──▶  Score  ──▶  Execute  ──▶  Verify      │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## The 8-State Page-Level Diagnostic Decision Tree
+## 4. Opportunity Scoring & Agentic Guardrails
+
+### Expected Value & Impact Score Formula
+
+$$\text{Potential Click Lift} = \text{Impressions} \times \left(\text{Expected CTR}(\max(1.0, \text{Pos} - 2.0)) - \text{Actual CTR}\right)$$
+
+$$\text{Friction Penalty} = (\text{Rage Clicks} > 10) \times 20 + (\text{LCP} > 2.5\text{s}) \times 30 + (\text{TTFB} > 400\text{ms}) \times 15$$
+
+$$\text{Potential Impact Score} = \text{Potential Click Lift} - \text{Friction Penalty}$$
+
+### Strict Guardrails Against SEO Hallucinations
+- **Never Change Established URLs or Slugs:** Preserves backlink equity and eliminates redirect penalties.
+- **Winner Protection Invariant:** Pages with $\text{Actual CTR} \ge \text{Expected CTR} \times 1.20$ at Position $\le 3.0$ are locked against title or snippet changes.
+- **Anti-Keyword Stuffing Invariant:** Prohibits repeating keywords more than twice across title and H1.
+- **Deterministic Preprocessing:** Python computes all metrics and rankings before handing structured summaries to LLMs.
+
+---
+
+## 5. The 8-State Page-Level Diagnostic Decision Tree
 
 | State | Search State Diagnosis | Primary Underlying Cause | Prescribed Action Family | Implementation Contract Type |
 | :---: | :--- | :--- | :--- | :--- |
@@ -64,30 +96,7 @@ The system optimizes strictly for **incremental organic search clicks and meanin
 
 ---
 
-## 7 Standard Typed Action Contracts
-
-Every emitted SEO action follows a strict implementation contract:
-
-1. `title_optimization`: Optimizes title tags within display width (~580px desktop, ~480px mobile) to front-load intent modifiers while aligning with visible `<h1>`.
-2. `content_expansion`: Deepens topic coverage with answers to real GSC query variations and original interactive calculation tools.
-3. `internal_link_update`: Adds crawlable standard HTML links (`<a href="...">`) from high-authority category hubs with descriptive anchor text.
-4. `technical_fix`: Remediates edge 5xx/404 errors, canonical tag inconsistencies, or failing Core Web Vitals.
-5. `new_page_creation`: Builds purpose-built pages for unmet query clusters passing the 7-factor quality gate and URL ownership check.
-6. `content_consolidation`: Resolves multi-URL keyword cannibalization by designating canonical topic owners and 301-redirecting thin duplicates.
-7. `measurement_only`: Sets up telemetry observation windows for uncertain hypotheses where premature code modification carries downside risk.
-
----
-
-## 4 Core Operational Recipes
-
-- **Recipe A — Improve Rankings for Existing Pages (Positions 4–20):** Extract top query clusters, inspect live SERP formats (calculators, tools, directories, guides), add missing computational logic or verified benchmarks, link contextually from relevant category hubs, and deploy the smallest change that directly closes the gap.
-- **Recipe B — Improve CTR Without Sacrificing Relevance:** Segment impressions by device and country, verify title display width (~580px desktop, ~480px mobile), align visible H1 with title, and evaluate over 28-day Difference-in-Differences against matched URL cohort.
-- **Recipe C — Recover Pages That Are Not Gaining Impressions:** Classify in indexing funnel (Not Discovered vs Crawled Not Indexed vs Duplicate Canonical vs No Demand); deploy technical fixes for canonicals, add unique utility for weak content, or add internal links for isolated pages.
-- **Recipe D — Scale Content That Has Demonstrated Value:** Track page-family health (% indexed, % receiving impressions, % generating clicks). If a page family succeeds, expand it using the same validated mechanisms and verified data; if it underperforms, fix the template defect before generating more URLs.
-
----
-
-## Antigravity Installation & Setup
+## 6. Antigravity Installation & Setup
 
 ### 1. Connect the SEO MCP Server
 Antigravity automatically connects to the `seo` MCP server. Ensure your `~/.gemini/antigravity/mcp_config.json` (or `~/.gemini/config/mcp_config.json`) includes:
@@ -106,8 +115,6 @@ Antigravity automatically connects to the `seo` MCP server. Ensure your `~/.gemi
 }
 ```
 
-*Note: For local crawl audits and technical site inspections, zero Google credentials are required.*
-
 ### 2. Install Skill into Antigravity
 
 ```bash
@@ -122,31 +129,26 @@ ln -sf /home/aqua/skills/improve-seo-with-data .agents/skills/improve-seo-with-d
 
 ---
 
-## CLI & Automation Quickstarts
+## 7. CLI & Automation Quickstarts
 
-### 0. Run the Master Growth Intelligence Engine
+### 0. Run the Multi-Source Correlation Engine
 ```bash
-# Live analysis against GSC property with EV scoring & diagnostic state classification
-python3 scripts/seo_growth_intelligence.py --site sc-domain:example.com
-
-# Ingest historical GSC + GA4 exports with custom conversion values
-python3 scripts/seo_growth_intelligence.py \
-    --gsc-file gsc_export.json \
-    --ga4-file ga4_export.json \
-    --telemetry-file telemetry_export.json \
-    --conv-value 25.0 \
+# Correlate GSC, Clarity, PostHog, and Cloudflare into prioritized Action Queue
+python3 scripts/seo_optimizer_engine.py \
+    --site sc-domain:example.com \
     --output-json /tmp/action_queue.json \
     --output-md /tmp/action_queue.md
 ```
 
-### 1. Audit & Setup the Observability Stack
+### 1. Run the Master Growth Intelligence Engine
 ```bash
-python3 scripts/setup_observability.py --url https://example.com
+# Live analysis against GSC property with EV scoring & diagnostic state classification
+python3 scripts/seo_growth_intelligence.py --site sc-domain:example.com
 ```
 
-### 2. Verify Environment & MCP Health
+### 2. Audit & Setup the Observability Stack
 ```bash
-python3 scripts/verify_mcp.py
+python3 scripts/setup_observability.py --url https://example.com
 ```
 
 ### 3. Run Technical Crawl Audit
@@ -161,7 +163,7 @@ python3 scripts/geo_evaluator.py --url https://example.com
 
 ---
 
-## Repository Structure
+## 8. Repository Structure
 
 ```text
 improve-seo-with-data/
@@ -173,7 +175,8 @@ improve-seo-with-data/
 │   ├── seo-action.schema.json        # Schema with typed actions, EV math, and diagnostic states
 │   └── data-source-manifest.schema.json
 ├── scripts/
-│   ├── seo_growth_intelligence.py    # Master engine with EV scoring, URL ownership & 8 diagnostic states
+│   ├── seo_optimizer_engine.py       # Multi-platform correlation engine (GSC + Clarity + PostHog + CF)
+│   ├── seo_growth_intelligence.py    # Master decision engine with EV scoring, URL ownership & 8 states
 │   ├── setup_observability.py        # Observability & telemetry stack auditor & setup tool
 │   ├── verify_mcp.py                 # MCP and CLI diagnostic runner
 │   ├── run_audit.py                  # Technical crawl & single-page audit engine
