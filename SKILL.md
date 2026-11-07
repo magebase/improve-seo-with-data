@@ -1,7 +1,7 @@
 ---
 name: improve-seo-with-data
 description: >-
-  The authoritative, multi-source SEO Growth & Conversion Operating System. Use this skill whenever you need to audit, diagnose, optimize, or scale a website's organic search visibility, conversion funnels, or AI search presence using real data. Automatically fetches, correlates, and joins Google Search Console (GSC joint page+query performance, devices, indexation), Microsoft Clarity (heatmaps, rage clicks, dead clicks, scroll depth drop-offs), PostHog (organic conversion funnels and user journeys), Cloudflare (TTFB, Core Web Vitals LCP/INP/CLS, edge 5xx/404 logs), Better Stack (uptime incidents), and live SERP competitor DOMs. Formulates prioritized, effort-adjusted Action Queues and executes rigorous SEO matched-cohort and CRO experiments.
+  The authoritative, multi-source SEO Growth & Conversion Operating System. Use this skill whenever you need to audit, diagnose, optimize, or scale a website's organic search visibility, conversion funnels, or AI search presence using real data. Automatically fetches, correlates, and joins Google Search Console (GSC joint page+query performance, devices, indexation), Microsoft Clarity (heatmaps, rage clicks, dead clicks, scroll depth drop-offs), PostHog (organic conversion funnels and user journeys), Cloudflare (TTFB, Core Web Vitals LCP/INP/CLS, edge 5xx/404 logs), Better Stack (uptime incidents), and live SERP competitor DOMs. Enriches every opportunity with external DataForSEO SERP intelligence (weak-spot detection, SERP feature crowding, cost-routed queue vs live fetching) and predicts pre-launch keyword ROI with LGBMRanker before spending crawl budget. Formulates prioritized, effort-adjusted Action Queues and executes rigorous SEO matched-cohort and CRO experiments.
 ---
 
 # improve-seo-with-data: The SEO & Conversion Growth Operating System
@@ -87,6 +87,11 @@ Google Search Console shows post-impression behavior on the SERP, but is a black
    - **Core Web Vitals:** Monitors Largest Contentful Paint (LCP $>2.5$s), Interaction to Next Paint (INP $>200$ms), and Cumulative Layout Shift (CLS $>0.1$). Slow LCP on mobile is the primary tie-breaker suppressing rankings against equally authoritative competitors.
 5. **Live SERP & Competitor DOM Scraper:**
    - Extracts live `<title>`, `<h1>–<h3>`, word count, JSON-LD schema, and internal linking structure of the top 5 ranking competitors to identify topical gaps.
+6. **DataForSEO SERP Intelligence (external evidence GSC cannot see):**
+   - GSC only shows queries where the site already has impressions and is completely blind to competitor gaps, exact SERP features, and uncaptured volume. DataForSEO fills that blind spot at ~$0.0006/SERP (Standard Queue).
+   - **Weak-Spot Scoring:** for every striking-distance query, fetch the Top 10 and compute `serp_vulnerability_score` — forum/UGC share (Reddit/Quora/`discussions_and_forums`), title exact-match rate of the Top 5, and SERP feature crowding (AI Overview / local pack / shopping blocks). High-volume queries where forums rank in the Top 5 with no exact-match titles are immediate, zero-backlink traffic wins.
+   - **Cost routing is mandatory:** batch discovery via Standard Queue (`task_post` → `tasks_ready` → `task_get`, ~$0.0006/SERP), never Live ($0.002/SERP). Search operators (`site:`, `inurl:`, `intitle:`) trigger a 5x billing multiplier — fetch the plain Top 10 and filter locally. AI Overviews and PAA come in the base payload (no paid `load_async_ai_overview` flag).
+   - **Rank tracking refunds:** pass `stop_crawl_on_match` with the target domain so DataForSEO stops crawling at your URL and refunds unused depth; audit deep positions via `search_param: "&start=N"` (e.g. `30` = page 4) instead of paying full depth from position 1.
 
 ---
 
@@ -229,6 +234,29 @@ Ensure search visibility across LLM answer engines (**ChatGPT Search**, **Perple
 python3 scripts/geo_evaluator.py --url https://example.com
 ```
 
+### Workflow 6: DataForSEO Weak-Spot Enrichment & Pre-Launch Ranking (External SERP Alpha)
+Internal telemetry alone is bound by survivorship bias: it can only optimize keywords where Google already grants impressions. Enrich every striking-distance candidate with external SERP evidence BEFORE spending engineering time (see [`references/serp_intelligence_and_programmatic_scaling.md`](./references/serp_intelligence_and_programmatic_scaling.md) for the full playbook):
+
+```bash
+# Dry-run: inspect the payload plan and cost estimate (no network)
+python3 scripts/dataforseo_client.py --keywords-file striking_distance.txt --dry-run
+
+# Batch weak-spot scan via the Standard Queue ($0.0006/SERP), then score every SERP
+python3 scripts/dataforseo_client.py --keywords-file striking_distance.txt \
+    --output-json /tmp/serp_weakspots.json
+
+# Rank tracking that stops at your domain (refunds unused depth)
+python3 scripts/dataforseo_client.py --keywords-file my-queries.txt --rank-track-domain example.com
+```
+
+Route every candidate through the enrichment funnel before acting:
+$$\text{GSC Striking Distance} \longrightarrow \text{SERP Vulnerability Score} \longrightarrow \text{LGBMRanker Expected Clicks} \longrightarrow \text{Action Queue}$$
+
+1. **Weak-Spot Gate:** high-impression queries scoring `weak_spot=true` (forum-heavy, low title-match) jump to the front of the Action Queue; queries where entrenched DR 90+ giants exact-match the title are demoted regardless of internal metrics.
+2. **Pre-Launch Prediction (LGBMRanker lambdarank):** rank the pSEO backlog by predicted 30-day click velocity (features: topical centroid similarity, SERP vulnerability, title exact-match rate, internal-link centrality) and publish only the top 5-15% of route pairs first. Deploy top deciles only after early cohorts earn impressions in GSC.
+3. **Programmatic Doorway Defense:** every pSEO template must pass the pre-deploy similarity gate — `uniqueness_ratio >= 0.50` populated data fields, dynamic DOM branching on data deltas, and MinHash/shingle similarity < 70% between sibling routes. Bulk templates that fail the gate are held from the sitemap (crawl-and-drop is a site-wide trust hazard, and noindex does not undo a domain-level classifier hit).
+4. **Navboost & Indexing Velocity:** interactive answers/calculators in the top 300px to win the long click; sharded priority sitemaps; IndexNow pings on publish (Bing/ChatGPT/Perplexity); rotating "recently updated" boost slots on the highest-authority pages until first GSC impressions arrive.
+
 ---
 
 ## 10. Tool & Script Inventory
@@ -238,6 +266,7 @@ python3 scripts/geo_evaluator.py --url https://example.com
 | [`scripts/seo_optimizer_engine.py`](./scripts/seo_optimizer_engine.py) | **The Multi-Platform Correlation Engine:** Unifies GSC, Microsoft Clarity, PostHog, and Cloudflare into the 4 High-Leverage Pipelines, enforces guardrails against hallucinations, and ranks tasks by Potential Impact Score. |
 | [`scripts/seo_growth_intelligence.py`](./scripts/seo_growth_intelligence.py) | **The Master Decision Engine:** Ingests multi-source telemetry, executes 6 opportunity detectors, classifies 8 diagnostic states, enforces URL ownership, computes $EV(a)$ expected values, and emits prioritized Action Queues. |
 | [`scripts/gsc_analyzer.py`](./scripts/gsc_analyzer.py) | Multi-dimensional Search Console analyzer for joint page+query dimensions, striking distance, expected CTR residuals, and traffic decomposition. |
+| [`scripts/dataforseo_client.py`](./scripts/dataforseo_client.py) | **Cost-Routed DataForSEO SERP Intelligence:** Standard Queue batch discovery at $0.0006/SERP (Live gated at $0.002), weak-spot vulnerability scoring, SERP feature extraction, `stop_crawl_on_match` rank tracking with refunds, offset deep-page crawling, and `--dry-run` cost plans. Credentials via `DATAFORSEO_LOGIN`/`DATAFORSEO_PASSWORD` (or `DFS_*`/`DATAFORSEO_API_KEY`) in `.env.credentials` — never hardcoded. |
 | [`scripts/setup_observability.py`](./scripts/setup_observability.py) | Scans, validates, heals, and exports telemetry manifests (`DataSourceManifest`) and drop-in tracking snippets. |
 | [`scripts/geo_evaluator.py`](./scripts/geo_evaluator.py) | Scores AI agent readiness, evaluates `llms.txt`, and validates Schema.org JSON-LD structured data. |
 | [`scripts/run_audit.py`](./scripts/run_audit.py) | High-speed technical crawler pass for status codes, canonical consistency, and crawl budget parameter defense. |
