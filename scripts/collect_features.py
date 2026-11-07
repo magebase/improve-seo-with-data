@@ -125,21 +125,29 @@ def compute_serp_features(serp_items: List[Dict[str, Any]], query: str) -> Dict[
 
 
 def extract_special_blocks(serp_items: List[Dict[str, Any]]) -> int:
-    """Counts SERP real-estate blocks above the organic fold (pixel proxy)."""
-    weights = {"featured_snippet": 400, "ai_overview": 600, "knowledge_graph": 350,
-               "local_pack": 300, "video": 250, "images": 200, "ads": 150,
-               "people_also_ask": 250, "related_searches": 150, "top_serp_features": 1}
+    """Sums pixel-equivalent real estate of SERP blocks above the organic fold.
+
+    Consumes the REAL DataForSEO advanced-endpoint item types (verified live
+    2026-11: ai_overview, people_also_ask, people_also_search, related_searches,
+    featured_snippet, ...). The regular endpoint returns only `organic` items,
+    which is why the queue client prefers endpoint_advanced.
+    """
+    type_weights = {
+        "ai_overview": 600,
+        "featured_snippet": 400,
+        "knowledge_graph": 350,
+        "local_pack": 300,
+        "people_also_ask": 250,
+        "discussions_and_forums": 250,
+        "video": 250,
+        "images": 200,
+        "people_also_search": 100,
+        "related_searches": 150,
+        "paid": 150,
+    }
     total = 0
     for item in serp_items:
-        if item.get("type") != "serp_features":
-            continue
-        block_type = str(item.get("title", item.get("block", ""))).lower()
-        for key, weight in weights.items():
-            if key in block_type:
-                total += weight
-                break
-        else:
-            total += weights["top_serp_features"]
+        total += type_weights.get(str(item.get("type", "")).lower(), 0)
     return total
 
 

@@ -457,6 +457,24 @@ def prescribe_action(
     return "REWRITE_SNIPPET_AND_TOP_300PX"
 
 
+def cold_start_depth_multiplier(current_pos: float, serp_forum_ratio: float) -> float:
+    """Position-depth decay for the cold-start proxy.
+
+    Raw impression weighting alone vaults ultra-deep head terms (a YMYL query
+    at position 207 against DR 90 incumbents) above winnable striking-distance
+    rows. Deep positions (>50) with NO weak-forum spots in the SERP are
+    hyper-competitive and discounted 85%; the striking-distance band (8-25)
+    gets a 1.5x boost. Verified live: 'average cost of car insurance' at
+    position 207 must never top an immediate action queue.
+    """
+    pos = float(current_pos)
+    if pos > 50.0 and float(serp_forum_ratio) <= 0.0:
+        return 0.15
+    if 8.0 <= pos <= 25.0:
+        return 1.5
+    return 1.0
+
+
 def split_action_queue(
     rows: List[Dict[str, Any]],
     n_exploit: int = EXPLOIT_SLOTS,

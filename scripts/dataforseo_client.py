@@ -352,8 +352,13 @@ class DataForSEOClient:
         caller simply sweeps again later (e.g. on the next cron run).
 
         NOTE: the tasks_ready envelope nests the ready-task descriptors inside
-        `result` (each carrying `id` + `endpoint_regular`); each descriptor is
-        then fetched individually via `/task_get/regular/{id}`.
+        `result` (each carrying `id` + `endpoint_regular`/`endpoint_advanced`);
+        each descriptor is then fetched individually. The ADVANCED endpoint is
+        preferred: verified live 2026-11, `task_get/regular` returns ONLY
+        `organic` items while `task_get/advanced` also carries the SERP feature
+        blocks (`ai_overview`, `people_also_ask`, `people_also_search`,
+        `related_searches`, `discussions_and_forums`) that the pixel-crowding
+        and forum-ratio features consume — at the same $0.0006 queue price.
         """
         fetched: List[Dict[str, Any]] = []
         self.last_queue_state = {"completed": [], "pending": 0, "fetched": 0, "skipped": []}
@@ -368,9 +373,11 @@ class DataForSEOClient:
                 self.last_queue_state["pending"] += 1
             for task in descriptors:
                 task_id = str(task.get("id", ""))
-                # tasks_ready returns the authoritative result-type endpoint
-                # (/task_get/regular/{id}); a bare task_get/{id} 404s (40400).
-                endpoint = task.get("endpoint_regular") or f"/serp/google/organic/task_get/regular/{task_id}"
+                endpoint = (
+                    task.get("endpoint_advanced")
+                    or task.get("endpoint_regular")
+                    or f"/serp/google/organic/task_get/advanced/{task_id}"
+                )
                 if endpoint.startswith("/v3"):
                     endpoint = endpoint[len("/v3"):]
                 try:

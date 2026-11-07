@@ -223,6 +223,7 @@ class TestDataForSEOClientPayloads(unittest.TestCase):
                 "result_count": 1,
                 "result": [{
                     "id": "111",
+                    "endpoint_advanced": "/v3/serp/google/organic/task_get/advanced/111",
                     "endpoint_regular": "/v3/serp/google/organic/task_get/regular/111",
                 }],
             }])
@@ -231,14 +232,17 @@ class TestDataForSEOClientPayloads(unittest.TestCase):
             return dfs_envelope(None, tasks=[{
                 "id": "111",
                 "status_code": 20000,
-                "result": [{"task_id": "111", "keyword": "k", "items": [organic_item(1, "t", "https://a.com/")]}],
+                "result": [{"task_id": "111", "keyword": "k", "items": [organic_item(1, "t", "https://a.com/"),
+                                                                         {"type": "ai_overview"},
+                                                                         {"type": "people_also_ask"}]}],
             }])
 
         transport = FakeTransport(responses=[ready_response, task_get_1])
         client = self._client(transport)
         results = client.collect_ready_tasks()
         self.assertIn("tasks_ready", transport.calls[0]["url"])
-        self.assertIn("task_get/regular/111", transport.calls[1]["url"])
+        # The advanced endpoint must win: regular strips SERP feature blocks.
+        self.assertIn("task_get/advanced/111", transport.calls[1]["url"])
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["task_id"], "111")
 

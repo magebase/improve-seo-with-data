@@ -34,6 +34,7 @@ from ltr_ranker import (  # noqa: E402
     IsotonicCalibrator,
     bucket_histogram,
     clicks_to_relevance_grade,
+    cold_start_depth_multiplier,
     cold_start_score,
     expected_ctr,
     heuristic_base_score,
@@ -95,6 +96,35 @@ class TestColdStartProxy(unittest.TestCase):
             pixel_crowding=4.0, search_volume=10,
         )
         self.assertLess(score, 0.0)
+
+
+class TestColdStartDepthDecay(unittest.TestCase):
+    """Regression: 'average cost of car insurance' (pos 207, DR 90 SERP) must
+    never top the action queue over winnable striking-distance rows."""
+
+    def test_deep_hypercompetitive_serp_discounted_85_percent(self):
+        self.assertEqual(cold_start_depth_multiplier(207.0, 0.0), 0.15)
+        self.assertEqual(cold_start_depth_multiplier(51.0, 0.0), 0.15)
+
+    def test_striking_distance_band_boosted(self):
+        self.assertEqual(cold_start_depth_multiplier(8.0, 0.6), 1.5)
+        self.assertEqual(cold_start_depth_multiplier(15.0, 0.0), 1.5)
+        self.assertEqual(cold_start_depth_multiplier(25.0, 0.3), 1.5)
+
+    def test_moderate_and_shallow_positions_neutral(self):
+        self.assertEqual(cold_start_depth_multiplier(1.0, 0.0), 1.0)
+        self.assertEqual(cold_start_depth_multiplier(5.0, 0.2), 1.0)
+        self.assertEqual(cold_start_depth_multiplier(30.0, 0.1), 1.0)
+
+    def test_deep_serp_with_weak_forums_escapes_discount(self):
+        self.assertEqual(cold_start_depth_multiplier(207.0, 0.8), 1.0)
+
+    def test_depth_decayed_queue_demotes_head_term_below_striking_distance(self):
+        raw_head = cold_start_score(1.0, 0.0, 0.0, 0.0, 999)   # huge raw score
+        raw_sd = cold_start_score(0.7, 0.6, 0.3, 2.0, 90)      # modest SD row
+        head = raw_head * cold_start_depth_multiplier(207.0, 0.0)
+        sd = raw_sd * cold_start_depth_multiplier(15.0, 0.6)
+        self.assertGreater(sd, head)
 
 
 class TestMonotoneContract(unittest.TestCase):

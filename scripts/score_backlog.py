@@ -35,6 +35,7 @@ from ltr_ranker import (  # noqa: E402
     EXPLOIT_SLOTS,
     EXPLORE_SLOTS,
     FEATURES,
+    cold_start_depth_multiplier,
     cold_start_score,
     load_bundle,
     prescribe_action,
@@ -53,13 +54,20 @@ def score_rows(rows: List[Dict[str, Any]], models_dir: str) -> Dict[str, Any]:
               "(Stage 1 of the closed loop).")
         for row in rows:
             feats = row["features"]
-            row["rank_score"] = cold_start_score(
+            raw_score = cold_start_score(
                 centroid_sim=feats["domain_centroid_sim"],
                 forum_ratio=feats["serp_forum_ratio"],
                 title_match_rate=feats["title_exact_match_rate"],
                 pixel_crowding=feats["serp_pixel_crowding"],
                 search_volume=10 ** feats["search_volume_log"] - 1 if feats["search_volume_log"] > 0 else 0,
             )
+            # Depth decay: hyper-competitive deep head terms never outrank
+            # winnable striking-distance rows on raw impressions alone.
+            depth = cold_start_depth_multiplier(
+                feats["current_pos"], feats["serp_forum_ratio"]
+            )
+            row["depth_multiplier"] = depth
+            row["rank_score"] = raw_score * depth
             row["expected_clicks_30d"] = None
             row["prescribed_action"] = prescribe_action(
                 current_pos=feats["current_pos"],
