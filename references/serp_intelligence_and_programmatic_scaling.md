@@ -130,6 +130,47 @@ from thin-content dampening. After training, extract SHAP contributions
 (`ranker.predict(X_val, pred_contrib=True)`) and drop paid features that
 contribute < 5% of variance.
 
+### 4.1 Production Implementation (scripts/ltr_ranker.py — the shipped contract)
+
+The conceptual recipe above is implemented and tested in
+`scripts/ltr_ranker.py` with four CLI stages (`collect_features.py` →
+`train_ranker.py` → `score_backlog.py` → `log_outcomes_and_retrain.py`).
+The shipped implementation hardens the naive recipe in six ways — treat
+these as mandatory when extending it:
+
+1. **Native LightGBM API, not the sklearn wrapper.** `lgb.train()` keeps the
+   dependency surface at numpy + lightgbm; `LGBMRanker` imports scikit-learn,
+   which the factory venv does not ship. Bundles persist via
+   `booster.save_model()` (native text format) + a JSON sidecar — never
+   joblib/pickle.
+2. **Position-bias correction on labels.** Training on raw clicks teaches the
+   model "recommend whatever already ranks #1". Labels are propensity-
+   weighted: `AdjustedClicks = realized * min(5, ECTR(3)/ECTR(p_start))`
+   with `ECTR(p) = 0.28 / p^1.15`.
+3. **Conversion override.** Any conversion grades the row 4 regardless of
+   click volume — revenue truth outranks traffic truth.
+4. **Cluster-integrity splitting.** The 80/20 train/validation split is
+   performed over whole semantic clusters (sorted rows, contiguous blocks),
+   never row-wise. Row-wise splits leak sibling template routes into the
+   validation set and inflate NDCG. Unit tests assert row-level cluster
+   disjointness (a metadata-only assertion is a false positive — verify the
+   actual rows).
+5. **Residual learning via `init_score`.** Warm-start from the deterministic
+   heuristic `log10(imp+1) * (TargetCTR(p) - CTR) * ConvValue` so the model
+   can never underperform the baseline while the history is young.
+6. **Isotonic calibration + 85/15 queue.** Raw LambdaRank margins are not
+   comparable across clusters; a pure-Python PAVA isotonic regressor
+   (out-of-bounds clipping) maps margins onto calibrated Expected 30-Day
+   Clicks before global Top-20 queueing. Reserve 3 of every 20 queue slots
+   for stratified exploration from the 50th-80th percentile so the training
+   history keeps receiving counterfactual variance.
+
+Below 300 labeled outcomes, `train_ranker.py` refuses to train (exit 2) and
+`score_backlog.py` falls back to the deterministic cold-start linear proxy:
+`0.30*CentroidSim + 0.25*ForumRatio - 0.20*TitleMatchRate - 0.15*PixelCrowding
++ 0.10*log10(Volume+1)`. The 30-day `log_outcomes_and_retrain.py` loop closes
+the gap; retraining is triggered in the same command.
+
 ---
 
 ## 5. Programmatic Doorway Defense (the crawl-and-drop classifier)

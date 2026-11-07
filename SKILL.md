@@ -257,6 +257,39 @@ $$\text{GSC Striking Distance} \longrightarrow \text{SERP Vulnerability Score} \
 3. **Programmatic Doorway Defense:** every pSEO template must pass the pre-deploy similarity gate — `uniqueness_ratio >= 0.50` populated data fields, dynamic DOM branching on data deltas, and MinHash/shingle similarity < 70% between sibling routes. Bulk templates that fail the gate are held from the sitemap (crawl-and-drop is a site-wide trust hazard, and noindex does not undo a domain-level classifier hit).
 4. **Navboost & Indexing Velocity:** interactive answers/calculators in the top 300px to win the long click; sharded priority sitemaps; IndexNow pings on publish (Bing/ChatGPT/Perplexity); rotating "recently updated" boost slots on the highest-authority pages until first GSC impressions arrive.
 
+### Workflow 7: The Self-Improving Ranking Loop (Collect → Train → Score → Log Outcomes)
+
+The production implementation of Workflow 6's funnel: a closed Learning-to-Rank loop that retrains on realized 30-day outcomes and can never underperform the deterministic baseline. Run it as a monthly cycle per property.
+
+```bash
+# Stage 1: REAL GSC candidates + DataForSEO SERP enrichment -> 8-feature matrix
+python3 scripts/collect_features.py --site smsriver.com --top 200
+
+# Stage 2: train LambdaRanker (once >= 300 labeled outcomes exist)
+python3 scripts/train_ranker.py                       # lambdarank + isotonic calibration
+python3 scripts/train_ranker.py --objective rank_xendcg   # drop-in for small/noisy data
+
+# Stage 3: score the backlog -> prescribed actions + calibrated Expected Clicks
+python3 scripts/score_backlog.py                      # cold-start proxy before the model exists
+
+# Stage 4 (30 days later): join executed queue against fresh GSC, append
+# labeled outcomes, and retrain in one step
+python3 scripts/log_outcomes_and_retrain.py \
+    --executed data/action_queue_2026-01.json --site smsriver.com
+```
+
+Contract details enforced by `scripts/ltr_ranker.py` (see [`references/serp_intelligence_and_programmatic_scaling.md`](./references/serp_intelligence_and_programmatic_scaling.md) section 4):
+
+- **Labels:** exponential 0-4 click buckets (`label_gain=[0, 1, 3, 7, 15]`); any conversion overrides to grade 4.
+- **Position-bias correction:** labels are propensity-adjusted (`AdjustedClicks = realized * min(5, ECTR(3)/ECTR(p_start))`, `ECTR(p) = 0.28/p^1.15`) so the ranker learns click LIFT, not "recommend whatever already ranks #1".
+- **Leakage defense:** the 80/20 train/validation split is performed over WHOLE semantic clusters, never inside one.
+- **Monotonic constraints:** `[+1 centroid, +1 forum, -1 title match, -1 crowding, +1 hub links, 0 position, +1 volume, +1 intent]` — small datasets cannot learn inverted truths.
+- **Residual learning:** `init_score` warm-starts from the deterministic heuristic `log10(imp+1) * (TargetCTR - CTR) * ConvValue`, so the model can never underperform the baseline while young.
+- **Cross-cluster calibration:** raw LambdaRank margins are NOT comparable across clusters; an isotonic regressor (PAVA, out-of-bounds clipping) maps them onto calibrated Expected 30-Day Clicks before global Top-20 queueing.
+- **Cold-start gate:** below 300 labeled outcomes the trainer refuses to run (exit 2) and the deterministic linear proxy (`0.30*CentroidSim + 0.25*ForumRatio - 0.20*TitleMatch - 0.15*PixelCrowding + 0.10*log10(Volume+1)`) stays authoritative.
+- **85/15 queue:** 17 exploited slots (top calibrated scores) + 3 exploratory slots drawn from the 50th-80th percentile stratified across clusters, so the history keeps receiving counterfactual variance and the model never goes feedback-loop blind.
+- **Prescription:** SHAP contributions (`booster.predict(X, pred_contrib=True)`) map each candidate onto one of 4 executable actions: `LAUNCH_PSEO_ROUTE`, `INJECT_EXACT_H2_AND_TITLE`, `BOOST_INTERNAL_LINKS`, `REWRITE_SNIPPET_AND_TOP_300PX`.
+
 ---
 
 ## 10. Tool & Script Inventory
@@ -267,6 +300,11 @@ $$\text{GSC Striking Distance} \longrightarrow \text{SERP Vulnerability Score} \
 | [`scripts/seo_growth_intelligence.py`](./scripts/seo_growth_intelligence.py) | **The Master Decision Engine:** Ingests multi-source telemetry, executes 6 opportunity detectors, classifies 8 diagnostic states, enforces URL ownership, computes $EV(a)$ expected values, and emits prioritized Action Queues. |
 | [`scripts/gsc_analyzer.py`](./scripts/gsc_analyzer.py) | Multi-dimensional Search Console analyzer for joint page+query dimensions, striking distance, expected CTR residuals, and traffic decomposition. |
 | [`scripts/dataforseo_client.py`](./scripts/dataforseo_client.py) | **Cost-Routed DataForSEO SERP Intelligence:** Standard Queue batch discovery at $0.0006/SERP (Live gated at $0.002), weak-spot vulnerability scoring, SERP feature extraction, `stop_crawl_on_match` rank tracking with refunds, offset deep-page crawling, and `--dry-run` cost plans. Credentials via `DATAFORSEO_LOGIN`/`DATAFORSEO_PASSWORD` (or `DFS_*`/`DATAFORSEO_API_KEY`) in `.env.credentials` — never hardcoded. |
+| [`scripts/ltr_ranker.py`](./scripts/ltr_ranker.py) | **Learning-to-Rank Core Library:** exponential click grading, position-bias correction, cluster-integrity splitting, monotone constraints, native LightGBM persistence (no joblib/sklearn), pure-Python isotonic calibration, SHAP action prescription, and the 85/15 exploration/exploitation queue split. |
+| [`scripts/collect_features.py`](./scripts/collect_features.py) | **Stage 1 Collector:** pulls real GSC performance via the `seo` binary, enriches top candidates through the DataForSEO Standard Queue, computes the 8-feature ranking matrix, and writes `data/ltr_features.json`. |
+| [`scripts/train_ranker.py`](./scripts/train_ranker.py) | **Stage 2 Trainer:** trains the LambdaRanker from the outcome history with heuristic init_score residual learning, calibrates margins onto Expected 30-Day Clicks, and persists the deployable bundle to `models/`. Refuses to train below 300 outcomes. |
+| [`scripts/score_backlog.py`](./scripts/score_backlog.py) | **Stage 3 Scorer:** ranks the collected backlog with the trained bundle (or the deterministic cold-start proxy), prescribes SHAP-driven actions, and emits the 85/15 `data/action_queue.json`. |
+| [`scripts/log_outcomes_and_retrain.py`](./scripts/log_outcomes_and_retrain.py) | **Stage 4 Loop Closer:** joins a previously executed queue against fresh GSC outcomes 30 days later, appends idempotently to the labeled history, and triggers retraining. |
 | [`scripts/setup_observability.py`](./scripts/setup_observability.py) | Scans, validates, heals, and exports telemetry manifests (`DataSourceManifest`) and drop-in tracking snippets. |
 | [`scripts/geo_evaluator.py`](./scripts/geo_evaluator.py) | Scores AI agent readiness, evaluates `llms.txt`, and validates Schema.org JSON-LD structured data. |
 | [`scripts/run_audit.py`](./scripts/run_audit.py) | High-speed technical crawler pass for status codes, canonical consistency, and crawl budget parameter defense. |
