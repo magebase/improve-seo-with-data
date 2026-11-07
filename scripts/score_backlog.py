@@ -129,6 +129,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     result = score_rows(rows, args.models_dir)
     scored = result["rows"]
 
+    # One action per query: cannibalised (query, page) pairs collapse onto the
+    # best-scoring row (the URL-ownership model allows a single owner per task).
+    by_query: Dict[str, Dict[str, Any]] = {}
+    for row in scored:
+        keeper = by_query.get(row["query"])
+        if keeper is None or row.get("rank_score", 0.0) > keeper.get("rank_score", 0.0):
+            by_query[row["query"]] = row
+    scored = list(by_query.values())
+
     n_exploit = max(1, int(args.queue_size * EXPLOIT_SLOTS / (EXPLOIT_SLOTS + EXPLORE_SLOTS)))
     n_explore = max(1, args.queue_size - n_exploit)
     queue = split_action_queue(scored, n_exploit=n_exploit, n_explore=n_explore, seed=args.seed)

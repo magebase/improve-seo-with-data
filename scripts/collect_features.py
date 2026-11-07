@@ -120,7 +120,9 @@ def compute_serp_features(serp_items: List[Dict[str, Any]], query: str) -> Dict[
     return {
         "serp_forum_ratio": forum / len(top10),
         "title_exact_match_rate": exact / len(top10),
-        "serp_pixel_crowding": float(special),
+        # Normalize pixel-equivalent real estate onto the 0-4 scale the
+        # cold-start/LTR crowding weights expect (600px AI Overview ~ 2.4).
+        "serp_pixel_crowding": round(min(4.0, special / 250.0), 6),
     }
 
 
@@ -296,6 +298,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"      task_post failed ({exc}).")
         poll_deadline = time.time() + args.queue_wait_mins * 60
         while affordable and time.time() < poll_deadline:
+            if not [q for q in affordable if q not in cache]:
+                break
             time.sleep(60)
             try:
                 entries = client.collect_ready_tasks()
@@ -307,11 +311,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 items = entry.get("items") or []
                 if keyword in affordable and items and keyword not in cache:
                     cache[keyword] = items
-            pending = client.last_queue_state.get("pending")
             got = sum(1 for q in affordable if q in cache)
-            print(f"      {got}/{len(affordable)} fetched, {pending} pending ...")
-            if got >= len(affordable) or not pending:
-                break
+            print(f"      {got}/{len(affordable)} fetched ...")
         with open(serp_cache_path, "w", encoding="utf-8") as fh:
             json.dump(cache, fh)
         serp_by_query = {c["query"]: cache[c["query"]] for c in candidates if c["query"] in cache}
