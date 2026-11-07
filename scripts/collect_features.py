@@ -120,37 +120,33 @@ def compute_serp_features(serp_items: List[Dict[str, Any]], query: str) -> Dict[
     return {
         "serp_forum_ratio": forum / len(top10),
         "title_exact_match_rate": exact / len(top10),
-        # Normalize pixel-equivalent real estate onto the 0-4 scale the
-        # cold-start/LTR crowding weights expect (600px AI Overview ~ 2.4).
-        "serp_pixel_crowding": round(min(4.0, special / 250.0), 6),
+        # Flag count on the 0-4 scale (cold-start weight -0.15 per block).
+        "serp_pixel_crowding": float(min(4, special)),
     }
 
 
 def extract_special_blocks(serp_items: List[Dict[str, Any]]) -> int:
-    """Sums pixel-equivalent real estate of SERP blocks above the organic fold.
+    """Counts distinct above-the-fold crowding blocks in the SERP.
 
-    Consumes the REAL DataForSEO advanced-endpoint item types (verified live
-    2026-11: ai_overview, people_also_ask, people_also_search, related_searches,
-    featured_snippet, ...). The regular endpoint returns only `organic` items,
-    which is why the queue client prefers endpoint_advanced.
+    Semantic contract (reference doc section 4): `serp_pixel_crowding` is a
+    FLAG COUNT on the 0-4 scale the cold-start/LTR weights expect — one point
+    per block type that pushes the organic fold down the viewport. Verified
+    live 2026-11 via the advanced endpoint; bottom-of-page blocks
+    (related_searches, people_also_search) do not crowd the organic fold.
     """
-    type_weights = {
-        "ai_overview": 600,
-        "featured_snippet": 400,
-        "knowledge_graph": 350,
-        "local_pack": 300,
-        "people_also_ask": 250,
-        "discussions_and_forums": 250,
-        "video": 250,
-        "images": 200,
-        "people_also_search": 100,
-        "related_searches": 150,
-        "paid": 150,
+    above_fold_types = {
+        "ai_overview",
+        "featured_snippet",
+        "knowledge_graph",
+        "local_pack",
+        "people_also_ask",
+        "discussions_and_forums",
+        "video",
+        "images",
+        "paid",
     }
-    total = 0
-    for item in serp_items:
-        total += type_weights.get(str(item.get("type", "")).lower(), 0)
-    return total
+    present = {str(item.get("type", "")).lower() for item in serp_items}
+    return min(4, len(present & above_fold_types))
 
 
 def load_hub_links(path: Optional[str]) -> Dict[str, int]:
