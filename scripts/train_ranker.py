@@ -86,6 +86,16 @@ def train_from_history(
     grades = clicks_to_relevance_grade(clicks, conversions)
     hist = bucket_histogram(grades)
     print(f"Label distribution over {len(rows)} outcomes: {hist}")
+    if len(set(grades.tolist())) < 2:
+        print(
+            "REFUSING TO TRAIN: every label has the same grade — the GSC window\n"
+            "contains no click/conversion variance to learn from (typical for\n"
+            "properties earning impressions but zero clicks). The cold-start\n"
+            "linear proxy stays authoritative; run score_backlog.py instead,\n"
+            "execute its queue, and let log_outcomes_and_retrain.py accumulate\n"
+            "real outcome variance over the next windows."
+        )
+        return None
 
     init_score = None
     if warm_start:
@@ -134,6 +144,48 @@ def train_from_history(
     return {"best_iteration": meta["best_iteration"], "rows": len(rows)}
 
 
+def bootstrap_history_from_features(features_path: str, history_path: str) -> int:
+    """Converts a collect_features.py snapshot into labeled history rows.
+
+    Labels are the ABSOLUTE realized clicks in the GSC window (position-bias
+    correction happens at scoring/calibration time, and the snapshot's
+    realized clicks ARE the training outcomes for a property's very first
+    model). Writes only rows not already present (idempotent by query+page).
+    """
+    with open(features_path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    rows_in = payload.get("rows") or []
+    existing = set()
+    if os.path.exists(history_path):
+        for row in load_history(history_path):
+            existing.add((row.get("query"), row.get("page")))
+    added = 0
+    os.makedirs(os.path.dirname(history_path) or ".", exist_ok=True)
+    with open(history_path, "a", encoding="utf-8") as fh:
+        for row in rows_in:
+            key = (row.get("query"), row.get("page"))
+            if key in existing:
+                continue
+            fh.write(json.dumps({
+                "query": row.get("query"),
+                "page": row.get("page"),
+                "cluster_id": row.get("cluster_id", "root"),
+                "features": row.get("features"),
+                "clicks_30d": float(row.get("clicks_30d", 0)),
+                "conversions_30d": 0.0,
+                "impressions": float(row.get("impressions", 0)),
+                "current_pos": float(row.get("current_pos", 99)),
+                "current_ctr": float(row.get("ctr", 0)),
+                "conv_value": 1.0,
+                "window_days": row.get("window_days", 90),
+                "source": "gsc_snapshot_bootstrap",
+            }) + "\n")
+            existing.add(key)
+            added += 1
+    print(f"Bootstrapped {added} labeled rows -> {history_path}")
+    return added
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--history", default="data/ltr_training_history.jsonl")
@@ -142,9 +194,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                         choices=["lambdarank", "rank_xendcg"])
     parser.add_argument("--no-warm-start", action="store_true",
                         help="train from scratch instead of init_score residuals")
+    parser.add_argument("--bootstrap-from", dest="bootstrap_from",
+                        help="data/ltr_features.json snapshot to label into history first")
     parser.add_argument("--force", action="store_true",
                         help="train even below the 300-outcome guard")
     args = parser.parse_args(argv)
+
+    if args.bootstrap_from:
+        if not os.path.exists(args.bootstrap_from):
+            print(f"ERROR: feature snapshot not found: {args.bootstrap_from}")
+            return 1
+        bootstrap_history_from_features(args.bootstrap_from, args.history)
 
     if not os.path.exists(args.history):
         print(f"ERROR: history file not found: {args.history}\n"

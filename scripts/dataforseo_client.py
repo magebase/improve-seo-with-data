@@ -350,25 +350,48 @@ class DataForSEOClient:
         Queue turnaround is typically ~5 minutes; this method never blocks —
         incomplete tasks are reported in `last_queue_state["pending"]` and the
         caller simply sweeps again later (e.g. on the next cron run).
+
+        NOTE: the tasks_ready envelope nests the ready-task descriptors inside
+        `result` (each carrying `id` + `endpoint_regular`); each descriptor is
+        then fetched individually via `/task_get/regular/{id}`.
         """
         fetched: List[Dict[str, Any]] = []
-        self.last_queue_state = {"completed": [], "pending": 0, "fetched": 0}
+        self.last_queue_state = {"completed": [], "pending": 0, "fetched": 0, "skipped": []}
         ready = self._get("/serp/google/organic/tasks_ready")
-        tasks = (ready.get("tasks") or [])
-        completed = [t for t in tasks if t.get("status_code") == 20000]
-        pending = [t for t in tasks if t.get("status_code") != 20000]
-        self.last_queue_state["pending"] = len(pending)
-        for task in completed:
-            task_id = str(task.get("id", ""))
-            detail = self._get(f"/serp/google/organic/task_get/{task_id}")
-            result_payload = detail.get("result") or []
-            if isinstance(result_payload, dict):
-                result_payload = [result_payload]
-            for result_entry in result_payload:
-                entry = dict(result_entry)
-                entry.setdefault("task_id", task_id)
-                fetched.append(entry)
-        self.last_queue_state["completed"].extend(str(t.get("id")) for t in completed)
+        for envelope in ready.get("tasks") or []:
+            descriptors = envelope.get("result") or []
+            result_count = envelope.get("result_count") or 0
+            if envelope.get("status_code") == 20000:
+                self.last_queue_state["pending"] += max(0, int(result_count) - len(descriptors))
+            else:
+                # A failed tasks_ready call proves nothing about queue emptiness.
+                self.last_queue_state["pending"] += 1
+            for task in descriptors:
+                task_id = str(task.get("id", ""))
+                # tasks_ready returns the authoritative result-type endpoint
+                # (/task_get/regular/{id}); a bare task_get/{id} 404s (40400).
+                endpoint = task.get("endpoint_regular") or f"/serp/google/organic/task_get/regular/{task_id}"
+                if endpoint.startswith("/v3"):
+                    endpoint = endpoint[len("/v3"):]
+                try:
+                    detail = self._get(endpoint)
+                except Exception as exc:  # noqa: BLE001 - one expired/evicted task id
+                    # must not poison the whole sweep (task_get retention is limited)
+                    self.last_queue_state["skipped"].append(task_id)
+                    print(f"  task_get {task_id} skipped: {exc}", file=sys.stderr)
+                    continue
+                detail_task = (detail.get("tasks") or [{}])[0]
+                if detail_task.get("status_code") != 20000:
+                    self.last_queue_state["skipped"].append(task_id)
+                    continue
+                result_payload = detail_task.get("result") or []
+                if isinstance(result_payload, dict):
+                    result_payload = [result_payload]
+                for result_entry in result_payload:
+                    entry = dict(result_entry)
+                    entry.setdefault("task_id", task_id)
+                    fetched.append(entry)
+                self.last_queue_state["completed"].append(task_id)
         self.last_queue_state["fetched"] = len(fetched)
         return fetched
 

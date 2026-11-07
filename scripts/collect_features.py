@@ -159,12 +159,51 @@ def load_hub_links(path: Optional[str]) -> Dict[str, int]:
     return mapping
 
 
+def load_report_files(paths: List[str]) -> List[Dict[str, Any]]:
+    """Ingests (query, page, clicks, impressions, position) rows from `seo reports
+    run` JSON exports (striking-distance, quick-wins, cannibalisation shapes)."""
+    candidates: List[Dict[str, Any]] = []
+    for path in paths:
+        with open(path, encoding="utf-8") as fh:
+            payload = json.load(fh)
+        if payload.get("ok") is False:
+            print(f"  WARNING: {path}: {payload.get('error', {}).get('message', 'error')[:80]}")
+            continue
+        rows = payload.get("items") or []
+        days = payload.get("rangeDays", payload.get("range", 90))
+        ingested = 0
+        for item in rows:
+            query = item.get("query")
+            pages = item.get("pages") or [{"url": item.get("url"), "clicks": item.get("clicks"),
+                                           "impressions": item.get("impressions"),
+                                           "position": item.get("position"),
+                                           "ctr": item.get("ctr")}]
+            for page_row in pages:
+                page = page_row.get("url")
+                if not query or not page:
+                    continue
+                candidates.append({
+                    "query": str(query),
+                    "page": str(page),
+                    "clicks_30d": float(page_row.get("clicks", 0) or 0),
+                    "impressions": float(page_row.get("impressions", 0) or 0),
+                    "current_pos": float(page_row.get("position", 99) or 99),
+                    "ctr": float(page_row.get("ctr", 0) or 0),
+                    "window_days": int(days) if days else 90,
+                })
+                ingested += 1
+        print(f"  {path.split('/')[-1]}: {ingested} (query, page) rows ingested")
+    return candidates
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--site", required=True, help="GSC property, e.g. smsriver.com")
     parser.add_argument("--top", type=int, default=150, help="max keywords to enrich")
     parser.add_argument("--gsc-only", action="store_true", help="skip DataForSEO enrichment")
     parser.add_argument("--report", default="search-performance-overview")
+    parser.add_argument("--gsc-json", action="append", default=[],
+                        help="ingest rows from a `seo reports run` JSON export (repeatable)")
     parser.add_argument("--hub-links", help="CSV export: url_prefix,internal_links")
     parser.add_argument("--output", default="data/ltr_features.json")
     parser.add_argument("--max-serp-cost", type=float, default=5.0, help="USD cap")
@@ -172,35 +211,39 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="minutes to poll the DataForSEO queue before falling back")
     args = parser.parse_args(argv)
 
-    if not find_seo_binary():
-        print("ERROR: seo binary not found; GSC data is unavailable.", file=sys.stderr)
-        return 1
+    if args.gsc_json:
+        print(f"[1/3] Ingesting {len(args.gsc_json)} GSC report export(s) ...")
+        candidates = load_report_files(list(args.gsc_json))
+    else:
+        if not find_seo_binary():
+            print("ERROR: seo binary not found; GSC data is unavailable.", file=sys.stderr)
+            return 1
 
-    print(f"[1/3] Pulling GSC performance for {args.site} via seo binary ...")
-    report = run_seo_report(args.report, args.site)
-    if not report.get("ok", True) and "error" in report:
-        print(f"ERROR: seo report failed: {report['error']}", file=sys.stderr)
-        return 1
-    rows = find_performance_rows(report)
-    if not rows:
-        print("ERROR: report contained no query/page performance rows.", file=sys.stderr)
-        return 1
+        print(f"[1/3] Pulling GSC performance for {args.site} via seo binary ...")
+        report = run_seo_report(args.report, args.site)
+        if not report.get("ok", True) and "error" in report:
+            print(f"ERROR: seo report failed: {report['error']}", file=sys.stderr)
+            return 1
+        rows = find_performance_rows(report)
+        if not rows:
+            print("ERROR: report contained no query/page performance rows.", file=sys.stderr)
+            return 1
 
-    # Normalize + keep the strongest candidates by impressions.
-    candidates: List[Dict[str, Any]] = []
-    for row in rows:
-        query = row.get("query", row.get("keyword"))
-        page = row.get("page", row.get("url", row.get("landing_page", "")))
-        if not query or not page:
-            continue
-        candidates.append({
-            "query": str(query),
-            "page": str(page),
-            "clicks_30d": float(row.get("clicks", 0) or 0),
-            "impressions": float(row.get("impressions", 0) or 0),
-            "current_pos": float(row.get("position", row.get("avg_position", 99)) or 99),
-            "ctr": float(row.get("ctr", 0) or 0),
-        })
+        candidates = []
+        for row in rows:
+            query = row.get("query", row.get("keyword"))
+            page = row.get("page", row.get("url", row.get("landing_page", "")))
+            if not query or not page:
+                continue
+            candidates.append({
+                "query": str(query),
+                "page": str(page),
+                "clicks_30d": float(row.get("clicks", 0) or 0),
+                "impressions": float(row.get("impressions", 0) or 0),
+                "current_pos": float(row.get("position", row.get("avg_position", 99)) or 99),
+                "ctr": float(row.get("ctr", 0) or 0),
+                "window_days": 28,
+            })
     # Deduplicate on (query, page), keep max impressions.
     best: Dict[tuple, Dict[str, Any]] = {}
     for cand in candidates:
@@ -228,19 +271,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     hub_links = load_hub_links(args.hub_links)
     serp_by_query: Dict[str, List[Dict[str, Any]]] = {}
     if client:
+        serp_cache_path = os.path.abspath(".serp_cache.json")
+        cache: Dict[str, List[Dict[str, Any]]] = {}
+        if os.path.exists(serp_cache_path):
+            with open(serp_cache_path, encoding="utf-8") as fh:
+                cache = json.load(fh)
+        missing = [c["query"] for c in candidates if c["query"] not in cache]
+        print(f"[2/3] DataForSEO: {len(cache)} cached, {len(missing)} to fetch "
+              f"(budget cap ${args.max_serp_cost:.2f}) ...")
         unit_cost = 0.0006
-        affordable = min(len(candidates), int(args.max_serp_cost / unit_cost) if unit_cost else len(candidates))
-        if affordable < len(candidates):
-            print(f"      Budget cap ${args.max_serp_cost:.2f} allows {affordable} SERPs.")
-        keywords = [c["query"] for c in candidates[:affordable]]
-        print(f"[2/3] DataForSEO Standard Queue: posting {len(keywords)} SERP tasks ...")
-        try:
-            client.post_serp_tasks(keywords, depth=10)
-        except Exception as exc:  # noqa: BLE001 - degrade to GSC-only
-            print(f"      task_post failed ({exc}); continuing GSC-only.")
-        remaining = dict.fromkeys(keywords)
+        affordable = missing[: int(args.max_serp_cost / unit_cost)] if unit_cost else missing
+        if affordable:
+            try:
+                client.post_serp_tasks(affordable, depth=10)
+            except Exception as exc:  # noqa: BLE001 - degrade to cache-only
+                print(f"      task_post failed ({exc}).")
         poll_deadline = time.time() + args.queue_wait_mins * 60
-        while remaining and time.time() < poll_deadline:
+        while affordable and time.time() < poll_deadline:
             time.sleep(60)
             try:
                 entries = client.collect_ready_tasks()
@@ -250,14 +297,17 @@ def main(argv: Optional[List[str]] = None) -> int:
             for entry in entries:
                 keyword = str(entry.get("keyword", ""))
                 items = entry.get("items") or []
-                if keyword in remaining and items:
-                    serp_by_query[keyword] = items
-                    remaining.pop(keyword, None)
-            if client.last_queue_state.get("pending"):
-                print(f"      {len(serp_by_query)}/{len(keywords)} SERPs ready, "
-                      f"{client.last_queue_state['pending']} pending ...")
-        if remaining:
-            print(f"      {len(remaining)} SERPs still pending -> GSC-only fallback for those.")
+                if keyword in affordable and items and keyword not in cache:
+                    cache[keyword] = items
+            pending = client.last_queue_state.get("pending")
+            got = sum(1 for q in affordable if q in cache)
+            print(f"      {got}/{len(affordable)} fetched, {pending} pending ...")
+            if got >= len(affordable) or not pending:
+                break
+        with open(serp_cache_path, "w", encoding="utf-8") as fh:
+            json.dump(cache, fh)
+        serp_by_query = {c["query"]: cache[c["query"]] for c in candidates if c["query"] in cache}
+        print(f"      SERP features available for {len(serp_by_query)}/{len(candidates)} candidates.")
     else:
         print("[2/3] Skipping DataForSEO enrichment (GSC-only mode).")
 
@@ -305,7 +355,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         json.dump({
             "site": args.site,
             "generated_at": __import__("datetime").datetime.now().isoformat(),
-            "gsc_rows": len(rows),
+            "gsc_rows": len(candidates),
             "dataforseo_enriched": len(serp_by_query),
             "rows": feature_rows,
         }, fh, indent=2)

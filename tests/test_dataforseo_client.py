@@ -214,25 +214,37 @@ class TestDataForSEOClientPayloads(unittest.TestCase):
         self.assertIn("/live", transport.calls[0]["url"])
 
     def test_collect_ready_tasks_polls_tasks_ready_then_task_get(self):
+        """tasks_ready nests ready-task descriptors in `result`, each carrying
+        the authoritative `endpoint_regular` (live API shape, captured 2026-11)."""
         def ready_response():
-            return dfs_envelope(None, tasks=[
-                {"id": "111", "status_code": 20000},
-                {"id": "222", "status_code": 40602, "cost": 0},
-            ])
+            return dfs_envelope(None, tasks=[{
+                "id": "ready-call-1",
+                "status_code": 20000,
+                "result_count": 1,
+                "result": [{
+                    "id": "111",
+                    "endpoint_regular": "/v3/serp/google/organic/task_get/regular/111",
+                }],
+            }])
 
         def task_get_1():
-            return dfs_envelope({"task_id": "111", "items": [organic_item(1, "t", "https://a.com/")]})
+            return dfs_envelope(None, tasks=[{
+                "id": "111",
+                "status_code": 20000,
+                "result": [{"task_id": "111", "keyword": "k", "items": [organic_item(1, "t", "https://a.com/")]}],
+            }])
 
         transport = FakeTransport(responses=[ready_response, task_get_1])
         client = self._client(transport)
         results = client.collect_ready_tasks()
         self.assertIn("tasks_ready", transport.calls[0]["url"])
+        self.assertIn("task_get/regular/111", transport.calls[1]["url"])
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["task_id"], "111")
 
     def test_collect_ready_tasks_reports_incomplete_queue_without_blocking(self):
         def ready_response():
-            return dfs_envelope(None, tasks=[{"id": "111", "status_code": 40602, "cost": 0}])
+            return dfs_envelope(None, tasks=[{"id": "222", "status_code": 40602, "cost": 0}])
 
         transport = FakeTransport(responses=[ready_response])
         client = self._client(transport)
