@@ -1,22 +1,33 @@
 #!/usr/bin/env python3
 """
-train_ranker.py - Stage 2 of the Learning-to-Rank closed loop.
+train_ranker.py - Stage 2 of the Learning-to-Rank closed loop. ALWAYS-ON.
 
-Builds the training matrix from the outcome history, trains the LightGBM
-LambdaRanker (cluster-integrity split, monotone constraints, heuristic
-init_score residual learning), calibrates raw margins onto Expected 30-Day
-Clicks with isotonic regression, and persists the deployable bundle:
+Builds the training matrix from the pooled outcome history, derives
+relevance grades, trains the LightGBM ranker (cluster-integrity split,
+monotone constraints, heuristic init_score residual learning), calibrates
+raw margins onto Expected 30-Day Clicks with isotonic regression when real
+clicks exist, and persists the deployable bundle:
 
     models/seo_lgbm_ranker.txt        native LightGBM format (no joblib)
     models/seo_lgbm_ranker.meta.json  features, constraints, calibrator knots
 
+ALWAYS-ON LABELING (the cold-start linear proxy is no longer the scorer):
+  - >= FLEET_CLICK_ROWS pooled rows carry real clicks -> canonical click
+    buckets ("fleet_clicks" mode).
+  - otherwise -> DataForSEO SERP-structure bootstrap grades
+    ("serp_bootstrap" mode): opportunity-score quantiles with deep-head
+    traps hard-graded 0 (see bootstrap_labels.py). The 300-outcome refusal
+    is GONE: rank_xendcg + adaptive min_data_in_leaf trains cleanly on
+    10-150 row histories. The deterministic heuristic survives ONLY as the
+    init_score residual baseline, so the model can never underperform it.
+
 Usage:
-    python3 scripts/train_ranker.py                     # standard path
-    python3 scripts/train_ranker.py --objective rank_xendcg
+    python3 scripts/train_ranker.py                     # always-on xendcg
+    python3 scripts/train_ranker.py --objective lambdarank
     python3 scripts/train_ranker.py --history custom.jsonl --models-dir models/
 
-Exits with code 2 when the history has fewer than 300 labeled outcomes
-(the model is not yet trustworthy; the cold-start proxy stays authoritative).
+Exits with code 2 only when the history is empty or below MIN_TRAINABLE_ROWS
+(no trees can split on it); pool the fleet with fleet_ingest.py first.
 """
 
 from __future__ import annotations
@@ -31,18 +42,23 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from bootstrap_labels import (  # noqa: E402
+    generate_bootstrap_grades,
+)
 from ltr_ranker import (  # noqa: E402
     FEATURES,
     IsotonicCalibrator,
-    MIN_TRAINING_ROWS,
+    MIN_TRAINABLE_ROWS,
     bucket_histogram,
-    clicks_to_relevance_grade,
     heuristic_base_score,
     load_bundle,
     position_adjusted_clicks,
     save_bundle,
     train_seo_ranker,
 )
+
+# Re-exported for CLI symmetry / external callers.
+save_bundle_compat = save_bundle
 
 
 def load_history(path: str) -> List[Dict[str, Any]]:
@@ -66,34 +82,40 @@ def build_matrix(rows: List[Dict[str, Any]]) -> tuple:
 def train_from_history(
     history_path: str,
     models_dir: str,
-    objective: str = "lambdarank",
+    objective: str = "rank_xendcg",
     warm_start: bool = True,
-    min_rows: int = MIN_TRAINING_ROWS,
+    min_rows: int = MIN_TRAINABLE_ROWS,
     force: bool = False,
 ) -> Optional[Dict[str, Any]]:
-    """Full train -> calibrate -> persist cycle; returns summary metadata."""
+    """Always-on train -> calibrate -> persist cycle; returns summary metadata.
+
+    Label authority is automatic (bootstrap_labels.generate_bootstrap_grades):
+    real fleet click buckets when >= FLEET_CLICK_ROWS clicked rows exist,
+    otherwise DataForSEO SERP-structure quantile grades. Returns None (exit 2)
+    only when the history cannot support tree splits at all.
+    """
     rows = load_history(history_path)
     if len(rows) < min_rows and not force:
         print(
-            f"REFUSING TO TRAIN: {len(rows)} labeled outcome rows < {min_rows} required.\n"
-            "The cold-start linear proxy remains authoritative until the 30-day\n"
-            "delta loop has accumulated enough outcomes (see SKILL.md Stage 3).\n"
-            "Override with --force once you understand the consequences."
+            f"REFUSING TO TRAIN: {len(rows)} rows < {min_rows} trainable floor.\n"
+            "Pool the fleet first: python3 scripts/fleet_ingest.py --inputs "
+            "'data/fleet/*.json' (all authenticated GSC properties), then rerun."
         )
         return None
 
     X, clicks, conversions, clusters = build_matrix(rows)
-    grades = clicks_to_relevance_grade(clicks, conversions)
+    grades, label_meta = generate_bootstrap_grades(rows)
     hist = bucket_histogram(grades)
-    print(f"Label distribution over {len(rows)} outcomes: {hist}")
+    print(f"Label mode: {label_meta['label_mode']} "
+          f"(traps graded 0: {label_meta['trap_count']}, "
+          f"clicked rows: {label_meta.get('clicked_rows', 0)})")
+    print(f"Label distribution over {len(rows)} rows: {hist}")
     if len(set(grades.tolist())) < 2:
         print(
-            "REFUSING TO TRAIN: every label has the same grade — the GSC window\n"
-            "contains no click/conversion variance to learn from (typical for\n"
-            "properties earning impressions but zero clicks). The cold-start\n"
-            "linear proxy stays authoritative; run score_backlog.py instead,\n"
-            "execute its queue, and let log_outcomes_and_retrain.py accumulate\n"
-            "real outcome variance over the next windows."
+            "REFUSING TO TRAIN: every row received the same grade — the pooled\n"
+            "history has neither click variance nor SERP structure variance to\n"
+            "learn from. Enrich more candidates with DataForSEO (collect_features.py)\n"
+            "and pool more properties (fleet_ingest.py)."
         )
         return None
 
@@ -112,25 +134,31 @@ def train_from_history(
         X, grades, clusters, objective=objective, init_score=init_score
     )
     print(f"Objective: {objective} | best_iteration: {meta['best_iteration']} "
+          f"| min_data_in_leaf: {meta['min_data_in_leaf']} "
           f"| train_rows: {meta['train_rows']} | val_rows: {meta['val_rows']}")
     print(f"Cluster integrity: {len(meta['train_clusters'])} train clusters, "
           f"{len(meta['val_clusters'])} held out: {sorted(meta['val_clusters'])[:8]}")
 
     # Calibrate raw margins against position-adjusted realized clicks on the
-    # held-out validation rows.
+    # held-out validation rows - ONLY when the fleet history already carries
+    # real click outcomes. Bootstrap-mode bundles ship uncalibrated margins
+    # (expected_clicks_30d=None) rather than inventing click semantics.
     val_mask = np.array([c in set(meta["val_clusters"]) for c in clusters])
-    if val_mask.any() and meta["best_iteration"]:
+    clicked_val = int((clicks[val_mask] > 0).sum()) if val_mask.any() else 0
+    if val_mask.any() and meta["best_iteration"] and clicked_val >= 20:
         raw_val = booster.predict(X[val_mask])
         realized_val = np.array([
             position_adjusted_clicks(c, r.get("current_pos", 50))
             for c, r in zip(clicks[val_mask], [rows[i] for i in np.where(val_mask)[0]])
         ])
         calibrator = IsotonicCalibrator.fit(raw_val, realized_val)
-        print(f"Isotonic calibration fitted on {int(val_mask.sum())} validation rows "
+        print(f"Isotonic calibration fitted on {clicked_val} clicked validation rows "
               f"({len(calibrator.knots_x)} knots).")
     else:
         calibrator = None
-        print("WARNING: no held-out calibration data; bundle ships uncalibrated margins.")
+        if val_mask.any():
+            print("Calibration SKIPPED (bootstrap mode or < 20 clicked validation rows); "
+                  "bundle ships uncalibrated margins.")
 
     importances = booster.feature_importance(importance_type="gain")
     order = np.argsort(importances)[::-1]
@@ -141,7 +169,13 @@ def train_from_history(
     os.makedirs(models_dir, exist_ok=True)
     model_path, meta_path = save_bundle(models_dir, booster, meta, calibrator)
     print(f"Saved bundle: {model_path} + {os.path.basename(meta_path)}")
-    return {"best_iteration": meta["best_iteration"], "rows": len(rows)}
+    return {
+        "best_iteration": meta["best_iteration"],
+        "rows": len(rows),
+        "objective": objective,
+        "label_mode": label_meta["label_mode"],
+        "min_data_in_leaf": meta["min_data_in_leaf"],
+    }
 
 
 def bootstrap_history_from_features(features_path: str, history_path: str) -> int:
@@ -190,14 +224,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--history", default="data/ltr_training_history.jsonl")
     parser.add_argument("--models-dir", default="models/")
-    parser.add_argument("--objective", default="lambdarank",
-                        choices=["lambdarank", "rank_xendcg"])
+    parser.add_argument("--objective", default="rank_xendcg",
+                        choices=["lambdarank", "rank_xendcg"],
+                        help="rank_xendcg is the always-on default (small/noisy "
+                             "bootstrapped histories); lambdarank for mature pools")
     parser.add_argument("--no-warm-start", action="store_true",
                         help="train from scratch instead of init_score residuals")
     parser.add_argument("--bootstrap-from", dest="bootstrap_from",
                         help="data/ltr_features.json snapshot to label into history first")
     parser.add_argument("--force", action="store_true",
-                        help="train even below the 300-outcome guard")
+                        help="train even below the MIN_TRAINABLE_ROWS floor")
     args = parser.parse_args(argv)
 
     if args.bootstrap_from:
@@ -208,7 +244,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if not os.path.exists(args.history):
         print(f"ERROR: history file not found: {args.history}\n"
-              "Run log_outcomes_and_retrain.py to accumulate labeled outcomes first.")
+              "Pool the fleet first: python3 scripts/fleet_ingest.py --inputs 'data/fleet/*.json'\n"
+              "(or run log_outcomes_and_retrain.py to accumulate labeled outcomes).")
         return 1
 
     summary = train_from_history(

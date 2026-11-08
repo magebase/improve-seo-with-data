@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-score_backlog.py - Stage 3 of the Learning-to-Rank closed loop.
+score_backlog.py - Stage 3 of the Learning-to-Rank closed loop. ALWAYS-ON.
 
 Scores the collected candidate backlog (data/ltr_features.json) with the
 trained model bundle (models/seo_lgbm_ranker.txt), prescribes an executable
@@ -9,9 +9,13 @@ action per candidate from SHAP drivers, calibrates margins into Expected
 
     data/action_queue.json
 
-Cold-start behavior: when no model bundle exists yet, candidates are ranked
-by the deterministic linear lambda proxy (LTR_COLD_START linear formula) so
-the pipeline is operational from day one.
+Always-on behavior: when no model bundle exists yet, this stage AUTO-TRAINS
+a rank_xendcg ranker on the candidate rows themselves — labels come from
+DataForSEO SERP-structure bootstrap grades (bootstrap_labels.py), never
+from the linear proxy. The deterministic formula survives ONLY as the
+init_score residual baseline inside training. If there is genuinely nothing
+to train on (< MIN_TRAINABLE_ROWS candidate rows), the stage exits 2 with
+pooling instructions instead of emitting proxy-ranked guesses.
 
 Usage:
     python3 scripts/score_backlog.py
@@ -31,52 +35,66 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from bootstrap_labels import generate_bootstrap_grades  # noqa: E402
 from ltr_ranker import (  # noqa: E402
     EXPLOIT_SLOTS,
     EXPLORE_SLOTS,
     FEATURES,
-    cold_start_depth_multiplier,
-    cold_start_score,
+    MIN_TRAINABLE_ROWS,
+    IsotonicCalibrator,
+    heuristic_base_score,
     load_bundle,
     prescribe_action,
+    save_bundle,
     split_action_queue,
+    train_seo_ranker,
 )
 
 
+def _train_on_the_fly(rows: List[Dict[str, Any]], models_dir: str) -> Dict[str, Any]:
+    """Always-on fallback: trains a bootstrap-grade ranker on the very rows
+    being scored (and persists it so later runs reuse the bundle)."""
+    if len(rows) < MIN_TRAINABLE_ROWS:
+        raise RuntimeError(
+            f"Only {len(rows)} candidate rows — below the {MIN_TRAINABLE_ROWS}-row "
+            "training floor. Run collect_features.py (more candidates), pool the "
+            "fleet (fleet_ingest.py), and rerun. The linear proxy is retired; "
+            "guess-ranked queues are no longer emitted."
+        )
+    grades, label_meta = generate_bootstrap_grades(rows)
+    X = np.array([[float(r["features"][f]) for f in FEATURES] for r in rows])
+    clusters = np.array([str(r.get("cluster_id", "root")) for r in rows])
+    init_score = np.array([
+        heuristic_base_score(
+            impressions=r.get("impressions", 0),
+            current_pos=r.get("current_pos", 50),
+            current_ctr=r.get("current_ctr", 0.0),
+            conv_value=r.get("conv_value", 1.0),
+        ) for r in rows
+    ])
+    booster, meta = train_seo_ranker(
+        X, grades, clusters, objective="rank_xendcg", init_score=init_score
+    )
+    os.makedirs(models_dir, exist_ok=True)
+    save_bundle(models_dir, booster, meta, None)
+    print(f"Auto-trained rank_xendcg bundle on {len(rows)} rows "
+          f"(label_mode={label_meta['label_mode']}, "
+          f"best_iteration={meta['best_iteration']}) -> {models_dir}")
+    return {"label_mode": label_meta["label_mode"]}
+
+
 def score_rows(rows: List[Dict[str, Any]], models_dir: str) -> Dict[str, Any]:
-    """Scores rows with the bundle when present, else the cold-start proxy."""
+    """Scores rows with the bundle when present, else auto-trains one."""
     bundle = None
     if os.path.exists(os.path.join(models_dir, "seo_lgbm_ranker.txt")):
         bundle = load_bundle(models_dir)
+    label_mode = None
 
     if bundle is None:
-        print("No trained bundle found -> COLD-START linear proxy ranking "
-              "(Stage 1 of the closed loop).")
-        for row in rows:
-            feats = row["features"]
-            raw_score = cold_start_score(
-                centroid_sim=feats["domain_centroid_sim"],
-                forum_ratio=feats["serp_forum_ratio"],
-                title_match_rate=feats["title_exact_match_rate"],
-                pixel_crowding=feats["serp_pixel_crowding"],
-                search_volume=10 ** feats["search_volume_log"] - 1 if feats["search_volume_log"] > 0 else 0,
-            )
-            # Depth decay: hyper-competitive deep head terms never outrank
-            # winnable striking-distance rows on raw impressions alone.
-            depth = cold_start_depth_multiplier(
-                feats["current_pos"], feats["serp_forum_ratio"]
-            )
-            row["depth_multiplier"] = depth
-            row["rank_score"] = raw_score * depth
-            row["expected_clicks_30d"] = None
-            row["prescribed_action"] = prescribe_action(
-                current_pos=feats["current_pos"],
-                title_match_rate=feats["title_exact_match_rate"],
-                hub_links_shap=0.0,
-                centroid_sim=feats["domain_centroid_sim"],
-                forum_ratio=feats["serp_forum_ratio"],
-            )
-        return {"mode": "cold_start_proxy", "rows": rows}
+        print("No trained bundle found -> AUTO-TRAINING a rank_xendcg ranker on "
+              "bootstrap grades (the linear proxy is retired).")
+        label_mode = _train_on_the_fly(rows, models_dir)["label_mode"]
+        bundle = load_bundle(models_dir)
 
     print(f"Scoring {len(rows)} candidates with trained {bundle['objective']} model ...")
     X = np.array([[float(r["features"][f]) for f in bundle["features"]] for r in rows])
@@ -103,7 +121,7 @@ def score_rows(rows: List[Dict[str, Any]], models_dir: str) -> Dict[str, Any]:
             forum_ratio=feats["serp_forum_ratio"],
             shap=shap,
         )
-    return {"mode": "trained_model", "rows": rows}
+    return {"mode": "trained_model", "label_mode": label_mode, "rows": rows}
 
 
 def main(argv: Optional[List[str]] = None) -> int:

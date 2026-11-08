@@ -158,18 +158,51 @@ these as mandatory when extending it:
 5. **Residual learning via `init_score`.** Warm-start from the deterministic
    heuristic `log10(imp+1) * (TargetCTR(p) - CTR) * ConvValue` so the model
    can never underperform the baseline while the history is young.
-6. **Isotonic calibration + 85/15 queue.** Raw LambdaRank margins are not
+6. **Isotonic calibration + 85/15 queue.** Raw ranker margins are not
    comparable across clusters; a pure-Python PAVA isotonic regressor
    (out-of-bounds clipping) maps margins onto calibrated Expected 30-Day
-   Clicks before global Top-20 queueing. Reserve 3 of every 20 queue slots
-   for stratified exploration from the 50th-80th percentile so the training
-   history keeps receiving counterfactual variance.
+   Clicks before global Top-20 queueing — fitted only when >= 20 clicked
+   validation rows exist; bootstrap-mode bundles ship uncalibrated margins.
+   Reserve 3 of every 20 queue slots for stratified exploration from the
+   50th-80th percentile so the training history keeps receiving
+   counterfactual variance.
 
-Below 300 labeled outcomes, `train_ranker.py` refuses to train (exit 2) and
-`score_backlog.py` falls back to the deterministic cold-start linear proxy:
-`0.30*CentroidSim + 0.25*ForumRatio - 0.20*TitleMatchRate - 0.15*PixelCrowding
-+ 0.10*log10(Volume+1)`. The 30-day `log_outcomes_and_retrain.py` loop closes
-the gap; retraining is triggered in the same command.
+### 4.2 Always-On Labels: Fleet Pooling + DataForSEO Bootstrap (the retired cold-start gate)
+
+The original contract refused to train below 300 labeled outcomes and ranked
+the backlog with a deterministic linear proxy meanwhile. That gate is RETIRED:
+waiting 30+ days for one property's click history before the first real model
+shipped wasted the highest-leverage window. The always-on replacement has
+three pillars, all tested in `tests/test_fleet_bootstrap_ranker.py`:
+
+1. **Fleet pooling (`scripts/fleet_ingest.py`).** GSC `(query, page)` rows are
+   harmonized from ALL authenticated properties into one domain-agnostic
+   8-feature schema: volume falls back to `log10(impressions + 1)` when
+   DataForSEO data is missing, SERP features fill neutral `0.0`, cluster IDs
+   derive from URL paths, and dedupe is max-clicks-wins per
+   `(domain, query, page)`. A 13-property fleet trains on day one from
+   pooled structure no single young property could supply.
+2. **SERP-to-relevance bootstrapping (`scripts/bootstrap_labels.py`).** When
+   fewer than 50 pooled rows carry real clicks, every candidate is graded 0-4
+   from pure SERP structure — no clicks required. An opportunity score
+   `search_volume_log x serp_openness x crowding_penalty x pos_weight x
+   domain_centroid_sim` (striking-distance band weighted highest) is
+   quantile-binned into grades; **deep-head traps** (position > 50, zero
+   forum slots, >= 0.6 title match rate) hard-grade to 0 because that shape
+   is unwinnable regardless of volume. The mode travels in the bundle
+   metadata (`label_mode: serp_bootstrap | fleet_clicks`) and flips
+   automatically once `FLEET_CLICK_ROWS = 50` clicked rows exist in the pool
+   — the Day-30 transition needs no code change.
+3. **Adaptive always-on training (`rank_xendcg`).** `min_data_in_leaf =
+   max(5, n_rows // 30)` scales leaf size down to the pooled history, and the
+   trainable floor drops to `MIN_TRAINABLE_ROWS = 10` — tiny bootstrapped
+   histories split trees cleanly under `rank_xendcg` where lambdarank's
+   query-group machinery would fight them. The deterministic linear formula
+   survives ONLY as the `init_score` residual baseline inside training (so a
+   young model can never underperform it); it is no longer a scorer.
+   `score_backlog.py` auto-trains a bundle from the candidate rows themselves
+   when none exists (>= 10 rows) and refuses with exit 2 below the floor
+   rather than emit proxy-ranked guesses.
 
 ---
 

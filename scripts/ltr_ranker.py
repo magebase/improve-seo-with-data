@@ -82,6 +82,12 @@ COLD_START_WEIGHTS = {
 # is trusted for queue ordering.
 MIN_TRAINING_ROWS = 300
 
+# Always-on training floor (Wave: eliminate the cold-start proxy). Below the
+# old 300-outcome gate the trainer now TRAINS with SERP-bootstrapped grades;
+# the proxy survives only as the init_score residual baseline. Below this
+# floor there is genuinely nothing for trees to split on.
+MIN_TRAINABLE_ROWS = 10
+
 
 # --------------------------------------------------------------------- labels
 
@@ -185,6 +191,7 @@ def train_seo_ranker(
     constraints: Sequence[int] = MONOTONE_CONSTRAINTS,
     train_fraction: float = 0.8,
     random_state: int = 42,
+    min_data_in_leaf: Optional[int] = None,
 ) -> Tuple[Any, Dict[str, Any]]:
     """Trains a LightGBM LambdaRanker with cluster-integrity splitting.
 
@@ -195,6 +202,10 @@ def train_seo_ranker(
     80/20 split is performed over WHOLE clusters (never inside one), and group
     sizes are derived after sorting. `objective="rank_xendcg"` is a one-line
     drop-in for small/noisy datasets (O(N) per group, no truncation tuning).
+
+    `min_data_in_leaf` defaults to the always-on adaptive schedule
+    max(5, n_rows // 30): small bootstrapped histories train immediately
+    (floor 5), large pooled histories regularize harder.
 
     Returns (booster, meta); predictions via booster.predict(X).
     """
@@ -229,6 +240,9 @@ def train_seo_ranker(
     train_groups = np.unique(train_clusters_sorted, return_counts=True)[1]
     has_val = len(val_df) > 0 and len(val_clusters) > 0
 
+    if min_data_in_leaf is None:
+        min_data_in_leaf = max(5, len(X) // 30)
+
     params = {
         "objective": objective,
         "metric": "ndcg",
@@ -239,7 +253,7 @@ def train_seo_ranker(
         "learning_rate": 0.04,
         "n_estimators": 400,
         "num_boost_round": 400,
-        "min_data_in_leaf": 15,
+        "min_data_in_leaf": int(min_data_in_leaf),
         "bagging_fraction": 0.8,
         "bagging_freq": 1,
         "feature_fraction": 0.8,
@@ -284,6 +298,7 @@ def train_seo_ranker(
         "constraints": list(constraints),
         "objective": objective,
         "best_iteration": int(getattr(booster, "best_iteration", 0) or 0),
+        "min_data_in_leaf": int(min_data_in_leaf or 0),
         "train_clusters": train_clusters,
         "val_clusters": val_clusters,
         "train_row_clusters": sorted(set(clusters[is_train].tolist())),

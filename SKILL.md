@@ -259,18 +259,23 @@ $$\text{GSC Striking Distance} \longrightarrow \text{SERP Vulnerability Score} \
 
 ### Workflow 7: The Self-Improving Ranking Loop (Collect → Train → Score → Log Outcomes)
 
-The production implementation of Workflow 6's funnel: a closed Learning-to-Rank loop that retrains on realized 30-day outcomes and can never underperform the deterministic baseline. Run it as a monthly cycle per property.
+The production implementation of Workflow 6's funnel: a closed, ALWAYS-ON Learning-to-Rank loop. Labels come from real click buckets once the fleet history carries clicks, and from DataForSEO SERP-structure bootstrap grades before that — so the ranker trains from day one (10+ rows) instead of idling behind a 300-outcome gate. The deterministic heuristic survives only as the `init_score` residual baseline, meaning the model can never underperform it. Run it as a monthly cycle per property.
 
 ```bash
 # Stage 1: REAL GSC candidates + DataForSEO SERP enrichment -> 8-feature matrix
 python3 scripts/collect_features.py --site smsriver.com --top 200
 
-# Stage 2: train LambdaRanker (once >= 300 labeled outcomes exist)
-python3 scripts/train_ranker.py                       # lambdarank + isotonic calibration
-python3 scripts/train_ranker.py --objective rank_xendcg   # drop-in for small/noisy data
+# Stage 1.5 (fleet pooling, cross-domain day-one strength): harmonize every
+# authenticated GSC property's exports into ONE domain-agnostic history
+python3 scripts/fleet_ingest.py --inputs 'data/fleet/*.json' \
+    --output data/ltr_training_history.jsonl
+
+# Stage 2: train the ranker (ALWAYS-ON: >= 10 trainable rows suffice)
+python3 scripts/train_ranker.py                       # rank_xendcg + bootstrap grades
+python3 scripts/train_ranker.py --objective lambdarank    # for mature click-rich pools
 
 # Stage 3: score the backlog -> prescribed actions + calibrated Expected Clicks
-python3 scripts/score_backlog.py                      # cold-start proxy before the model exists
+python3 scripts/score_backlog.py                      # auto-trains if no bundle exists
 
 # Stage 4 (30 days later): join executed queue against fresh GSC, append
 # labeled outcomes, and retrain in one step
@@ -280,13 +285,14 @@ python3 scripts/log_outcomes_and_retrain.py \
 
 Contract details enforced by `scripts/ltr_ranker.py` (see [`references/serp_intelligence_and_programmatic_scaling.md`](./references/serp_intelligence_and_programmatic_scaling.md) section 4):
 
-- **Labels:** exponential 0-4 click buckets (`label_gain=[0, 1, 3, 7, 15]`); any conversion overrides to grade 4.
-- **Position-bias correction:** labels are propensity-adjusted (`AdjustedClicks = realized * min(5, ECTR(3)/ECTR(p_start))`, `ECTR(p) = 0.28/p^1.15`) so the ranker learns click LIFT, not "recommend whatever already ranks #1".
+- **Labels (always-on, two modes):** with >= 50 pooled rows carrying real clicks, exponential 0-4 click buckets (`label_gain=[0, 1, 3, 7, 15]`; any conversion overrides to grade 4). Below that, `bootstrap_labels.py` grades every candidate from pure SERP structure: quantile-binned DataForSEO opportunity score (`search_volume_log x serp_openness x crowding_penalty x position_weight x domain_centroid_sim`), with **deep-head traps** (position > 50, zero forum slots, >= 0.6 title match rate) hard-graded 0. The mode is recorded in the bundle metadata (`label_mode: serp_bootstrap | fleet_clicks`) and flips automatically as click outcomes accumulate.
+- **Position-bias correction:** click labels are propensity-adjusted (`AdjustedClicks = realized * min(5, ECTR(3)/ECTR(p_start))`, `ECTR(p) = 0.28/p^1.15`) so the ranker learns click LIFT, not "recommend whatever already ranks #1".
 - **Leakage defense:** the 80/20 train/validation split is performed over WHOLE semantic clusters, never inside one.
 - **Monotonic constraints:** `[+1 centroid, +1 forum, -1 title match, -1 crowding, +1 hub links, 0 position, +1 volume, +1 intent]` — small datasets cannot learn inverted truths.
-- **Residual learning:** `init_score` warm-starts from the deterministic heuristic `log10(imp+1) * (TargetCTR - CTR) * ConvValue`, so the model can never underperform the baseline while young.
-- **Cross-cluster calibration:** raw LambdaRank margins are NOT comparable across clusters; an isotonic regressor (PAVA, out-of-bounds clipping) maps them onto calibrated Expected 30-Day Clicks before global Top-20 queueing.
-- **Cold-start gate:** below 300 labeled outcomes the trainer refuses to run (exit 2) and the deterministic linear proxy (`0.30*CentroidSim + 0.25*ForumRatio - 0.20*TitleMatch - 0.15*PixelCrowding + 0.10*log10(Volume+1)`) stays authoritative.
+- **Residual learning:** `init_score` warm-starts from the deterministic heuristic `log10(imp+1) * (TargetCTR - CTR) * ConvValue`, so the model can never underperform the baseline while young. The linear proxy has no other role; it is no longer a scorer.
+- **Adaptive regularization:** `min_data_in_leaf = max(5, n_rows // 30)` scales leaf size to the pooled history, which is what makes 10-150-row bootstrapped histories trainable at all.
+- **Cross-cluster calibration:** raw ranker margins are NOT comparable across clusters; an isotonic regressor (PAVA, out-of-bounds clipping) maps them onto calibrated Expected 30-Day Clicks before global Top-20 queueing — fitted only when >= 20 clicked validation rows exist. Bootstrap-mode bundles ship uncalibrated margins rather than invent click semantics.
+- **Trainable floor:** below `MIN_TRAINABLE_ROWS = 10` pooled rows the trainer and scorer refuse (exit 2) rather than emit guess-ranked queues; pool the fleet with `fleet_ingest.py` first.
 - **85/15 queue:** 17 exploited slots (top calibrated scores) + 3 exploratory slots drawn from the 50th-80th percentile stratified across clusters, so the history keeps receiving counterfactual variance and the model never goes feedback-loop blind.
 - **Prescription:** SHAP contributions (`booster.predict(X, pred_contrib=True)`) map each candidate onto one of 4 executable actions: `LAUNCH_PSEO_ROUTE`, `INJECT_EXACT_H2_AND_TITLE`, `BOOST_INTERNAL_LINKS`, `REWRITE_SNIPPET_AND_TOP_300PX`.
 
@@ -302,8 +308,9 @@ Contract details enforced by `scripts/ltr_ranker.py` (see [`references/serp_inte
 | [`scripts/dataforseo_client.py`](./scripts/dataforseo_client.py) | **Cost-Routed DataForSEO SERP Intelligence:** Standard Queue batch discovery at $0.0006/SERP (Live gated at $0.002), weak-spot vulnerability scoring, SERP feature extraction, `stop_crawl_on_match` rank tracking with refunds, offset deep-page crawling, and `--dry-run` cost plans. Credentials via `DATAFORSEO_LOGIN`/`DATAFORSEO_PASSWORD` (or `DFS_*`/`DATAFORSEO_API_KEY`) in `.env.credentials` — never hardcoded. |
 | [`scripts/ltr_ranker.py`](./scripts/ltr_ranker.py) | **Learning-to-Rank Core Library:** exponential click grading, position-bias correction, cluster-integrity splitting, monotone constraints, native LightGBM persistence (no joblib/sklearn), pure-Python isotonic calibration, SHAP action prescription, and the 85/15 exploration/exploitation queue split. |
 | [`scripts/collect_features.py`](./scripts/collect_features.py) | **Stage 1 Collector:** pulls real GSC performance via the `seo` binary, enriches top candidates through the DataForSEO Standard Queue, computes the 8-feature ranking matrix, and writes `data/ltr_features.json`. |
-| [`scripts/train_ranker.py`](./scripts/train_ranker.py) | **Stage 2 Trainer:** trains the LambdaRanker from the outcome history with heuristic init_score residual learning, calibrates margins onto Expected 30-Day Clicks, and persists the deployable bundle to `models/`. Refuses to train below 300 outcomes. |
-| [`scripts/score_backlog.py`](./scripts/score_backlog.py) | **Stage 3 Scorer:** ranks the collected backlog with the trained bundle (or the deterministic cold-start proxy), prescribes SHAP-driven actions, and emits the 85/15 `data/action_queue.json`. |
+| [`scripts/train_ranker.py`](./scripts/train_ranker.py) | **Stage 2 Trainer:** trains the always-on rank_xendcg/LambdaRanker from the pooled outcome history (bootstrap SERP grades or real click buckets, adaptive `min_data_in_leaf`, heuristic init_score residual learning), calibrates margins onto Expected 30-Day Clicks when clicked outcomes exist, and persists the deployable bundle to `models/`. Refuses below 10 trainable rows. |
+| [`scripts/score_backlog.py`](./scripts/score_backlog.py) | **Stage 3 Scorer:** ranks the collected backlog with the trained bundle, auto-trains one from bootstrap grades when no bundle exists (>= 10 rows), prescribes SHAP-driven actions, and emits the 85/15 `data/action_queue.json`. |
+| [`scripts/fleet_ingest.py`](./scripts/fleet_ingest.py) | **Stage 1.5 Fleet Harmonizer:** pools GSC `(query, page)` rows from ALL authenticated properties into one domain-agnostic 8-feature schema (log-scaled volume, URL-path cluster IDs, neutral SERP-feature fills), dedupes with max-clicks-wins, and writes the pooled training history that powers cross-domain day-one training. |
 | [`scripts/log_outcomes_and_retrain.py`](./scripts/log_outcomes_and_retrain.py) | **Stage 4 Loop Closer:** joins a previously executed queue against fresh GSC outcomes 30 days later, appends idempotently to the labeled history, and triggers retraining. |
 | [`scripts/setup_observability.py`](./scripts/setup_observability.py) | Scans, validates, heals, and exports telemetry manifests (`DataSourceManifest`) and drop-in tracking snippets. |
 | [`scripts/geo_evaluator.py`](./scripts/geo_evaluator.py) | Scores AI agent readiness, evaluates `llms.txt`, and validates Schema.org JSON-LD structured data. |
