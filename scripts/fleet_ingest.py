@@ -71,7 +71,9 @@ def _normalize_row(raw: Dict[str, Any], domain: str) -> Dict[str, Any]:
         volume_log = float(volume)
 
     features = {
-        "domain_centroid_sim": float(features_in.get("domain_centroid_sim", 0.0) or 0.0),
+        # Neutral 0.5 fill: unknown similarity must NOT zero the bootstrap
+        # opportunity score the way a maximally-off-topic 0.0 fill would.
+        "domain_centroid_sim": float(features_in.get("domain_centroid_sim", 0.5) or 0.5),
         "serp_forum_ratio": float(features_in.get("serp_forum_ratio", 0.0) or 0.0),
         "title_exact_match_rate": float(features_in.get("title_exact_match_rate", 0.0) or 0.0),
         "serp_pixel_crowding": float(features_in.get("serp_pixel_crowding", 0.0) or 0.0),
@@ -109,6 +111,12 @@ def harmonize_fleet_history(property_payloads: List[Dict[str, Any]]) -> List[Dic
     for idx, payload in enumerate(property_payloads):
         domain = _domain_of(payload, idx)
         for raw in payload.get("rows", []):
+            if "keys" in raw and not raw.get("query"):
+                keys = raw.get("keys") or []
+                if len(keys) < 2:
+                    continue
+                raw = dict(raw)
+                raw["query"], raw["page"] = keys[0], keys[1]
             if not raw.get("query") or not raw.get("page"):
                 continue
             row = _normalize_row(raw, domain)

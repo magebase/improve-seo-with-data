@@ -172,6 +172,18 @@ class TestFleetIngest(unittest.TestCase):
         self.assertEqual(feats["title_exact_match_rate"], 0.0)
         self.assertEqual(feats["serp_pixel_crowding"], 0.0)
 
+    def test_missing_centroid_sim_fills_neutral_not_off_topic(self):
+        """Centroid similarity is a multiplicative factor in the bootstrap
+        opportunity score: a 0.0 fill (maximally off-topic) zeroes EVERY
+        pooled row's opportunity and collapses all grades to 0. Unknown
+        similarity must fill neutral (0.5) so SERP structure alone still
+        spreads the grades."""
+        pooled = harmonize_fleet_history([self._property_export("a.com", with_features=False)])
+        self.assertEqual(pooled[0]["features"]["domain_centroid_sim"], 0.5)
+        grades, meta = generate_bootstrap_grades(pooled)
+        self.assertEqual(meta["label_mode"], "serp_bootstrap")
+        self.assertGreaterEqual(len(set(grades.tolist())), 2)
+
     def test_volume_is_log_scaled(self):
         pooled = harmonize_fleet_history([self._property_export("a.com", with_features=False)])
         expected = np.log10(101)  # impressions fallback: log10(100 + 1)
@@ -239,6 +251,31 @@ class TestAlwaysOnTraining(unittest.TestCase):
         self.assertGreater(meta["best_iteration"], 0)
         self.assertEqual(meta["objective"], "rank_xendcg")
         self.assertLessEqual(meta["min_data_in_leaf"], 5)
+
+    def test_snapshot_enrichment_upgrades_pooled_rows_in_place(self):
+        """collect_features snapshots re-carry (query, page) keys the fleet
+        pool already holds, but with REAL DataForSEO SERP features instead of
+        0.0 fills. Bootstrap must upgrade those rows in place (no duplicate
+        keys, no silent skip) so retraining learns real SERP structure."""
+        with tempfile.TemporaryDirectory() as tmp:
+            hist = os.path.join(tmp, "history.jsonl")
+            base = _feat_row(query="q0", page="https://x.com/c/p0/", forum=0.0,
+                             title_match=0.0, crowding=0.0, centroid=0.5)
+            base["impressions"] = 100.0
+            with open(hist, "w", encoding="utf-8") as fh:
+                fh.write(json.dumps(base) + "\n")
+            snap = os.path.join(tmp, "snapshot.json")
+            json.dump({"rows": [
+                _feat_row(query="q0", page="https://x.com/c/p0/", forum=0.6,
+                          title_match=0.2, crowding=0.4, centroid=0.8),
+                _feat_row(query="q-new", page="https://x.com/c/p9/"),
+            ]}, open(snap, "w"))
+            added = train_ranker.bootstrap_history_from_features(snap, hist)
+            rows = train_ranker.load_history(hist)
+            self.assertEqual(len(rows), 2)          # upgraded in place, no dup
+            self.assertEqual(added, 1)              # only the genuinely new key
+            got = next(r for r in rows if r["query"] == "q0")
+            self.assertAlmostEqual(got["features"]["serp_forum_ratio"], 0.6)
 
     def test_bundle_roundtrip_xendcg(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -189,34 +189,53 @@ def bootstrap_history_from_features(features_path: str, history_path: str) -> in
     with open(features_path, encoding="utf-8") as fh:
         payload = json.load(fh)
     rows_in = payload.get("rows") or []
-    existing = set()
-    if os.path.exists(history_path):
-        for row in load_history(history_path):
-            existing.add((row.get("query"), row.get("page")))
+
+    SERP_RICHNESS_KEYS = ("serp_forum_ratio", "title_exact_match_rate",
+                          "serp_pixel_crowding")
+
+    def _serp_richness(row: Dict[str, Any]) -> float:
+        feats = row.get("features") or {}
+        return max(float(feats.get(k, 0.0) or 0.0) for k in SERP_RICHNESS_KEYS)
+
+    history_rows = load_history(history_path) if os.path.exists(history_path) else []
+    by_key = {(r.get("query"), r.get("page")): r for r in history_rows}
+    upgraded = 0
     added = 0
-    os.makedirs(os.path.dirname(history_path) or ".", exist_ok=True)
-    with open(history_path, "a", encoding="utf-8") as fh:
-        for row in rows_in:
-            key = (row.get("query"), row.get("page"))
-            if key in existing:
-                continue
-            fh.write(json.dumps({
-                "query": row.get("query"),
-                "page": row.get("page"),
-                "cluster_id": row.get("cluster_id", "root"),
-                "features": row.get("features"),
-                "clicks_30d": float(row.get("clicks_30d", 0)),
-                "conversions_30d": 0.0,
-                "impressions": float(row.get("impressions", 0)),
-                "current_pos": float(row.get("current_pos", 99)),
-                "current_ctr": float(row.get("ctr", 0)),
-                "conv_value": 1.0,
-                "window_days": row.get("window_days", 90),
-                "source": "gsc_snapshot_bootstrap",
-            }) + "\n")
-            existing.add(key)
-            added += 1
-    print(f"Bootstrapped {added} labeled rows -> {history_path}")
+    for row in rows_in:
+        key = (row.get("query"), row.get("page"))
+        existing = by_key.get(key)
+        if existing is not None:
+            # Richer SERP evidence wins in place: a DataForSEO-enriched
+            # snapshot row replaces the pooled row's neutral 0.0 SERP fills
+            # so retraining learns real structure instead of zeros.
+            if _serp_richness(row) > _serp_richness(existing):
+                existing["features"] = row.get("features")
+                if row.get("current_pos"):
+                    existing["current_pos"] = float(row["current_pos"])
+                    existing["features"]["current_pos"] = float(row["current_pos"])
+                upgraded += 1
+            continue
+        by_key[key] = {
+            "query": row.get("query"),
+            "page": row.get("page"),
+            "cluster_id": row.get("cluster_id", "root"),
+            "features": row.get("features"),
+            "clicks_30d": float(row.get("clicks_30d", 0)),
+            "conversions_30d": 0.0,
+            "impressions": float(row.get("impressions", 0)),
+            "current_pos": float(row.get("current_pos", 99)),
+            "current_ctr": float(row.get("ctr", 0)),
+            "conv_value": 1.0,
+            "window_days": row.get("window_days", 90),
+            "source": "gsc_snapshot_bootstrap",
+        }
+        added += 1
+    if added or upgraded:
+        os.makedirs(os.path.dirname(history_path) or ".", exist_ok=True)
+        with open(history_path, "w", encoding="utf-8") as fh:
+            for row in by_key.values():
+                fh.write(json.dumps(row) + "\n")
+    print(f"Bootstrapped {added} new + {upgraded} SERP-upgraded rows -> {history_path}")
     return added
 
 

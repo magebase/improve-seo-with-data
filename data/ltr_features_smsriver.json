@@ -1,0 +1,3808 @@
+{
+  "site": "sc-domain:smsriver.com",
+  "generated_at": "2026-11-08T09:07:50.193592",
+  "gsc_rows": 200,
+  "dataforseo_enriched": 92,
+  "rows": [
+    {
+      "query": "receive sms",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 83.0,
+      "current_pos": 30.698795180722893,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.785359,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.555556,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 30.698795180722893,
+        "search_volume_log": 3.848559,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "online sms state",
+      "page": "https://smsriver.com/receive-sms/us/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 57.0,
+      "current_pos": 8.035087719298247,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.493264,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 8.035087719298247,
+        "search_volume_log": 3.526856,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "5493812234024",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 3.0,
+      "impressions": 55.0,
+      "current_pos": 3.8,
+      "ctr": 0.05454545454545454,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 3.8,
+        "search_volume_log": 3.496376,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "online sms state",
+      "page": "https://smsriver.com/status/",
+      "cluster_id": "status",
+      "clicks_30d": 0.0,
+      "impressions": 43.0,
+      "current_pos": 5.186046511627907,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.493264,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 5.186046511627907,
+        "search_volume_log": 3.286905,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "14692466072",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 2.0,
+      "impressions": 25.0,
+      "current_pos": 5.6,
+      "ctr": 0.08,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.1,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 5.6,
+        "search_volume_log": 2.829947,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "61481829954",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 3.0,
+      "impressions": 18.0,
+      "current_pos": 4.833333333333334,
+      "ctr": 0.16666666666666666,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.1,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 4.833333333333334,
+        "search_volume_log": 2.557507,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "393511182622",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 2.0,
+      "impressions": 18.0,
+      "current_pos": 6.722222222222222,
+      "ctr": 0.1111111111111111,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.722222222222222,
+        "search_volume_log": 2.557507,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "573504922814",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 2.0,
+      "impressions": 17.0,
+      "current_pos": 2.8235294117647056,
+      "ctr": 0.11764705882352941,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 2.8235294117647056,
+        "search_volume_log": 2.510545,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "32465795960",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 15.0,
+      "current_pos": 4.0,
+      "ctr": 0.06666666666666667,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 4.0,
+        "search_volume_log": 2.40824,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receive",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 15.0,
+      "current_pos": 27.6,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.785359,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.777778,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 27.6,
+        "search_volume_log": 2.40824,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "4571383439",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 14.0,
+      "current_pos": 9.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 9.0,
+        "search_volume_log": 2.352183,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "385915291691",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 13.0,
+      "current_pos": 6.384615384615385,
+      "ctr": 0.07692307692307693,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.384615384615385,
+        "search_volume_log": 2.292256,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "34669968571",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 11.0,
+      "current_pos": 8.818181818181818,
+      "ctr": 0.09090909090909091,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.1,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 8.818181818181818,
+        "search_volume_log": 2.158362,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "plivo vs twilio",
+      "page": "https://smsriver.com/compare/twilio-vs-plivo/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 11.0,
+      "current_pos": 81.0909090909091,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.333333,
+        "title_exact_match_rate": 0.666667,
+        "serp_pixel_crowding": 4.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 81.0909090909091,
+        "search_volume_log": 2.158362,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "smsdock",
+      "page": "https://smsriver.com/compare/smspool-vs-smsdock/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 11.0,
+      "current_pos": 7.2727272727272725,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 7.2727272727272725,
+        "search_volume_log": 2.158362,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "4368110412804",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 10.0,
+      "current_pos": 4.4,
+      "ctr": 0.1,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 4.4,
+        "search_volume_log": 2.082785,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms france",
+      "page": "https://smsriver.com/receive-sms/fr/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 10.0,
+      "current_pos": 55.2,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54371,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.555556,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 55.2,
+        "search_volume_log": 2.082785,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "33754057766",
+      "page": "https://smsriver.com/receive-sms/fr/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 1.0,
+      "impressions": 8.0,
+      "current_pos": 3.375,
+      "ctr": 0.125,
+      "features": {
+        "domain_centroid_sim": 0.170872,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 3.375,
+        "search_volume_log": 1.908485,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms live",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 7.0,
+      "current_pos": 11.285714285714286,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.739895,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 11.285714285714286,
+        "search_volume_log": 1.80618,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 7.0,
+      "current_pos": 33.57142857142857,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.785359,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.666667,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 33.57142857142857,
+        "search_volume_log": 1.80618,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive-sms",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 7.0,
+      "current_pos": 29.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.785359,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.888889,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 29.0,
+        "search_volume_log": 1.80618,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms verification",
+      "page": "https://smsriver.com/receive-sms/pl/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 7.0,
+      "current_pos": 78.28571428571429,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54371,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.333333,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 78.28571428571429,
+        "search_volume_log": 1.80618,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "+12083797171",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 2.0,
+      "impressions": 6.0,
+      "current_pos": 2.833333333333333,
+      "ctr": 0.3333333333333333,
+      "features": {
+        "domain_centroid_sim": 0.170872,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 2.833333333333333,
+        "search_volume_log": 1.690196,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "free phone number",
+      "page": "https://smsriver.com/receive-sms/fr/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 6.0,
+      "current_pos": 8.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.098653,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.333333,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 8.5,
+        "search_volume_log": 1.690196,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "send free uk sms",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 6.0,
+      "current_pos": 67.83333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54259,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 67.83333333333333,
+        "search_volume_log": 1.690196,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "12083797171",
+      "page": "https://smsriver.com/receive-sms/us/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 1.0,
+      "impressions": 5.0,
+      "current_pos": 6.0,
+      "ctr": 0.2,
+      "features": {
+        "domain_centroid_sim": 0.170872,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.0,
+        "search_volume_log": 1.556303,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "393508437616",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 5.0,
+      "current_pos": 7.2,
+      "ctr": 0.2,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.2,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 7.2,
+        "search_volume_log": 1.556303,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms live",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 5.0,
+      "current_pos": 10.2,
+      "ctr": 0.2,
+      "features": {
+        "domain_centroid_sim": 0.664534,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 10.2,
+        "search_volume_log": 1.556303,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "burner app virtual phone number",
+      "page": "https://smsriver.com/guides/burner-phone-number-privacy-guide/",
+      "cluster_id": "guides",
+      "clicks_30d": 0.0,
+      "impressions": 5.0,
+      "current_pos": 32.8,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 32.8,
+        "search_volume_log": 1.556303,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "convert number to e 164 format",
+      "page": "https://smsriver.com/tools/phone-number-formatter/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 5.0,
+      "current_pos": 80.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 80.0,
+        "search_volume_log": 1.556303,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "live sms",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 5.0,
+      "current_pos": 11.2,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.664534,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 11.2,
+        "search_volume_log": 1.556303,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "send sms france",
+      "page": "https://smsriver.com/receive-sms/fr/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 5.0,
+      "current_pos": 83.4,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.443937,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 83.4,
+        "search_volume_log": 1.556303,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "5493812234024",
+      "page": "https://smsriver.com/receive-sms/ar/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 2.25,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 2.25,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "4571445882",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 5.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 5.5,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "4571549098",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 8.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.2,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 8.0,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "free sms england",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 45.25,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54259,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 45.25,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "free uk sms sender",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 56.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54259,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 56.5,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "internationale landekoder",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 90.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 90.0,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mcc mnc",
+      "page": "https://smsriver.com/tools/mcc-mnc-telecom-lookup/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 81.25,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.5,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 81.25,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "online sms gateway",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 80.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.493264,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 80.5,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "rcv sms",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 46.25,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54371,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 46.25,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive online text message",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 65.75,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.213589,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 65.75,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms canada",
+      "page": "https://smsriver.com/receive-sms/ca/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 44.25,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.641243,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.666667,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 44.25,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms online france",
+      "page": "https://smsriver.com/receive-sms/fr/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 40.25,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.59805,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.666667,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 40.25,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive text messages online",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 70.25,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.213589,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.222222,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 70.25,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms interworking",
+      "page": "https://smsriver.com/articles/",
+      "cluster_id": "articles",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 71.75,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54371,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 71.75,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "33754057766",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 3.0,
+      "current_pos": 6.666666666666667,
+      "ctr": 0.3333333333333333,
+      "features": {
+        "domain_centroid_sim": 0.170872,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.666666666666667,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "public sms inbox",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 3.0,
+      "current_pos": 47.0,
+      "ctr": 0.3333333333333333,
+      "features": {
+        "domain_centroid_sim": 0.641243,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 47.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "22 free sms",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 23.333333333333332,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.664534,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.75,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 23.333333333333332,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "34696845618",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 8.666666666666668,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 8.666666666666668,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "70 country code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 68.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.060412,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 68.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "connect appsflyer to claude code",
+      "page": "https://smsriver.com/developer/",
+      "cluster_id": "developer",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 76.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.042718,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 76.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "convert phone number to international format online",
+      "page": "https://smsriver.com/tools/phone-number-formatter/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 71.33333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.034879,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 71.33333333333333,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "discord sms integration",
+      "page": "https://smsriver.com/verify/discord/",
+      "cluster_id": "verify",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 66.33333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.443937,
+        "serp_forum_ratio": 1.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 66.33333333333333,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "e 164 format converter",
+      "page": "https://smsriver.com/tools/phone-number-formatter/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 59.333333333333336,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 59.333333333333336,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "free sms to uk online",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 67.33333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.591916,
+        "serp_forum_ratio": 0.222222,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 67.33333333333333,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "free sms uk receive",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 50.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.739895,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.333333,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 50.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "internationale landekoder telefon",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 94.33333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 94.33333333333333,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "live sms",
+      "page": "https://www.smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 7.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.664534,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 7.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "lookup api",
+      "page": "https://smsriver.com/developer/phone-lookup-api/",
+      "cluster_id": "developer",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 88.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.333333,
+        "title_exact_match_rate": 0.666667,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 88.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mcc and mnc",
+      "page": "https://smsriver.com/tools/mcc-mnc-telecom-lookup/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 83.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.5,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 83.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mcc country code",
+      "page": "https://smsriver.com/tools/mcc-mnc-telecom-lookup/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 65.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.25,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 65.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mcc mobile",
+      "page": "https://smsriver.com/tools/mcc-mnc-telecom-lookup/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 76.33333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.428571,
+        "title_exact_match_rate": 0.142857,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 76.33333333333333,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mcc mobile country code",
+      "page": "https://smsriver.com/tools/mcc-mnc-telecom-lookup/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 63.333333333333336,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.042718,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 63.333333333333336,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "number lookup api for telecom services",
+      "page": "https://smsriver.com/developer/phone-lookup-api/",
+      "cluster_id": "developer",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 88.33333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 88.33333333333333,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "online text receive",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 57.666666666666664,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.246632,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 57.666666666666664,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "phone number international format converter",
+      "page": "https://smsriver.com/tools/phone-number-formatter/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 73.33333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 73.33333333333333,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "phone parser",
+      "page": "https://smsriver.com/tools/phone-number-formatter/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 51.666666666666664,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.222222,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 51.666666666666664,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive a text online uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 53.333333333333336,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.246632,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 53.333333333333336,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms online canada",
+      "page": "https://smsriver.com/receive-sms/ca/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 31.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.59805,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.444444,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 31.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms paypal",
+      "page": "https://smsriver.com/verify/paypal/",
+      "cluster_id": "verify",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 42.333333333333336,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.641243,
+        "serp_forum_ratio": 0.3,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 42.333333333333336,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive text messages",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 61.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.197305,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 61.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive texts online",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 66.66666666666667,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.246632,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 66.66666666666667,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive uk sms",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 54.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.785359,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.777778,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 54.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "send a free sms uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 69.66666666666667,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54259,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 69.66666666666667,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "send free sms online uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 53.666666666666664,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.512615,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 53.666666666666664,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "send free sms uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 73.33333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54259,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.5,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 73.33333333333333,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "send sms online free uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 54.333333333333336,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.512615,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 54.333333333333336,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "send sms online uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 73.66666666666667,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.493264,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.375,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 73.66666666666667,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms online status",
+      "page": "https://smsriver.com/status/",
+      "cluster_id": "status",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 8.666666666666668,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.493264,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 8.666666666666668,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receive uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 52.333333333333336,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.785359,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.555556,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 52.333333333333336,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receiving",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 49.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54371,
+        "serp_forum_ratio": 0.333333,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 49.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms segment calculator",
+      "page": "https://smsriver.com/tools/sms-segment-calculator/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 74.66666666666667,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.443937,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.444444,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 74.66666666666667,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "tinder otp",
+      "page": "https://smsriver.com/verify/tinder/",
+      "cluster_id": "verify",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 65.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.142857,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 65.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "tinder receive sms",
+      "page": "https://smsriver.com/verify/tinder/",
+      "cluster_id": "verify",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 59.666666666666664,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.641243,
+        "serp_forum_ratio": 0.333333,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 59.666666666666664,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "tinder sms receive",
+      "page": "https://smsriver.com/verify/tinder/",
+      "cluster_id": "verify",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 66.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.641243,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 66.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "uk sms receive",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 61.666666666666664,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.785359,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.333333,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 61.666666666666664,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "uk sms receive free",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 55.333333333333336,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.739895,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.333333,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 55.333333333333336,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "\u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0441\u043c\u0441 \u0441\u0435\u0440\u0432\u0438\u0441",
+      "page": "https://smsriver.com/receive-sms/ua/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 86.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 86.0,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "\u0441\u043c\u0441 \u0441\u0435\u0440\u0432\u0438\u0441 \u043e\u043d\u043b\u0430\u0439\u043d",
+      "page": "https://smsriver.com/receive-sms/ua/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 80.66666666666667,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 80.66666666666667,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "14692466072",
+      "page": "https://www.smsriver.com/?country=US",
+      "cluster_id": "?country=US",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 13.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.1,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 13.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "2348153353131",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 2.0,
+      "current_pos": 6.5,
+      "ctr": 0.5,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "public sms inbox",
+      "page": "https://www.smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 1.0,
+      "impressions": 2.0,
+      "current_pos": 6.5,
+      "ctr": 0.5,
+      "features": {
+        "domain_centroid_sim": 0.641243,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms online free",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 1.0,
+      "impressions": 2.0,
+      "current_pos": 6.0,
+      "ctr": 0.5,
+      "features": {
+        "domain_centroid_sim": 0.683486,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.444444,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "0049 kengetal",
+      "page": "https://smsriver.com/country-codes/germany/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 76.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 76.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "10dlc vs short code",
+      "page": "https://smsriver.com/guides/short-code-vs-10dlc-vs-toll-free-sms-comparison/",
+      "cluster_id": "guides",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 88.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.125,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 88.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "10dlc vs toll free",
+      "page": "https://smsriver.com/guides/short-code-vs-10dlc-vs-toll-free-sms-comparison/",
+      "cluster_id": "guides",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 79.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.098653,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.75,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 79.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "34626687996",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 9.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 9.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "34680169025",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 7.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 7.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "420607585227",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 6.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "447985618978",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 10.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 10.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "4571601258",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 9.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 9.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "5493812232115",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 3.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 3.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "55 country code",
+      "page": "https://smsriver.com/country-codes/brazil/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 58.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.060412,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 58.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "65888 sms",
+      "page": "https://smsriver.com/receive-sms/us/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 79.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54371,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 79.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "access sms code",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 70.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.493264,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 70.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "brazil dialing code",
+      "page": "https://smsriver.com/country-codes/brazil/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 46.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 46.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "bulk phone number validator",
+      "page": "https://smsriver.com/tools/bulk-phone-validator/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 43.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 43.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "bulk phone verification",
+      "page": "https://smsriver.com/tools/bulk-phone-validator/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 76.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 76.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "convert mobile number to international format",
+      "page": "https://smsriver.com/tools/phone-number-formatter/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 82.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 82.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "developer tool for sms verification",
+      "page": "https://smsriver.com/tools/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 81.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.384461,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 81.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "dnd scrubbing",
+      "page": "https://smsriver.com/guides/dnd-national-do-not-call-telecom-scrubbing-guide/",
+      "cluster_id": "guides",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 90.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 90.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "e 164 format converter online",
+      "page": "https://smsriver.com/tools/phone-number-formatter/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 63.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.042718,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 63.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "free uk sms receive",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 54.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.739895,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 54.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "international telephone code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 97.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 97.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "kierunkowy do australii",
+      "page": "https://smsriver.com/country-codes/australia/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 98.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 98.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mcc mnc codes",
+      "page": "https://smsriver.com/tools/mcc-mnc-telecom-lookup/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 77.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 77.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mnc and mcc",
+      "page": "https://smsriver.com/tools/mcc-mnc-telecom-lookup/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 82.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 82.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mnc mcc codes",
+      "page": "https://smsriver.com/tools/mcc-mnc-telecom-lookup/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 77.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 77.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mobile country code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 80.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 80.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "online sms",
+      "page": "https://smsriver.com/receive-sms/nl/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 25.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.604122,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 25.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "online sms status",
+      "page": "https://smsriver.com/status/",
+      "cluster_id": "status",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 6.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.493264,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "overseas dialling codes",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 96.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 96.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "paypal sms integration",
+      "page": "https://smsriver.com/verify/paypal/",
+      "cluster_id": "verify",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 27.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.443937,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 27.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "phone area codes australia",
+      "page": "https://smsriver.com/country-codes/australia/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 77.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 77.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "phone france code",
+      "page": "https://smsriver.com/country-codes/france/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 69.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 69.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "phone number api",
+      "page": "https://smsriver.com/developer/phone-lookup-api/",
+      "cluster_id": "developer",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 98.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 98.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "phone number formatter",
+      "page": "https://smsriver.com/tools/phone-number-formatter/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 82.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 82.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "phone number lookup api",
+      "page": "https://smsriver.com/developer/phone-lookup-api/",
+      "cluster_id": "developer",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 88.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 88.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "rcs verified sender compliance",
+      "page": "https://smsriver.com/guides/rcs-verified-sender-onboarding-guide/",
+      "cluster_id": "guides",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 87.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 87.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive free sms uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 52.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.739895,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 52.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms france",
+      "page": "https://smsriver.com/receive-sms/fr/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 40.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.641243,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 40.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms twitter",
+      "page": "https://smsriver.com/verify/twitter-x/",
+      "cluster_id": "verify",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 51.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.641243,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 51.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms uk free",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 39.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.739895,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 39.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms uk online",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 40.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.690569,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 40.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms united kingdom",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 47.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.555332,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 47.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive text",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 50.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.241649,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 50.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive text online",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 64.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.246632,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 64.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive-smss",
+      "page": "https://smsriver.com/receive-sms/ca/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 61.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.241649,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 61.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "reiceve sms",
+      "page": "https://smsriver.com/receive-sms/br/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 46.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54371,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 46.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "rfc3966",
+      "page": "https://smsriver.com/tools/phone-number-formatter/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 81.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 81.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "short code vs 10dlc",
+      "page": "https://smsriver.com/guides/short-code-vs-10dlc-vs-toll-free-sms-comparison/",
+      "cluster_id": "guides",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 86.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 86.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sinch vs bandwidth",
+      "page": "https://smsriver.com/compare/sinch-vs-bandwidth/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 25.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 25.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms mcp server",
+      "page": "https://smsriver.com/developer/mcp-setup/",
+      "cluster_id": "developer",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 90.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.443937,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 90.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receive",
+      "page": "https://smsriver.com/receive-sms/ca/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 49.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.785359,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.777778,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 49.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receive",
+      "page": "https://smsriver.com/receive-sms/pl/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 49.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.785359,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.777778,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 49.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receive canada",
+      "page": "https://smsriver.com/receive-sms/ca/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 53.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.641243,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 53.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receive free uk",
+      "page": "https://smsriver.com/receive-sms/gb/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 44.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.739895,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 44.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms recive",
+      "page": "https://smsriver.com/receive-sms/pl/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 10.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54371,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 10.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "smsbro",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 18.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 18.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "smsreceivefree",
+      "page": "https://smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 55.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 55.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "telefon landekoder",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 89.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 89.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "telnyx sms pricing",
+      "page": "https://smsriver.com/compare/twilio-vs-telnyx/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 90.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.443937,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 90.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "tiktok sms",
+      "page": "https://smsriver.com/verify/tiktok/",
+      "cluster_id": "verify",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 69.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.54371,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 69.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "tlf landekoder",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 84.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 84.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "twilio sms zustellbarkeit verbessern mit compare von infobip",
+      "page": "https://smsriver.com/compare/twilio-vs-infobip/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 67.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.271855,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 67.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "twilio vs infobip",
+      "page": "https://smsriver.com/compare/twilio-vs-infobip/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 19.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 19.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "twilio vs plivo",
+      "page": "https://smsriver.com/compare/twilio-vs-plivo/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 76.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 76.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "twilio vs sendbird",
+      "page": "https://smsriver.com/compare/twilio-vs-messagebird/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 82.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 82.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "usa sms receiving",
+      "page": "https://smsriver.com/receive-sms/us/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 46.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.443937,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 46.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "\u0441\u043c\u0441 \u0441\u0435\u0440\u0432\u0438\u0441 \u0443\u043a\u0440\u0430\u0438\u043d\u0430",
+      "page": "https://smsriver.com/receive-sms/ua/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 88.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 88.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "14692466072",
+      "page": "https://smsriver.com/receive-sms/us/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 6.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.1,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 6.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "573504922814",
+      "page": "https://smsriver.com/receive-sms/co/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 2.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 2.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "4368110412804",
+      "page": "https://smsriver.com/receive-sms/at/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 2.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.085436,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 2.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms code",
+      "page": "https://smsriver.com/receive-sms/fr/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 1.0,
+      "impressions": 1.0,
+      "current_pos": 77.0,
+      "ctr": 1.0,
+      "features": {
+        "domain_centroid_sim": 0.690569,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 77.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "receive sms live",
+      "page": "https://smsriver.com/receive-sms/us/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 1.0,
+      "impressions": 1.0,
+      "current_pos": 11.0,
+      "ctr": 1.0,
+      "features": {
+        "domain_centroid_sim": 0.739895,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 11.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms brasil gr\u00e1tis",
+      "page": "https://smsriver.com/receive-sms/br/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 1.0,
+      "impressions": 1.0,
+      "current_pos": 35.0,
+      "ctr": 1.0,
+      "features": {
+        "domain_centroid_sim": 0.54259,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 35.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms live",
+      "page": "https://www.smsriver.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 7.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.664534,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 7.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receive free",
+      "page": "https://www.smsriver.com/?country=GB",
+      "cluster_id": "?country=GB",
+      "clicks_30d": 1.0,
+      "impressions": 1.0,
+      "current_pos": 8.0,
+      "ctr": 1.0,
+      "features": {
+        "domain_centroid_sim": 0.739895,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 8.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receiver",
+      "page": "https://smsriver.com/receive-sms/us/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 1.0,
+      "impressions": 1.0,
+      "current_pos": 91.0,
+      "ctr": 1.0,
+      "features": {
+        "domain_centroid_sim": 0.604122,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 91.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "sms receiver",
+      "page": "https://smsriver.com/receive-sms/pl/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 108.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.604122,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 108.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "\"sinch\"",
+      "page": "https://smsriver.com/compare/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 50.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 50.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "\"sinch\"",
+      "page": "https://smsriver.com/tools/sms-segment-calculator/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 100.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 100.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "+33635033408",
+      "page": "https://smsriver.com/receive-sms/fr/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 9.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 9.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "-site:facebook.com -site:fb.me -site:youtube.com -site:youtu.be -site:youtube.be -site:twitter.com -site:instagram.com -site:tiktok.com -site:vm.tiktok.com -site:t.co -site:x.com -site:reddit.com \"telnyx\"",
+      "page": "https://smsriver.com/compare/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 31.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 31.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "-site:facebook.com -site:fb.me -site:youtube.com -site:youtu.be -site:youtube.be -site:twitter.com -site:instagram.com -site:tiktok.com -site:vm.tiktok.com -site:t.co -site:x.com -site:reddit.com \"telnyx\"",
+      "page": "https://smsriver.com/receive-sms/ca/",
+      "cluster_id": "receive-sms",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 48.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 48.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "-site:facebook.com -site:fb.me -site:youtube.com -site:youtu.be -site:youtube.be -site:twitter.com -site:instagram.com -site:tiktok.com -site:vm.tiktok.com -site:t.co -site:x.com -site:reddit.com \"telnyx\"",
+      "page": "https://smsriver.com/tools/",
+      "cluster_id": "tools",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 38.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 38.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "00067 country code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 77.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 77.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "00117 country code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 32.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 32.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "00121 country",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 31.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 31.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "0038 code country",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 76.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 76.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "0049 netnummer",
+      "page": "https://smsriver.com/country-codes/germany/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 76.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 76.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "00566 country code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 3.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 3.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "0082 country code",
+      "page": "https://smsriver.com/country-codes/south-korea/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 13.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 13.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "0085 country code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 99.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 99.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "010 country code",
+      "page": "https://smsriver.com/country-codes/south-korea/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 76.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 76.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "02036 area code",
+      "page": "https://smsriver.com/country-codes/united-kingdom/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 47.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 47.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "03 phone code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 70.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.060412,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 70.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "0300 which country",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 31.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 31.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "038 landnummer",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 27.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 27.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "04 country code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 47.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.060412,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 47.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "055 country code",
+      "page": "https://smsriver.com/country-codes/brazil/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 57.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 57.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "063 number",
+      "page": "https://smsriver.com/country-codes/brazil/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 73.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 73.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "070 which country phone number",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 41.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 41.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "072 number code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 68.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 68.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "075 country code",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 53.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 53.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "07770 area code",
+      "page": "https://smsriver.com/country-codes/united-kingdom/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 24.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 24.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "078 phone code",
+      "page": "https://smsriver.com/country-codes/united-kingdom/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 85.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.049326,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 85.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "078 phone number country",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 24.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 24.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "0783 which network",
+      "page": "https://smsriver.com/country-codes/",
+      "cluster_id": "country-codes",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 13.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 0.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 13.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    }
+  ]
+}
