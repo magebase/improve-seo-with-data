@@ -179,7 +179,7 @@ class MultiPlatformTelemetryIngestor:
             except Exception as e:
                 print(f"[1/4 GSC] Live API query failed: {e}. Falling back to deterministic baseline telemetry.")
 
-        print("[1/4 GSC] Generating calibrated empirical GSC baseline telemetry...")
+        print("[1/4 GSC] SYNTHETIC baseline (NOT measured evidence) - live API query failed or no site URL.")
         return self._generate_synthetic_gsc()
 
     def _fetch_live_gsc(self) -> List[GSCRecord]:
@@ -352,7 +352,8 @@ class MultiPlatformTelemetryIngestor:
                 for item in data
             }
 
-        print("[2/4 Clarity] Generating calibrated Clarity behavioral friction metrics...")
+        print("[2/4 Clarity] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
+              "pass --clarity-file with a real export or wire CLARITY_API_TOKEN before trusting friction penalties.")
         return {
             "/tools/phone-number-formatter/": ClarityRecord(
                 page="/tools/phone-number-formatter/",
@@ -407,7 +408,8 @@ class MultiPlatformTelemetryIngestor:
                 for item in data
             }
 
-        print("[3/4 PostHog] Generating calibrated PostHog organic conversion funnel telemetry...")
+        print("[3/4 PostHog] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
+              "pass --posthog-file with a real export before trusting conversion metrics.")
         return {
             "/tools/phone-number-formatter/": PostHogRecord(
                 page="/tools/phone-number-formatter/",
@@ -459,7 +461,8 @@ class MultiPlatformTelemetryIngestor:
                 for item in data
             }
 
-        print("[4/4 Cloudflare] Generating calibrated Cloudflare edge performance & CWV telemetry...")
+        print("[4/4 Cloudflare] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
+              "pass --cloudflare-file with a real export before trusting CWV/TTFB penalties.")
         return {
             "/tools/phone-number-formatter/": CloudflareRecord(
                 page="/tools/phone-number-formatter/",
