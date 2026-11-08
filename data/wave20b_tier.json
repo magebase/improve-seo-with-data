@@ -1,0 +1,1042 @@
+[
+ {
+  "query": "online sms state",
+  "page": "https://smsriver.com/receive-sms/us/",
+  "rank_score": 0.9847933460826622,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.493264,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 8.035087719298247,
+   "search_volume_log": 3.526856,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.738217,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "free phone number",
+  "page": "https://smsriver.com/receive-sms/fr/",
+  "rank_score": 0.9847933460826622,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.098653,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.333333,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 8.5,
+   "search_volume_log": 1.690196,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.738217,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "34696845618",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.9847933460826622,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 8.666666666666668,
+   "search_volume_log": 1.20412,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.729208,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "sms online status",
+  "page": "https://smsriver.com/status/",
+  "rank_score": 0.9847933460826622,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.493264,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 8.666666666666668,
+   "search_volume_log": 1.20412,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.738217,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "5493812234024",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 3.8,
+   "search_volume_log": 3.496376,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "online sms state",
+  "page": "https://smsriver.com/status/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.493264,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 5.186046511627907,
+   "search_volume_log": 3.286905,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.632036,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "14692466072",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.1,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 5.6,
+   "search_volume_log": 2.829947,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "61481829954",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.1,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 4.833333333333334,
+   "search_volume_log": 2.557507,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "393511182622",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.722222222222222,
+   "search_volume_log": 2.557507,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "573504922814",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 2.8235294117647056,
+   "search_volume_log": 2.510545,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "32465795960",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 4.0,
+   "search_volume_log": 2.40824,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "385915291691",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.384615384615385,
+   "search_volume_log": 2.292256,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "smsdock",
+  "page": "https://smsriver.com/compare/smspool-vs-smsdock/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.111111,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 7.2727272727272725,
+   "search_volume_log": 2.158362,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.632036,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "4368110412804",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 4.4,
+   "search_volume_log": 2.082785,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "33754057766",
+  "page": "https://smsriver.com/receive-sms/fr/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.170872,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 3.375,
+   "search_volume_log": 1.908485,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "+12083797171",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.170872,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 2.833333333333333,
+   "search_volume_log": 1.690196,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "12083797171",
+  "page": "https://smsriver.com/receive-sms/us/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.170872,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.0,
+   "search_volume_log": 1.556303,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "393508437616",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.2,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 7.2,
+   "search_volume_log": 1.556303,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "5493812234024",
+  "page": "https://smsriver.com/receive-sms/ar/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 2.25,
+   "search_volume_log": 1.39794,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "4571445882",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 5.5,
+   "search_volume_log": 1.39794,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "4571549098",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.2,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 8.0,
+   "search_volume_log": 1.39794,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "33754057766",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.170872,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.666666666666667,
+   "search_volume_log": 1.20412,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.623027,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "live sms",
+  "page": "https://www.smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.664534,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 7.0,
+   "search_volume_log": 1.20412,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.632036,
+   "search_volume_log": 0.467073,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "2348153353131",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.111111,
+   "serp_pixel_crowding": 2.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.5,
+   "search_volume_log": 0.954243,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.70782,
+   "search_volume_log": 0.391289,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "public sms inbox",
+  "page": "https://www.smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.641243,
+   "serp_forum_ratio": 0.111111,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.5,
+   "search_volume_log": 0.954243,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.70782,
+   "search_volume_log": 0.391289,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "receive sms online free",
+  "page": "https://smsriver.com/receive-sms/gb/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
+  "features": {
+   "domain_centroid_sim": 0.683486,
+   "serp_forum_ratio": 0.111111,
+   "title_exact_match_rate": 0.444444,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.0,
+   "search_volume_log": 0.954243,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.70782,
+   "search_volume_log": 0.391289,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "34680169025",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 7.5,
+   "search_volume_log": 0.954243,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.698811,
+   "search_volume_log": 0.391289,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "420607585227",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.0,
+   "search_volume_log": 0.954243,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.698811,
+   "search_volume_log": 0.391289,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "5493812232115",
+  "page": "https://smsriver.com/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 3.5,
+   "search_volume_log": 0.954243,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.698811,
+   "search_volume_log": 0.391289,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "online sms status",
+  "page": "https://smsriver.com/status/",
+  "rank_score": 0.8786126185232717,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.493264,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.0,
+   "search_volume_log": 0.954243,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.698811,
+   "search_volume_log": 0.391289,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "14692466072",
+  "page": "https://smsriver.com/receive-sms/us/",
+  "rank_score": 0.8700410723848182,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.1,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 6.0,
+   "search_volume_log": 0.60206,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.69571,
+   "search_volume_log": 0.385818,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "573504922814",
+  "page": "https://smsriver.com/receive-sms/co/",
+  "rank_score": 0.8700410723848182,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 2.0,
+   "search_volume_log": 0.60206,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.69571,
+   "search_volume_log": 0.385818,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "4368110412804",
+  "page": "https://smsriver.com/receive-sms/at/",
+  "rank_score": 0.8700410723848182,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.085436,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 2.0,
+   "search_volume_log": 0.60206,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.69571,
+   "search_volume_log": 0.385818,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "sms live",
+  "page": "https://www.smsriver.com/",
+  "rank_score": 0.8700410723848182,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.664534,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.111111,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 7.0,
+   "search_volume_log": 0.60206,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.704719,
+   "search_volume_log": 0.385818,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "sms receive free",
+  "page": "https://www.smsriver.com/?country=GB",
+  "rank_score": 0.8700410723848182,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.739895,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 8.0,
+   "search_volume_log": 0.60206,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.69571,
+   "search_volume_log": 0.385818,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "00566 country code",
+  "page": "https://smsriver.com/country-codes/",
+  "rank_score": 0.8700410723848182,
+  "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+  "features": {
+   "domain_centroid_sim": 0.049326,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 3.0,
+   "search_volume_log": 0.60206,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.69571,
+   "search_volume_log": 0.385818,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "online sms",
+  "page": "https://smsriver.com/receive-sms/nl/",
+  "rank_score": 0.8308712761475571,
+  "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
+  "features": {
+   "domain_centroid_sim": 0.604122,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 25.5,
+   "search_volume_log": 0.954243,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": 0.000362,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.629788,
+   "search_volume_log": 0.412571,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "receive sms",
+  "page": "https://smsriver.com/receive-sms/gb/",
+  "rank_score": 0.6885891079120311,
+  "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
+  "features": {
+   "domain_centroid_sim": 0.785359,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.555556,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 30.698795180722893,
+   "search_volume_log": 3.848559,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.343965,
+   "search_volume_log": 0.565121,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "sms receive",
+  "page": "https://smsriver.com/receive-sms/gb/",
+  "rank_score": 0.6885891079120311,
+  "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
+  "features": {
+   "domain_centroid_sim": 0.785359,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.777778,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 27.6,
+   "search_volume_log": 2.40824,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.337947,
+   "search_volume_log": 0.571139,
+   "conversion_intent_score": 0.0
+  }
+ },
+ {
+  "query": "receive-sms",
+  "page": "https://smsriver.com/receive-sms/gb/",
+  "rank_score": 0.6885891079120311,
+  "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
+  "features": {
+   "domain_centroid_sim": 0.785359,
+   "serp_forum_ratio": 0.111111,
+   "title_exact_match_rate": 0.888889,
+   "serp_pixel_crowding": 1.0,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 29.0,
+   "search_volume_log": 1.80618,
+   "conversion_intent_score": 0.0
+  },
+  "shap": {
+   "domain_centroid_sim": 0.0,
+   "serp_forum_ratio": 0.0,
+   "title_exact_match_rate": 0.0,
+   "serp_pixel_crowding": -0.008647,
+   "parent_hub_internal_links": 0.0,
+   "current_pos": 0.343033,
+   "search_volume_log": 0.566053,
+   "conversion_intent_score": 0.0
+  }
+ }
+]
