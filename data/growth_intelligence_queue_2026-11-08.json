@@ -1,0 +1,2788 @@
+{
+  "site": "sc-domain:smsriver.com",
+  "generated_at": "2026-11-08T10:19:43.043178+00:00",
+  "total_actions_detected": 14,
+  "actions_by_type": {
+    "ctr_improvement": 0,
+    "ranking_opportunity": 4,
+    "conversion_leakage": 0,
+    "technical_risk": 0,
+    "content_expansion_or_consolidation": 3,
+    "unmet_search_demand": 7
+  },
+  "page_level_decisions": {
+    "consolidate_overlapping_pages": 3,
+    "create_new_page": 7,
+    "improve_existing_page": 4
+  },
+  "diagnostic_states": {
+    "state_8_multi_url_cannibalization": 3,
+    "state_5_striking_distance_stage_1_pos_4_10": 10,
+    "state_3_impressions_position_gt_30": 1
+  },
+  "typed_actions": {
+    "content_consolidation": 3,
+    "new_page_creation": 7,
+    "content_expansion": 4
+  },
+  "indexing_funnel": {
+    "receiving_impressions": 7,
+    "published": 7
+  },
+  "tracks": {
+    "track1_improve_existing": [
+      {
+        "action_id": "seo_cannibal_001",
+        "site": "site",
+        "page_group": "cannibalization_clusters",
+        "target_urls": [
+          "https://smsriver.com/",
+          "https://smsriver.com/receive-sms/ar/"
+        ],
+        "opportunity_type": "content_expansion_or_consolidation",
+        "page_level_action": "consolidate_overlapping_pages",
+        "action_type": "content_consolidation",
+        "diagnostic_classification": "state_8_multi_url_cannibalization",
+        "url_ownership": {
+          "query_cluster": "5493812234024",
+          "intended_url": "https://smsriver.com/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/",
+            "https://smsriver.com/receive-sms/ar/"
+          ],
+          "competing_urls": [
+            "https://smsriver.com/receive-sms/ar/"
+          ],
+          "ownership_status": "disputed_competing"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Multi-URL Query Distribution"
+          ],
+          "verified_claims": [
+            "Query '5493812234024' is split across 2 distinct URLs (https://smsriver.com/, https://smsriver.com/receive-sms/ar/).",
+            "Aggregate demand: 60 impressions and 3 clicks."
+          ],
+          "unique_value_assertion": "Unifies split organic authority onto designated primary canonical URL; eliminates internal rank competition.",
+          "validation_timestamp": "2026-11-08T10:19:43.031334+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "receiving_impressions",
+        "baseline_period": {
+          "start_date": "pre_consolidation_window",
+          "end_date": "2026-11-08",
+          "impressions": 60,
+          "clicks": 3,
+          "ctr": 0.05,
+          "position": 3.0,
+          "conversions": 0.1
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.24,
+          "cost": 1.0,
+          "risk": 0.25,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "consolidated_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Net organic click loss across cluster > 20% over 28 days."
+        },
+        "direct_observation": "GSC: Query '5493812234024' split across 2 competing URLs (https://smsriver.com/, https://smsriver.com/receive-sms/ar/) with 60 impressions and 3 clicks",
+        "decision_framework": {
+          "target_scope": "Competing URLs: https://smsriver.com/, https://smsriver.com/receive-sms/ar/",
+          "action_type": "consolidate_overlapping_pages",
+          "supporting_evidence": "Query '5493812234024' is split across 2 URLs (60 impressions, 3 clicks).",
+          "measurable_outcome": "Unification of split click volume on primary canonical URL and elimination of keyword cannibalization.",
+          "scale_or_rollback_protocol": "Monitor rank consolidation over 28 days via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query '5493812234024' is split across 2 competing URLs (https://smsriver.com/, https://smsriver.com/receive-sms/ar/), dividing authority (60 impressions, 3 clicks)."
+          }
+        ],
+        "hypothesis": "Multiple pages compete for intent '5493812234024'. Designating a single canonical authority URL and differentiating secondary URLs will unify search rank.",
+        "expected_impact": {
+          "incremental_clicks_low": 1.0,
+          "incremental_clicks_high": 2.0,
+          "expected_incremental_value": 0.24,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "medium",
+        "priority_score": 0.04,
+        "proposed_action": "Designate https://smsriver.com/ as canonical topic owner for '5493812234024'. Canonicalize, 301-redirect, or differentiate https://smsriver.com/receive-sms/ar/.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.031409+00:00"
+      },
+      {
+        "action_id": "seo_cannibal_002",
+        "site": "site",
+        "page_group": "cannibalization_clusters",
+        "target_urls": [
+          "https://smsriver.com/receive-sms/us/",
+          "https://smsriver.com/status/"
+        ],
+        "opportunity_type": "content_expansion_or_consolidation",
+        "page_level_action": "consolidate_overlapping_pages",
+        "action_type": "content_consolidation",
+        "diagnostic_classification": "state_8_multi_url_cannibalization",
+        "url_ownership": {
+          "query_cluster": "online sms state",
+          "intended_url": "https://smsriver.com/receive-sms/us/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/receive-sms/us/",
+            "https://smsriver.com/status/"
+          ],
+          "competing_urls": [
+            "https://smsriver.com/status/"
+          ],
+          "ownership_status": "disputed_competing"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Multi-URL Query Distribution"
+          ],
+          "verified_claims": [
+            "Query 'online sms state' is split across 2 distinct URLs (https://smsriver.com/receive-sms/us/, https://smsriver.com/status/).",
+            "Aggregate demand: 100 impressions and 0 clicks."
+          ],
+          "unique_value_assertion": "Unifies split organic authority onto designated primary canonical URL; eliminates internal rank competition.",
+          "validation_timestamp": "2026-11-08T10:19:43.031653+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "receiving_impressions",
+        "baseline_period": {
+          "start_date": "pre_consolidation_window",
+          "end_date": "2026-11-08",
+          "impressions": 100,
+          "clicks": 0,
+          "ctr": 0.0,
+          "position": 6.6,
+          "conversions": 0.0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.0,
+          "cost": 1.0,
+          "risk": 0.25,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "consolidated_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Net organic click loss across cluster > 20% over 28 days."
+        },
+        "direct_observation": "GSC: Query 'online sms state' split across 2 competing URLs (https://smsriver.com/receive-sms/us/, https://smsriver.com/status/) with 100 impressions and 0 clicks",
+        "decision_framework": {
+          "target_scope": "Competing URLs: https://smsriver.com/receive-sms/us/, https://smsriver.com/status/",
+          "action_type": "consolidate_overlapping_pages",
+          "supporting_evidence": "Query 'online sms state' is split across 2 URLs (100 impressions, 0 clicks).",
+          "measurable_outcome": "Unification of split click volume on primary canonical URL and elimination of keyword cannibalization.",
+          "scale_or_rollback_protocol": "Monitor rank consolidation over 28 days via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query 'online sms state' is split across 2 competing URLs (https://smsriver.com/receive-sms/us/, https://smsriver.com/status/), dividing authority (100 impressions, 0 clicks)."
+          }
+        ],
+        "hypothesis": "Multiple pages compete for intent 'online sms state'. Designating a single canonical authority URL and differentiating secondary URLs will unify search rank.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.0,
+          "incremental_clicks_high": 0.0,
+          "expected_incremental_value": 0.0,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "medium",
+        "priority_score": 0.04,
+        "proposed_action": "Designate https://smsriver.com/receive-sms/us/ as canonical topic owner for 'online sms state'. Canonicalize, 301-redirect, or differentiate https://smsriver.com/status/.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.031716+00:00"
+      },
+      {
+        "action_id": "seo_cannibal_003",
+        "site": "site",
+        "page_group": "cannibalization_clusters",
+        "target_urls": [
+          "https://smsriver.com/receive-sms/fr/",
+          "https://smsriver.com/receive-sms/ca/",
+          "https://smsriver.com/receive-sms/gb/"
+        ],
+        "opportunity_type": "content_expansion_or_consolidation",
+        "page_level_action": "consolidate_overlapping_pages",
+        "action_type": "content_consolidation",
+        "diagnostic_classification": "state_8_multi_url_cannibalization",
+        "url_ownership": {
+          "query_cluster": "receive sms",
+          "intended_url": "https://smsriver.com/receive-sms/fr/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/receive-sms/fr/",
+            "https://smsriver.com/receive-sms/ca/",
+            "https://smsriver.com/receive-sms/gb/"
+          ],
+          "competing_urls": [
+            "https://smsriver.com/receive-sms/ca/",
+            "https://smsriver.com/receive-sms/gb/"
+          ],
+          "ownership_status": "disputed_competing"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Multi-URL Query Distribution"
+          ],
+          "verified_claims": [
+            "Query 'receive sms' is split across 3 distinct URLs (https://smsriver.com/receive-sms/fr/, https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/).",
+            "Aggregate demand: 85 impressions and 0 clicks."
+          ],
+          "unique_value_assertion": "Unifies split organic authority onto designated primary canonical URL; eliminates internal rank competition.",
+          "validation_timestamp": "2026-11-08T10:19:43.031780+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "receiving_impressions",
+        "baseline_period": {
+          "start_date": "pre_consolidation_window",
+          "end_date": "2026-11-08",
+          "impressions": 85,
+          "clicks": 0,
+          "ctr": 0.0,
+          "position": 28.6,
+          "conversions": 0.0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.0,
+          "cost": 1.0,
+          "risk": 0.25,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "consolidated_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Net organic click loss across cluster > 20% over 28 days."
+        },
+        "direct_observation": "GSC: Query 'receive sms' split across 3 competing URLs (https://smsriver.com/receive-sms/fr/, https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/) with 85 impressions and 0 clicks",
+        "decision_framework": {
+          "target_scope": "Competing URLs: https://smsriver.com/receive-sms/fr/, https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/",
+          "action_type": "consolidate_overlapping_pages",
+          "supporting_evidence": "Query 'receive sms' is split across 3 URLs (85 impressions, 0 clicks).",
+          "measurable_outcome": "Unification of split click volume on primary canonical URL and elimination of keyword cannibalization.",
+          "scale_or_rollback_protocol": "Monitor rank consolidation over 28 days via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query 'receive sms' is split across 3 competing URLs (https://smsriver.com/receive-sms/fr/, https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/), dividing authority (85 impressions, 0 clicks)."
+          }
+        ],
+        "hypothesis": "Multiple pages compete for intent 'receive sms'. Designating a single canonical authority URL and differentiating secondary URLs will unify search rank.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.0,
+          "incremental_clicks_high": 0.0,
+          "expected_incremental_value": 0.0,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "medium",
+        "priority_score": 0.04,
+        "proposed_action": "Designate https://smsriver.com/receive-sms/fr/ as canonical topic owner for 'receive sms'. Canonicalize, 301-redirect, or differentiate https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.031832+00:00"
+      },
+      {
+        "action_id": "seo_rank_001",
+        "site": "site",
+        "page_group": "striking_distance",
+        "target_urls": [
+          "https://smsriver.com/"
+        ],
+        "opportunity_type": "ranking_opportunity",
+        "page_level_action": "improve_existing_page",
+        "action_type": "content_expansion",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "14692466072",
+          "intended_url": "https://smsriver.com/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "exclusive_owner"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Striking Distance Performance"
+          ],
+          "verified_claims": [
+            "Query '14692466072' averages position 5.6 with 25 impressions and 2 clicks.",
+            "Page https://smsriver.com/ already has topical traction but lacks complete intent depth for '14692466072'."
+          ],
+          "unique_value_assertion": "Adds dedicated H2 sub-topic coverage, edge-case guidance, and interactive calculation utility absent on competing pages.",
+          "validation_timestamp": "2026-11-08T10:19:43.029380+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "receiving_impressions",
+        "baseline_period": {
+          "start_date": "pre_intervention_window",
+          "end_date": "2026-11-08",
+          "impressions": 25,
+          "clicks": 2,
+          "ctr": 0.08,
+          "position": 5.6,
+          "conversions": 0.0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.7,
+          "estimated_business_value": 0.2,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_average_position_and_clicks",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Average position deterioration > 3.0 positions over 28 days."
+        },
+        "direct_observation": "GSC: Striking distance query '14692466072' at pos 5.6 with 25 impressions and 2 clicks",
+        "decision_framework": {
+          "target_scope": "URL: https://smsriver.com/",
+          "action_type": "improve_existing_page",
+          "supporting_evidence": "Striking distance query '14692466072' averages position 5.6 with 25 impressions.",
+          "measurable_outcome": "Position lift to top 3 and incremental qualified click volume (+1 clicks).",
+          "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched control cohort."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Striking distance query '14692466072' averages position 5.6 with 25 impressions.",
+            "period": "current_observation_window",
+            "metrics": {
+              "query": "14692466072",
+              "position": 5.6,
+              "impressions": 25
+            }
+          }
+        ],
+        "hypothesis": "Target page has established topical authority but lacks dedicated H2 section, original computational utility, and contextual internal links for '14692466072'. Adding targeted semantic content will lift position to Page 1.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.0,
+          "incremental_clicks_high": 2.0,
+          "incremental_conversions_low": 0.0,
+          "incremental_conversions_high": 0.0,
+          "expected_incremental_value": 0.2,
+          "currency": "USD"
+        },
+        "confidence": "medium",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.03,
+        "proposed_action": "Expand https://smsriver.com/ with dedicated H2 and original utility for '14692466072', link from relevant category hubs, and align visible title/H1 tags.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.029521+00:00"
+      },
+      {
+        "action_id": "seo_rank_002",
+        "site": "site",
+        "page_group": "striking_distance",
+        "target_urls": [
+          "https://smsriver.com/"
+        ],
+        "opportunity_type": "ranking_opportunity",
+        "page_level_action": "improve_existing_page",
+        "action_type": "content_expansion",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "393511182622",
+          "intended_url": "https://smsriver.com/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "exclusive_owner"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Striking Distance Performance"
+          ],
+          "verified_claims": [
+            "Query '393511182622' averages position 6.8 with 19 impressions and 2 clicks.",
+            "Page https://smsriver.com/ already has topical traction but lacks complete intent depth for '393511182622'."
+          ],
+          "unique_value_assertion": "Adds dedicated H2 sub-topic coverage, edge-case guidance, and interactive calculation utility absent on competing pages.",
+          "validation_timestamp": "2026-11-08T10:19:43.029621+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "receiving_impressions",
+        "baseline_period": {
+          "start_date": "pre_intervention_window",
+          "end_date": "2026-11-08",
+          "impressions": 19,
+          "clicks": 2,
+          "ctr": 0.1053,
+          "position": 6.8,
+          "conversions": 0.0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.7,
+          "estimated_business_value": 0.2,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_average_position_and_clicks",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Average position deterioration > 3.0 positions over 28 days."
+        },
+        "direct_observation": "GSC: Striking distance query '393511182622' at pos 6.8 with 19 impressions and 2 clicks",
+        "decision_framework": {
+          "target_scope": "URL: https://smsriver.com/",
+          "action_type": "improve_existing_page",
+          "supporting_evidence": "Striking distance query '393511182622' averages position 6.8 with 19 impressions.",
+          "measurable_outcome": "Position lift to top 3 and incremental qualified click volume (+1 clicks).",
+          "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched control cohort."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Striking distance query '393511182622' averages position 6.8 with 19 impressions.",
+            "period": "current_observation_window",
+            "metrics": {
+              "query": "393511182622",
+              "position": 6.8,
+              "impressions": 19
+            }
+          }
+        ],
+        "hypothesis": "Target page has established topical authority but lacks dedicated H2 section, original computational utility, and contextual internal links for '393511182622'. Adding targeted semantic content will lift position to Page 1.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.0,
+          "incremental_clicks_high": 2.0,
+          "incremental_conversions_low": 0.0,
+          "incremental_conversions_high": 0.0,
+          "expected_incremental_value": 0.2,
+          "currency": "USD"
+        },
+        "confidence": "medium",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.03,
+        "proposed_action": "Expand https://smsriver.com/ with dedicated H2 and original utility for '393511182622', link from relevant category hubs, and align visible title/H1 tags.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.029684+00:00"
+      },
+      {
+        "action_id": "seo_rank_003",
+        "site": "site",
+        "page_group": "striking_distance",
+        "target_urls": [
+          "https://smsriver.com/receive-sms/us/"
+        ],
+        "opportunity_type": "ranking_opportunity",
+        "page_level_action": "improve_existing_page",
+        "action_type": "content_expansion",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "online sms state",
+          "intended_url": "https://smsriver.com/receive-sms/us/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/receive-sms/us/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "exclusive_owner"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Striking Distance Performance"
+          ],
+          "verified_claims": [
+            "Query 'online sms state' averages position 8.0 with 57 impressions and 0 clicks.",
+            "Page https://smsriver.com/receive-sms/us/ already has topical traction but lacks complete intent depth for 'online sms state'."
+          ],
+          "unique_value_assertion": "Adds dedicated H2 sub-topic coverage, edge-case guidance, and interactive calculation utility absent on competing pages.",
+          "validation_timestamp": "2026-11-08T10:19:43.030018+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "receiving_impressions",
+        "baseline_period": {
+          "start_date": "pre_intervention_window",
+          "end_date": "2026-11-08",
+          "impressions": 57,
+          "clicks": 0,
+          "ctr": 0.0,
+          "position": 8.0,
+          "conversions": 0.0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.7,
+          "estimated_business_value": 0.91,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_average_position_and_clicks",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Average position deterioration > 3.0 positions over 28 days."
+        },
+        "direct_observation": "GSC: Striking distance query 'online sms state' at pos 8.0 with 57 impressions and 0 clicks",
+        "decision_framework": {
+          "target_scope": "URL: https://smsriver.com/receive-sms/us/",
+          "action_type": "improve_existing_page",
+          "supporting_evidence": "Striking distance query 'online sms state' averages position 8.0 with 57 impressions.",
+          "measurable_outcome": "Position lift to top 3 and incremental qualified click volume (+5 clicks).",
+          "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched control cohort."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Striking distance query 'online sms state' averages position 8.0 with 57 impressions.",
+            "period": "current_observation_window",
+            "metrics": {
+              "query": "online sms state",
+              "position": 8.0,
+              "impressions": 57
+            }
+          }
+        ],
+        "hypothesis": "Target page has established topical authority but lacks dedicated H2 section, original computational utility, and contextual internal links for 'online sms state'. Adding targeted semantic content will lift position to Page 1.",
+        "expected_impact": {
+          "incremental_clicks_low": 2.0,
+          "incremental_clicks_high": 7.0,
+          "incremental_conversions_low": 0.1,
+          "incremental_conversions_high": 0.2,
+          "expected_incremental_value": 0.91,
+          "currency": "USD"
+        },
+        "confidence": "medium",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.03,
+        "proposed_action": "Expand https://smsriver.com/receive-sms/us/ with dedicated H2 and original utility for 'online sms state', link from relevant category hubs, and align visible title/H1 tags.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.030072+00:00"
+      },
+      {
+        "action_id": "seo_rank_004",
+        "site": "site",
+        "page_group": "striking_distance",
+        "target_urls": [
+          "https://smsriver.com/status/"
+        ],
+        "opportunity_type": "ranking_opportunity",
+        "page_level_action": "improve_existing_page",
+        "action_type": "content_expansion",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "online sms state",
+          "intended_url": "https://smsriver.com/status/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/status/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "exclusive_owner"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Striking Distance Performance"
+          ],
+          "verified_claims": [
+            "Query 'online sms state' averages position 5.2 with 43 impressions and 0 clicks.",
+            "Page https://smsriver.com/status/ already has topical traction but lacks complete intent depth for 'online sms state'."
+          ],
+          "unique_value_assertion": "Adds dedicated H2 sub-topic coverage, edge-case guidance, and interactive calculation utility absent on competing pages.",
+          "validation_timestamp": "2026-11-08T10:19:43.030134+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "receiving_impressions",
+        "baseline_period": {
+          "start_date": "pre_intervention_window",
+          "end_date": "2026-11-08",
+          "impressions": 43,
+          "clicks": 0,
+          "ctr": 0.0,
+          "position": 5.2,
+          "conversions": 0.0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.7,
+          "estimated_business_value": 0.69,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_average_position_and_clicks",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Average position deterioration > 3.0 positions over 28 days."
+        },
+        "direct_observation": "GSC: Striking distance query 'online sms state' at pos 5.2 with 43 impressions and 0 clicks",
+        "decision_framework": {
+          "target_scope": "URL: https://smsriver.com/status/",
+          "action_type": "improve_existing_page",
+          "supporting_evidence": "Striking distance query 'online sms state' averages position 5.2 with 43 impressions.",
+          "measurable_outcome": "Position lift to top 3 and incremental qualified click volume (+3 clicks).",
+          "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched control cohort."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Striking distance query 'online sms state' averages position 5.2 with 43 impressions.",
+            "period": "current_observation_window",
+            "metrics": {
+              "query": "online sms state",
+              "position": 5.2,
+              "impressions": 43
+            }
+          }
+        ],
+        "hypothesis": "Target page has established topical authority but lacks dedicated H2 section, original computational utility, and contextual internal links for 'online sms state'. Adding targeted semantic content will lift position to Page 1.",
+        "expected_impact": {
+          "incremental_clicks_low": 2.0,
+          "incremental_clicks_high": 5.0,
+          "incremental_conversions_low": 0.1,
+          "incremental_conversions_high": 0.2,
+          "expected_incremental_value": 0.69,
+          "currency": "USD"
+        },
+        "confidence": "medium",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.03,
+        "proposed_action": "Expand https://smsriver.com/status/ with dedicated H2 and original utility for 'online sms state', link from relevant category hubs, and align visible title/H1 tags.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.030176+00:00"
+      }
+    ],
+    "track2_create_new": [
+      {
+        "action_id": "seo_new_001",
+        "site": "sc-domain:smsriver.com",
+        "page_group": "unmet_technical_guide",
+        "target_urls": [
+          "/articles/61481829954/"
+        ],
+        "opportunity_type": "unmet_search_demand",
+        "page_level_action": "create_new_page",
+        "action_type": "new_page_creation",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "61481829954",
+          "intended_url": "/articles/61481829954/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "unowned_hub_landing"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Search Query Demand Telemetry",
+            "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+          ],
+          "verified_claims": [
+            "Target query intent '61481829954' generated 18 impressions (avg pos 4.8) landing on '/'.",
+            "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+          ],
+          "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+          "validation_timestamp": "2026-11-08T10:19:43.037916+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "published",
+        "baseline_period": {
+          "start_date": "pre_creation_baseline",
+          "end_date": "2026-11-08",
+          "impressions": 18,
+          "clicks": 3,
+          "ctr": 0.1667,
+          "position": 4.8,
+          "conversions": 0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.23,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Zero impressions after 60 days post-indexing."
+        },
+        "direct_observation": "GSC: Query '61481829954' with 18 impressions (pos 4.8) lands on generic '/' due to missing dedicated page",
+        "decision_framework": {
+          "target_scope": "New Page: /articles/61481829954/",
+          "action_type": "create_new_page",
+          "supporting_evidence": "Search query '61481829954' generated 18 impressions (avg pos 4.8) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+          "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.2 clicks / +0.0 conversions.",
+          "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query '61481829954' generated 18 impressions and 3 clicks (avg pos 4.8) landing on '/'.",
+            "metrics": {
+              "query": "61481829954",
+              "impressions": 18,
+              "clicks": 3,
+              "position": 4.8,
+              "current_landing": "/",
+              "template_archetype": "technical_guide"
+            }
+          }
+        ],
+        "hypothesis": "Searchers querying '61481829954' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/61481829954/' with Schema.org markup and interactive content will capture top-5 rankings.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.8,
+          "incremental_clicks_high": 1.5,
+          "incremental_conversions_low": 0.0,
+          "incremental_conversions_high": 0.0,
+          "expected_incremental_value": 0.23,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.04,
+        "proposed_action": "Create new Technical Guide page at /articles/61481829954/ targeting '61481829954' with verified data, schema, and interactive elements.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.038014+00:00"
+      },
+      {
+        "action_id": "seo_new_002",
+        "site": "sc-domain:smsriver.com",
+        "page_group": "unmet_technical_guide",
+        "target_urls": [
+          "/articles/393511182622/"
+        ],
+        "opportunity_type": "unmet_search_demand",
+        "page_level_action": "create_new_page",
+        "action_type": "new_page_creation",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "393511182622",
+          "intended_url": "/articles/393511182622/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "unowned_hub_landing"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Search Query Demand Telemetry",
+            "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+          ],
+          "verified_claims": [
+            "Target query intent '393511182622' generated 19 impressions (avg pos 6.8) landing on '/'.",
+            "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+          ],
+          "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+          "validation_timestamp": "2026-11-08T10:19:43.038688+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "published",
+        "baseline_period": {
+          "start_date": "pre_creation_baseline",
+          "end_date": "2026-11-08",
+          "impressions": 19,
+          "clicks": 2,
+          "ctr": 0.1053,
+          "position": 6.8,
+          "conversions": 0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.25,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Zero impressions after 60 days post-indexing."
+        },
+        "direct_observation": "GSC: Query '393511182622' with 19 impressions (pos 6.8) lands on generic '/' due to missing dedicated page",
+        "decision_framework": {
+          "target_scope": "New Page: /articles/393511182622/",
+          "action_type": "create_new_page",
+          "supporting_evidence": "Search query '393511182622' generated 19 impressions (avg pos 6.8) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+          "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.2 clicks / +0.0 conversions.",
+          "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query '393511182622' generated 19 impressions and 2 clicks (avg pos 6.8) landing on '/'.",
+            "metrics": {
+              "query": "393511182622",
+              "impressions": 19,
+              "clicks": 2,
+              "position": 6.8,
+              "current_landing": "/",
+              "template_archetype": "technical_guide"
+            }
+          }
+        ],
+        "hypothesis": "Searchers querying '393511182622' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/393511182622/' with Schema.org markup and interactive content will capture top-5 rankings.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.9,
+          "incremental_clicks_high": 1.6,
+          "incremental_conversions_low": 0.0,
+          "incremental_conversions_high": 0.0,
+          "expected_incremental_value": 0.25,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.04,
+        "proposed_action": "Create new Technical Guide page at /articles/393511182622/ targeting '393511182622' with verified data, schema, and interactive elements.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.038761+00:00"
+      },
+      {
+        "action_id": "seo_new_003",
+        "site": "sc-domain:smsriver.com",
+        "page_group": "unmet_technical_guide",
+        "target_urls": [
+          "/articles/32465795960/"
+        ],
+        "opportunity_type": "unmet_search_demand",
+        "page_level_action": "create_new_page",
+        "action_type": "new_page_creation",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "32465795960",
+          "intended_url": "/articles/32465795960/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "unowned_hub_landing"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Search Query Demand Telemetry",
+            "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+          ],
+          "verified_claims": [
+            "Target query intent '32465795960' generated 15 impressions (avg pos 4.0) landing on '/'.",
+            "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+          ],
+          "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+          "validation_timestamp": "2026-11-08T10:19:43.039333+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "published",
+        "baseline_period": {
+          "start_date": "pre_creation_baseline",
+          "end_date": "2026-11-08",
+          "impressions": 15,
+          "clicks": 1,
+          "ctr": 0.0667,
+          "position": 4.0,
+          "conversions": 0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.2,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Zero impressions after 60 days post-indexing."
+        },
+        "direct_observation": "GSC: Query '32465795960' with 15 impressions (pos 4.0) lands on generic '/' due to missing dedicated page",
+        "decision_framework": {
+          "target_scope": "New Page: /articles/32465795960/",
+          "action_type": "create_new_page",
+          "supporting_evidence": "Search query '32465795960' generated 15 impressions (avg pos 4.0) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+          "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+          "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query '32465795960' generated 15 impressions and 1 clicks (avg pos 4.0) landing on '/'.",
+            "metrics": {
+              "query": "32465795960",
+              "impressions": 15,
+              "clicks": 1,
+              "position": 4.0,
+              "current_landing": "/",
+              "template_archetype": "technical_guide"
+            }
+          }
+        ],
+        "hypothesis": "Searchers querying '32465795960' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/32465795960/' with Schema.org markup and interactive content will capture top-5 rankings.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.7,
+          "incremental_clicks_high": 1.3,
+          "incremental_conversions_low": 0.0,
+          "incremental_conversions_high": 0.0,
+          "expected_incremental_value": 0.2,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.04,
+        "proposed_action": "Create new Technical Guide page at /articles/32465795960/ targeting '32465795960' with verified data, schema, and interactive elements.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.039395+00:00"
+      },
+      {
+        "action_id": "seo_new_004",
+        "site": "sc-domain:smsriver.com",
+        "page_group": "unmet_technical_guide",
+        "target_urls": [
+          "/articles/34669968571/"
+        ],
+        "opportunity_type": "unmet_search_demand",
+        "page_level_action": "create_new_page",
+        "action_type": "new_page_creation",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "34669968571",
+          "intended_url": "/articles/34669968571/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "unowned_hub_landing"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Search Query Demand Telemetry",
+            "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+          ],
+          "verified_claims": [
+            "Target query intent '34669968571' generated 11 impressions (avg pos 8.8) landing on '/'.",
+            "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+          ],
+          "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+          "validation_timestamp": "2026-11-08T10:19:43.039942+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "published",
+        "baseline_period": {
+          "start_date": "pre_creation_baseline",
+          "end_date": "2026-11-08",
+          "impressions": 11,
+          "clicks": 1,
+          "ctr": 0.0909,
+          "position": 8.8,
+          "conversions": 0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.2,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Zero impressions after 60 days post-indexing."
+        },
+        "direct_observation": "GSC: Query '34669968571' with 11 impressions (pos 8.8) lands on generic '/' due to missing dedicated page",
+        "decision_framework": {
+          "target_scope": "New Page: /articles/34669968571/",
+          "action_type": "create_new_page",
+          "supporting_evidence": "Search query '34669968571' generated 11 impressions (avg pos 8.8) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+          "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+          "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query '34669968571' generated 11 impressions and 1 clicks (avg pos 8.8) landing on '/'.",
+            "metrics": {
+              "query": "34669968571",
+              "impressions": 11,
+              "clicks": 1,
+              "position": 8.8,
+              "current_landing": "/",
+              "template_archetype": "technical_guide"
+            }
+          }
+        ],
+        "hypothesis": "Searchers querying '34669968571' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/34669968571/' with Schema.org markup and interactive content will capture top-5 rankings.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.7,
+          "incremental_clicks_high": 1.3,
+          "incremental_conversions_low": 0.0,
+          "incremental_conversions_high": 0.0,
+          "expected_incremental_value": 0.2,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.04,
+        "proposed_action": "Create new Technical Guide page at /articles/34669968571/ targeting '34669968571' with verified data, schema, and interactive elements.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.039993+00:00"
+      },
+      {
+        "action_id": "seo_new_005",
+        "site": "sc-domain:smsriver.com",
+        "page_group": "unmet_technical_guide",
+        "target_urls": [
+          "/articles/385915291691/"
+        ],
+        "opportunity_type": "unmet_search_demand",
+        "page_level_action": "create_new_page",
+        "action_type": "new_page_creation",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "385915291691",
+          "intended_url": "/articles/385915291691/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "unowned_hub_landing"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Search Query Demand Telemetry",
+            "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+          ],
+          "verified_claims": [
+            "Target query intent '385915291691' generated 13 impressions (avg pos 6.4) landing on '/'.",
+            "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+          ],
+          "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+          "validation_timestamp": "2026-11-08T10:19:43.040302+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "published",
+        "baseline_period": {
+          "start_date": "pre_creation_baseline",
+          "end_date": "2026-11-08",
+          "impressions": 13,
+          "clicks": 1,
+          "ctr": 0.0769,
+          "position": 6.4,
+          "conversions": 0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.2,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Zero impressions after 60 days post-indexing."
+        },
+        "direct_observation": "GSC: Query '385915291691' with 13 impressions (pos 6.4) lands on generic '/' due to missing dedicated page",
+        "decision_framework": {
+          "target_scope": "New Page: /articles/385915291691/",
+          "action_type": "create_new_page",
+          "supporting_evidence": "Search query '385915291691' generated 13 impressions (avg pos 6.4) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+          "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+          "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query '385915291691' generated 13 impressions and 1 clicks (avg pos 6.4) landing on '/'.",
+            "metrics": {
+              "query": "385915291691",
+              "impressions": 13,
+              "clicks": 1,
+              "position": 6.4,
+              "current_landing": "/",
+              "template_archetype": "technical_guide"
+            }
+          }
+        ],
+        "hypothesis": "Searchers querying '385915291691' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/385915291691/' with Schema.org markup and interactive content will capture top-5 rankings.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.7,
+          "incremental_clicks_high": 1.3,
+          "incremental_conversions_low": 0.0,
+          "incremental_conversions_high": 0.0,
+          "expected_incremental_value": 0.2,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.04,
+        "proposed_action": "Create new Technical Guide page at /articles/385915291691/ targeting '385915291691' with verified data, schema, and interactive elements.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.040354+00:00"
+      },
+      {
+        "action_id": "seo_new_006",
+        "site": "sc-domain:smsriver.com",
+        "page_group": "unmet_technical_guide",
+        "target_urls": [
+          "/articles/4571383439/"
+        ],
+        "opportunity_type": "unmet_search_demand",
+        "page_level_action": "create_new_page",
+        "action_type": "new_page_creation",
+        "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+        "url_ownership": {
+          "query_cluster": "4571383439",
+          "intended_url": "/articles/4571383439/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "unowned_hub_landing"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Search Query Demand Telemetry",
+            "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+          ],
+          "verified_claims": [
+            "Target query intent '4571383439' generated 14 impressions (avg pos 9.0) landing on '/'.",
+            "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+          ],
+          "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+          "validation_timestamp": "2026-11-08T10:19:43.040874+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "published",
+        "baseline_period": {
+          "start_date": "pre_creation_baseline",
+          "end_date": "2026-11-08",
+          "impressions": 14,
+          "clicks": 0,
+          "ctr": 0.0,
+          "position": 9.0,
+          "conversions": 0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.2,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Zero impressions after 60 days post-indexing."
+        },
+        "direct_observation": "GSC: Query '4571383439' with 14 impressions (pos 9.0) lands on generic '/' due to missing dedicated page",
+        "decision_framework": {
+          "target_scope": "New Page: /articles/4571383439/",
+          "action_type": "create_new_page",
+          "supporting_evidence": "Search query '4571383439' generated 14 impressions (avg pos 9.0) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+          "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+          "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query '4571383439' generated 14 impressions and 0 clicks (avg pos 9.0) landing on '/'.",
+            "metrics": {
+              "query": "4571383439",
+              "impressions": 14,
+              "clicks": 0,
+              "position": 9.0,
+              "current_landing": "/",
+              "template_archetype": "technical_guide"
+            }
+          }
+        ],
+        "hypothesis": "Searchers querying '4571383439' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/4571383439/' with Schema.org markup and interactive content will capture top-5 rankings.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.7,
+          "incremental_clicks_high": 1.3,
+          "incremental_conversions_low": 0.0,
+          "incremental_conversions_high": 0.0,
+          "expected_incremental_value": 0.2,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.04,
+        "proposed_action": "Create new Technical Guide page at /articles/4571383439/ targeting '4571383439' with verified data, schema, and interactive elements.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.040928+00:00"
+      },
+      {
+        "action_id": "seo_new_007",
+        "site": "sc-domain:smsriver.com",
+        "page_group": "unmet_geographic_directory",
+        "target_urls": [
+          "/receive-sms/sms-france/"
+        ],
+        "opportunity_type": "unmet_search_demand",
+        "page_level_action": "create_new_page",
+        "action_type": "new_page_creation",
+        "diagnostic_classification": "state_3_impressions_position_gt_30",
+        "url_ownership": {
+          "query_cluster": "sms france",
+          "intended_url": "/receive-sms/sms-france/",
+          "actual_ranking_urls": [
+            "https://smsriver.com/receive-sms/fr/"
+          ],
+          "competing_urls": [],
+          "ownership_status": "new_cluster"
+        },
+        "content_evidence": {
+          "factual_sources": [
+            "GSC Search Query Demand Telemetry",
+            "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+          ],
+          "verified_claims": [
+            "Target query intent 'sms france' generated 10 impressions (avg pos 55.2) landing on '/receive-sms/fr/'.",
+            "Template archetype 'Geographic Directory' satisfies specific user task with original computation/data utility."
+          ],
+          "unique_value_assertion": "Delivers dedicated Geographic Directory functionality and deterministic data tables absent on generic hub '/receive-sms/fr/'.",
+          "validation_timestamp": "2026-11-08T10:19:43.042039+00:00",
+          "quality_gate_passed": true
+        },
+        "indexing_funnel_stage": "published",
+        "baseline_period": {
+          "start_date": "pre_creation_baseline",
+          "end_date": "2026-11-08",
+          "impressions": 10,
+          "clicks": 0,
+          "ctr": 0.0,
+          "position": 55.2,
+          "conversions": 0
+        },
+        "expected_value_breakdown": {
+          "p_success": 0.85,
+          "estimated_business_value": 0.2,
+          "cost": 1.0,
+          "risk": 0.1,
+          "expected_value": 0.0,
+          "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+        },
+        "evaluation_plan": {
+          "metric": "organic_clicks_and_position",
+          "eval_window_days": 28,
+          "evaluation_method": "matched_url_cohort",
+          "rollback_criteria": "Zero impressions after 60 days post-indexing."
+        },
+        "direct_observation": "GSC: Query 'sms france' with 10 impressions (pos 55.2) lands on generic '/receive-sms/fr/' due to missing dedicated page",
+        "decision_framework": {
+          "target_scope": "New Page: /receive-sms/sms-france/",
+          "action_type": "create_new_page",
+          "supporting_evidence": "Search query 'sms france' generated 10 impressions (avg pos 55.2) currently landing on generic hub '/receive-sms/fr/'. Creating a dedicated Geographic Directory page captures high-intent organic demand.",
+          "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+          "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+        },
+        "evidence_sources": [
+          "gsc"
+        ],
+        "evidence_details": [
+          {
+            "source": "gsc",
+            "observation": "Query 'sms france' generated 10 impressions and 0 clicks (avg pos 55.2) landing on '/receive-sms/fr/'.",
+            "metrics": {
+              "query": "sms france",
+              "impressions": 10,
+              "clicks": 0,
+              "position": 55.2,
+              "current_landing": "/receive-sms/fr/",
+              "template_archetype": "geographic_directory"
+            }
+          }
+        ],
+        "hypothesis": "Searchers querying 'sms france' seek specific Geographic Directory utility. The current landing page '/receive-sms/fr/' does not address this specific user task. Building '/receive-sms/sms-france/' with Schema.org markup and interactive content will capture top-5 rankings.",
+        "expected_impact": {
+          "incremental_clicks_low": 0.7,
+          "incremental_clicks_high": 1.3,
+          "incremental_conversions_low": 0.0,
+          "incremental_conversions_high": 0.0,
+          "expected_incremental_value": 0.2,
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "effort": "medium",
+        "risk": "low",
+        "priority_score": 0.04,
+        "proposed_action": "Create new Geographic Directory page at /receive-sms/sms-france/ targeting 'sms france' with verified data, schema, and interactive elements.",
+        "experiment_method": "matched_url_cohort",
+        "status": "detected",
+        "created_at": "2026-11-08T10:19:43.042129+00:00"
+      }
+    ]
+  },
+  "dimensions": {
+    "total_query_page_rows": 449,
+    "devices": [],
+    "countries": [],
+    "pages": [],
+    "queries": [],
+    "dates": []
+  },
+  "actions": [
+    {
+      "action_id": "seo_cannibal_001",
+      "site": "site",
+      "page_group": "cannibalization_clusters",
+      "target_urls": [
+        "https://smsriver.com/",
+        "https://smsriver.com/receive-sms/ar/"
+      ],
+      "opportunity_type": "content_expansion_or_consolidation",
+      "page_level_action": "consolidate_overlapping_pages",
+      "action_type": "content_consolidation",
+      "diagnostic_classification": "state_8_multi_url_cannibalization",
+      "url_ownership": {
+        "query_cluster": "5493812234024",
+        "intended_url": "https://smsriver.com/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/",
+          "https://smsriver.com/receive-sms/ar/"
+        ],
+        "competing_urls": [
+          "https://smsriver.com/receive-sms/ar/"
+        ],
+        "ownership_status": "disputed_competing"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Multi-URL Query Distribution"
+        ],
+        "verified_claims": [
+          "Query '5493812234024' is split across 2 distinct URLs (https://smsriver.com/, https://smsriver.com/receive-sms/ar/).",
+          "Aggregate demand: 60 impressions and 3 clicks."
+        ],
+        "unique_value_assertion": "Unifies split organic authority onto designated primary canonical URL; eliminates internal rank competition.",
+        "validation_timestamp": "2026-11-08T10:19:43.031334+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "receiving_impressions",
+      "baseline_period": {
+        "start_date": "pre_consolidation_window",
+        "end_date": "2026-11-08",
+        "impressions": 60,
+        "clicks": 3,
+        "ctr": 0.05,
+        "position": 3.0,
+        "conversions": 0.1
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.24,
+        "cost": 1.0,
+        "risk": 0.25,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "consolidated_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Net organic click loss across cluster > 20% over 28 days."
+      },
+      "direct_observation": "GSC: Query '5493812234024' split across 2 competing URLs (https://smsriver.com/, https://smsriver.com/receive-sms/ar/) with 60 impressions and 3 clicks",
+      "decision_framework": {
+        "target_scope": "Competing URLs: https://smsriver.com/, https://smsriver.com/receive-sms/ar/",
+        "action_type": "consolidate_overlapping_pages",
+        "supporting_evidence": "Query '5493812234024' is split across 2 URLs (60 impressions, 3 clicks).",
+        "measurable_outcome": "Unification of split click volume on primary canonical URL and elimination of keyword cannibalization.",
+        "scale_or_rollback_protocol": "Monitor rank consolidation over 28 days via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query '5493812234024' is split across 2 competing URLs (https://smsriver.com/, https://smsriver.com/receive-sms/ar/), dividing authority (60 impressions, 3 clicks)."
+        }
+      ],
+      "hypothesis": "Multiple pages compete for intent '5493812234024'. Designating a single canonical authority URL and differentiating secondary URLs will unify search rank.",
+      "expected_impact": {
+        "incremental_clicks_low": 1.0,
+        "incremental_clicks_high": 2.0,
+        "expected_incremental_value": 0.24,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "medium",
+      "priority_score": 0.04,
+      "proposed_action": "Designate https://smsriver.com/ as canonical topic owner for '5493812234024'. Canonicalize, 301-redirect, or differentiate https://smsriver.com/receive-sms/ar/.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.031409+00:00"
+    },
+    {
+      "action_id": "seo_cannibal_002",
+      "site": "site",
+      "page_group": "cannibalization_clusters",
+      "target_urls": [
+        "https://smsriver.com/receive-sms/us/",
+        "https://smsriver.com/status/"
+      ],
+      "opportunity_type": "content_expansion_or_consolidation",
+      "page_level_action": "consolidate_overlapping_pages",
+      "action_type": "content_consolidation",
+      "diagnostic_classification": "state_8_multi_url_cannibalization",
+      "url_ownership": {
+        "query_cluster": "online sms state",
+        "intended_url": "https://smsriver.com/receive-sms/us/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/receive-sms/us/",
+          "https://smsriver.com/status/"
+        ],
+        "competing_urls": [
+          "https://smsriver.com/status/"
+        ],
+        "ownership_status": "disputed_competing"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Multi-URL Query Distribution"
+        ],
+        "verified_claims": [
+          "Query 'online sms state' is split across 2 distinct URLs (https://smsriver.com/receive-sms/us/, https://smsriver.com/status/).",
+          "Aggregate demand: 100 impressions and 0 clicks."
+        ],
+        "unique_value_assertion": "Unifies split organic authority onto designated primary canonical URL; eliminates internal rank competition.",
+        "validation_timestamp": "2026-11-08T10:19:43.031653+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "receiving_impressions",
+      "baseline_period": {
+        "start_date": "pre_consolidation_window",
+        "end_date": "2026-11-08",
+        "impressions": 100,
+        "clicks": 0,
+        "ctr": 0.0,
+        "position": 6.6,
+        "conversions": 0.0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.0,
+        "cost": 1.0,
+        "risk": 0.25,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "consolidated_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Net organic click loss across cluster > 20% over 28 days."
+      },
+      "direct_observation": "GSC: Query 'online sms state' split across 2 competing URLs (https://smsriver.com/receive-sms/us/, https://smsriver.com/status/) with 100 impressions and 0 clicks",
+      "decision_framework": {
+        "target_scope": "Competing URLs: https://smsriver.com/receive-sms/us/, https://smsriver.com/status/",
+        "action_type": "consolidate_overlapping_pages",
+        "supporting_evidence": "Query 'online sms state' is split across 2 URLs (100 impressions, 0 clicks).",
+        "measurable_outcome": "Unification of split click volume on primary canonical URL and elimination of keyword cannibalization.",
+        "scale_or_rollback_protocol": "Monitor rank consolidation over 28 days via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query 'online sms state' is split across 2 competing URLs (https://smsriver.com/receive-sms/us/, https://smsriver.com/status/), dividing authority (100 impressions, 0 clicks)."
+        }
+      ],
+      "hypothesis": "Multiple pages compete for intent 'online sms state'. Designating a single canonical authority URL and differentiating secondary URLs will unify search rank.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.0,
+        "incremental_clicks_high": 0.0,
+        "expected_incremental_value": 0.0,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "medium",
+      "priority_score": 0.04,
+      "proposed_action": "Designate https://smsriver.com/receive-sms/us/ as canonical topic owner for 'online sms state'. Canonicalize, 301-redirect, or differentiate https://smsriver.com/status/.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.031716+00:00"
+    },
+    {
+      "action_id": "seo_cannibal_003",
+      "site": "site",
+      "page_group": "cannibalization_clusters",
+      "target_urls": [
+        "https://smsriver.com/receive-sms/fr/",
+        "https://smsriver.com/receive-sms/ca/",
+        "https://smsriver.com/receive-sms/gb/"
+      ],
+      "opportunity_type": "content_expansion_or_consolidation",
+      "page_level_action": "consolidate_overlapping_pages",
+      "action_type": "content_consolidation",
+      "diagnostic_classification": "state_8_multi_url_cannibalization",
+      "url_ownership": {
+        "query_cluster": "receive sms",
+        "intended_url": "https://smsriver.com/receive-sms/fr/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/receive-sms/fr/",
+          "https://smsriver.com/receive-sms/ca/",
+          "https://smsriver.com/receive-sms/gb/"
+        ],
+        "competing_urls": [
+          "https://smsriver.com/receive-sms/ca/",
+          "https://smsriver.com/receive-sms/gb/"
+        ],
+        "ownership_status": "disputed_competing"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Multi-URL Query Distribution"
+        ],
+        "verified_claims": [
+          "Query 'receive sms' is split across 3 distinct URLs (https://smsriver.com/receive-sms/fr/, https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/).",
+          "Aggregate demand: 85 impressions and 0 clicks."
+        ],
+        "unique_value_assertion": "Unifies split organic authority onto designated primary canonical URL; eliminates internal rank competition.",
+        "validation_timestamp": "2026-11-08T10:19:43.031780+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "receiving_impressions",
+      "baseline_period": {
+        "start_date": "pre_consolidation_window",
+        "end_date": "2026-11-08",
+        "impressions": 85,
+        "clicks": 0,
+        "ctr": 0.0,
+        "position": 28.6,
+        "conversions": 0.0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.0,
+        "cost": 1.0,
+        "risk": 0.25,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "consolidated_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Net organic click loss across cluster > 20% over 28 days."
+      },
+      "direct_observation": "GSC: Query 'receive sms' split across 3 competing URLs (https://smsriver.com/receive-sms/fr/, https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/) with 85 impressions and 0 clicks",
+      "decision_framework": {
+        "target_scope": "Competing URLs: https://smsriver.com/receive-sms/fr/, https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/",
+        "action_type": "consolidate_overlapping_pages",
+        "supporting_evidence": "Query 'receive sms' is split across 3 URLs (85 impressions, 0 clicks).",
+        "measurable_outcome": "Unification of split click volume on primary canonical URL and elimination of keyword cannibalization.",
+        "scale_or_rollback_protocol": "Monitor rank consolidation over 28 days via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query 'receive sms' is split across 3 competing URLs (https://smsriver.com/receive-sms/fr/, https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/), dividing authority (85 impressions, 0 clicks)."
+        }
+      ],
+      "hypothesis": "Multiple pages compete for intent 'receive sms'. Designating a single canonical authority URL and differentiating secondary URLs will unify search rank.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.0,
+        "incremental_clicks_high": 0.0,
+        "expected_incremental_value": 0.0,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "medium",
+      "priority_score": 0.04,
+      "proposed_action": "Designate https://smsriver.com/receive-sms/fr/ as canonical topic owner for 'receive sms'. Canonicalize, 301-redirect, or differentiate https://smsriver.com/receive-sms/ca/, https://smsriver.com/receive-sms/gb/.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.031832+00:00"
+    },
+    {
+      "action_id": "seo_new_001",
+      "site": "sc-domain:smsriver.com",
+      "page_group": "unmet_technical_guide",
+      "target_urls": [
+        "/articles/61481829954/"
+      ],
+      "opportunity_type": "unmet_search_demand",
+      "page_level_action": "create_new_page",
+      "action_type": "new_page_creation",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "61481829954",
+        "intended_url": "/articles/61481829954/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "unowned_hub_landing"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Search Query Demand Telemetry",
+          "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+        ],
+        "verified_claims": [
+          "Target query intent '61481829954' generated 18 impressions (avg pos 4.8) landing on '/'.",
+          "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+        ],
+        "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+        "validation_timestamp": "2026-11-08T10:19:43.037916+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "published",
+      "baseline_period": {
+        "start_date": "pre_creation_baseline",
+        "end_date": "2026-11-08",
+        "impressions": 18,
+        "clicks": 3,
+        "ctr": 0.1667,
+        "position": 4.8,
+        "conversions": 0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.23,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Zero impressions after 60 days post-indexing."
+      },
+      "direct_observation": "GSC: Query '61481829954' with 18 impressions (pos 4.8) lands on generic '/' due to missing dedicated page",
+      "decision_framework": {
+        "target_scope": "New Page: /articles/61481829954/",
+        "action_type": "create_new_page",
+        "supporting_evidence": "Search query '61481829954' generated 18 impressions (avg pos 4.8) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+        "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.2 clicks / +0.0 conversions.",
+        "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query '61481829954' generated 18 impressions and 3 clicks (avg pos 4.8) landing on '/'.",
+          "metrics": {
+            "query": "61481829954",
+            "impressions": 18,
+            "clicks": 3,
+            "position": 4.8,
+            "current_landing": "/",
+            "template_archetype": "technical_guide"
+          }
+        }
+      ],
+      "hypothesis": "Searchers querying '61481829954' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/61481829954/' with Schema.org markup and interactive content will capture top-5 rankings.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.8,
+        "incremental_clicks_high": 1.5,
+        "incremental_conversions_low": 0.0,
+        "incremental_conversions_high": 0.0,
+        "expected_incremental_value": 0.23,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.04,
+      "proposed_action": "Create new Technical Guide page at /articles/61481829954/ targeting '61481829954' with verified data, schema, and interactive elements.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.038014+00:00"
+    },
+    {
+      "action_id": "seo_new_002",
+      "site": "sc-domain:smsriver.com",
+      "page_group": "unmet_technical_guide",
+      "target_urls": [
+        "/articles/393511182622/"
+      ],
+      "opportunity_type": "unmet_search_demand",
+      "page_level_action": "create_new_page",
+      "action_type": "new_page_creation",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "393511182622",
+        "intended_url": "/articles/393511182622/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "unowned_hub_landing"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Search Query Demand Telemetry",
+          "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+        ],
+        "verified_claims": [
+          "Target query intent '393511182622' generated 19 impressions (avg pos 6.8) landing on '/'.",
+          "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+        ],
+        "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+        "validation_timestamp": "2026-11-08T10:19:43.038688+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "published",
+      "baseline_period": {
+        "start_date": "pre_creation_baseline",
+        "end_date": "2026-11-08",
+        "impressions": 19,
+        "clicks": 2,
+        "ctr": 0.1053,
+        "position": 6.8,
+        "conversions": 0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.25,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Zero impressions after 60 days post-indexing."
+      },
+      "direct_observation": "GSC: Query '393511182622' with 19 impressions (pos 6.8) lands on generic '/' due to missing dedicated page",
+      "decision_framework": {
+        "target_scope": "New Page: /articles/393511182622/",
+        "action_type": "create_new_page",
+        "supporting_evidence": "Search query '393511182622' generated 19 impressions (avg pos 6.8) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+        "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.2 clicks / +0.0 conversions.",
+        "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query '393511182622' generated 19 impressions and 2 clicks (avg pos 6.8) landing on '/'.",
+          "metrics": {
+            "query": "393511182622",
+            "impressions": 19,
+            "clicks": 2,
+            "position": 6.8,
+            "current_landing": "/",
+            "template_archetype": "technical_guide"
+          }
+        }
+      ],
+      "hypothesis": "Searchers querying '393511182622' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/393511182622/' with Schema.org markup and interactive content will capture top-5 rankings.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.9,
+        "incremental_clicks_high": 1.6,
+        "incremental_conversions_low": 0.0,
+        "incremental_conversions_high": 0.0,
+        "expected_incremental_value": 0.25,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.04,
+      "proposed_action": "Create new Technical Guide page at /articles/393511182622/ targeting '393511182622' with verified data, schema, and interactive elements.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.038761+00:00"
+    },
+    {
+      "action_id": "seo_new_003",
+      "site": "sc-domain:smsriver.com",
+      "page_group": "unmet_technical_guide",
+      "target_urls": [
+        "/articles/32465795960/"
+      ],
+      "opportunity_type": "unmet_search_demand",
+      "page_level_action": "create_new_page",
+      "action_type": "new_page_creation",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "32465795960",
+        "intended_url": "/articles/32465795960/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "unowned_hub_landing"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Search Query Demand Telemetry",
+          "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+        ],
+        "verified_claims": [
+          "Target query intent '32465795960' generated 15 impressions (avg pos 4.0) landing on '/'.",
+          "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+        ],
+        "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+        "validation_timestamp": "2026-11-08T10:19:43.039333+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "published",
+      "baseline_period": {
+        "start_date": "pre_creation_baseline",
+        "end_date": "2026-11-08",
+        "impressions": 15,
+        "clicks": 1,
+        "ctr": 0.0667,
+        "position": 4.0,
+        "conversions": 0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.2,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Zero impressions after 60 days post-indexing."
+      },
+      "direct_observation": "GSC: Query '32465795960' with 15 impressions (pos 4.0) lands on generic '/' due to missing dedicated page",
+      "decision_framework": {
+        "target_scope": "New Page: /articles/32465795960/",
+        "action_type": "create_new_page",
+        "supporting_evidence": "Search query '32465795960' generated 15 impressions (avg pos 4.0) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+        "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+        "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query '32465795960' generated 15 impressions and 1 clicks (avg pos 4.0) landing on '/'.",
+          "metrics": {
+            "query": "32465795960",
+            "impressions": 15,
+            "clicks": 1,
+            "position": 4.0,
+            "current_landing": "/",
+            "template_archetype": "technical_guide"
+          }
+        }
+      ],
+      "hypothesis": "Searchers querying '32465795960' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/32465795960/' with Schema.org markup and interactive content will capture top-5 rankings.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.7,
+        "incremental_clicks_high": 1.3,
+        "incremental_conversions_low": 0.0,
+        "incremental_conversions_high": 0.0,
+        "expected_incremental_value": 0.2,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.04,
+      "proposed_action": "Create new Technical Guide page at /articles/32465795960/ targeting '32465795960' with verified data, schema, and interactive elements.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.039395+00:00"
+    },
+    {
+      "action_id": "seo_new_004",
+      "site": "sc-domain:smsriver.com",
+      "page_group": "unmet_technical_guide",
+      "target_urls": [
+        "/articles/34669968571/"
+      ],
+      "opportunity_type": "unmet_search_demand",
+      "page_level_action": "create_new_page",
+      "action_type": "new_page_creation",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "34669968571",
+        "intended_url": "/articles/34669968571/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "unowned_hub_landing"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Search Query Demand Telemetry",
+          "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+        ],
+        "verified_claims": [
+          "Target query intent '34669968571' generated 11 impressions (avg pos 8.8) landing on '/'.",
+          "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+        ],
+        "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+        "validation_timestamp": "2026-11-08T10:19:43.039942+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "published",
+      "baseline_period": {
+        "start_date": "pre_creation_baseline",
+        "end_date": "2026-11-08",
+        "impressions": 11,
+        "clicks": 1,
+        "ctr": 0.0909,
+        "position": 8.8,
+        "conversions": 0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.2,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Zero impressions after 60 days post-indexing."
+      },
+      "direct_observation": "GSC: Query '34669968571' with 11 impressions (pos 8.8) lands on generic '/' due to missing dedicated page",
+      "decision_framework": {
+        "target_scope": "New Page: /articles/34669968571/",
+        "action_type": "create_new_page",
+        "supporting_evidence": "Search query '34669968571' generated 11 impressions (avg pos 8.8) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+        "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+        "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query '34669968571' generated 11 impressions and 1 clicks (avg pos 8.8) landing on '/'.",
+          "metrics": {
+            "query": "34669968571",
+            "impressions": 11,
+            "clicks": 1,
+            "position": 8.8,
+            "current_landing": "/",
+            "template_archetype": "technical_guide"
+          }
+        }
+      ],
+      "hypothesis": "Searchers querying '34669968571' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/34669968571/' with Schema.org markup and interactive content will capture top-5 rankings.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.7,
+        "incremental_clicks_high": 1.3,
+        "incremental_conversions_low": 0.0,
+        "incremental_conversions_high": 0.0,
+        "expected_incremental_value": 0.2,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.04,
+      "proposed_action": "Create new Technical Guide page at /articles/34669968571/ targeting '34669968571' with verified data, schema, and interactive elements.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.039993+00:00"
+    },
+    {
+      "action_id": "seo_new_005",
+      "site": "sc-domain:smsriver.com",
+      "page_group": "unmet_technical_guide",
+      "target_urls": [
+        "/articles/385915291691/"
+      ],
+      "opportunity_type": "unmet_search_demand",
+      "page_level_action": "create_new_page",
+      "action_type": "new_page_creation",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "385915291691",
+        "intended_url": "/articles/385915291691/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "unowned_hub_landing"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Search Query Demand Telemetry",
+          "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+        ],
+        "verified_claims": [
+          "Target query intent '385915291691' generated 13 impressions (avg pos 6.4) landing on '/'.",
+          "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+        ],
+        "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+        "validation_timestamp": "2026-11-08T10:19:43.040302+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "published",
+      "baseline_period": {
+        "start_date": "pre_creation_baseline",
+        "end_date": "2026-11-08",
+        "impressions": 13,
+        "clicks": 1,
+        "ctr": 0.0769,
+        "position": 6.4,
+        "conversions": 0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.2,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Zero impressions after 60 days post-indexing."
+      },
+      "direct_observation": "GSC: Query '385915291691' with 13 impressions (pos 6.4) lands on generic '/' due to missing dedicated page",
+      "decision_framework": {
+        "target_scope": "New Page: /articles/385915291691/",
+        "action_type": "create_new_page",
+        "supporting_evidence": "Search query '385915291691' generated 13 impressions (avg pos 6.4) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+        "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+        "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query '385915291691' generated 13 impressions and 1 clicks (avg pos 6.4) landing on '/'.",
+          "metrics": {
+            "query": "385915291691",
+            "impressions": 13,
+            "clicks": 1,
+            "position": 6.4,
+            "current_landing": "/",
+            "template_archetype": "technical_guide"
+          }
+        }
+      ],
+      "hypothesis": "Searchers querying '385915291691' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/385915291691/' with Schema.org markup and interactive content will capture top-5 rankings.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.7,
+        "incremental_clicks_high": 1.3,
+        "incremental_conversions_low": 0.0,
+        "incremental_conversions_high": 0.0,
+        "expected_incremental_value": 0.2,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.04,
+      "proposed_action": "Create new Technical Guide page at /articles/385915291691/ targeting '385915291691' with verified data, schema, and interactive elements.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.040354+00:00"
+    },
+    {
+      "action_id": "seo_new_006",
+      "site": "sc-domain:smsriver.com",
+      "page_group": "unmet_technical_guide",
+      "target_urls": [
+        "/articles/4571383439/"
+      ],
+      "opportunity_type": "unmet_search_demand",
+      "page_level_action": "create_new_page",
+      "action_type": "new_page_creation",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "4571383439",
+        "intended_url": "/articles/4571383439/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "unowned_hub_landing"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Search Query Demand Telemetry",
+          "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+        ],
+        "verified_claims": [
+          "Target query intent '4571383439' generated 14 impressions (avg pos 9.0) landing on '/'.",
+          "Template archetype 'Technical Guide' satisfies specific user task with original computation/data utility."
+        ],
+        "unique_value_assertion": "Delivers dedicated Technical Guide functionality and deterministic data tables absent on generic hub '/'.",
+        "validation_timestamp": "2026-11-08T10:19:43.040874+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "published",
+      "baseline_period": {
+        "start_date": "pre_creation_baseline",
+        "end_date": "2026-11-08",
+        "impressions": 14,
+        "clicks": 0,
+        "ctr": 0.0,
+        "position": 9.0,
+        "conversions": 0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.2,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Zero impressions after 60 days post-indexing."
+      },
+      "direct_observation": "GSC: Query '4571383439' with 14 impressions (pos 9.0) lands on generic '/' due to missing dedicated page",
+      "decision_framework": {
+        "target_scope": "New Page: /articles/4571383439/",
+        "action_type": "create_new_page",
+        "supporting_evidence": "Search query '4571383439' generated 14 impressions (avg pos 9.0) currently landing on generic hub '/'. Creating a dedicated Technical Guide page captures high-intent organic demand.",
+        "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+        "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query '4571383439' generated 14 impressions and 0 clicks (avg pos 9.0) landing on '/'.",
+          "metrics": {
+            "query": "4571383439",
+            "impressions": 14,
+            "clicks": 0,
+            "position": 9.0,
+            "current_landing": "/",
+            "template_archetype": "technical_guide"
+          }
+        }
+      ],
+      "hypothesis": "Searchers querying '4571383439' seek specific Technical Guide utility. The current landing page '/' does not address this specific user task. Building '/articles/4571383439/' with Schema.org markup and interactive content will capture top-5 rankings.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.7,
+        "incremental_clicks_high": 1.3,
+        "incremental_conversions_low": 0.0,
+        "incremental_conversions_high": 0.0,
+        "expected_incremental_value": 0.2,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.04,
+      "proposed_action": "Create new Technical Guide page at /articles/4571383439/ targeting '4571383439' with verified data, schema, and interactive elements.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.040928+00:00"
+    },
+    {
+      "action_id": "seo_new_007",
+      "site": "sc-domain:smsriver.com",
+      "page_group": "unmet_geographic_directory",
+      "target_urls": [
+        "/receive-sms/sms-france/"
+      ],
+      "opportunity_type": "unmet_search_demand",
+      "page_level_action": "create_new_page",
+      "action_type": "new_page_creation",
+      "diagnostic_classification": "state_3_impressions_position_gt_30",
+      "url_ownership": {
+        "query_cluster": "sms france",
+        "intended_url": "/receive-sms/sms-france/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/receive-sms/fr/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "new_cluster"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Search Query Demand Telemetry",
+          "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+        ],
+        "verified_claims": [
+          "Target query intent 'sms france' generated 10 impressions (avg pos 55.2) landing on '/receive-sms/fr/'.",
+          "Template archetype 'Geographic Directory' satisfies specific user task with original computation/data utility."
+        ],
+        "unique_value_assertion": "Delivers dedicated Geographic Directory functionality and deterministic data tables absent on generic hub '/receive-sms/fr/'.",
+        "validation_timestamp": "2026-11-08T10:19:43.042039+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "published",
+      "baseline_period": {
+        "start_date": "pre_creation_baseline",
+        "end_date": "2026-11-08",
+        "impressions": 10,
+        "clicks": 0,
+        "ctr": 0.0,
+        "position": 55.2,
+        "conversions": 0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.85,
+        "estimated_business_value": 0.2,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_clicks_and_position",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Zero impressions after 60 days post-indexing."
+      },
+      "direct_observation": "GSC: Query 'sms france' with 10 impressions (pos 55.2) lands on generic '/receive-sms/fr/' due to missing dedicated page",
+      "decision_framework": {
+        "target_scope": "New Page: /receive-sms/sms-france/",
+        "action_type": "create_new_page",
+        "supporting_evidence": "Search query 'sms france' generated 10 impressions (avg pos 55.2) currently landing on generic hub '/receive-sms/fr/'. Creating a dedicated Geographic Directory page captures high-intent organic demand.",
+        "measurable_outcome": "Achieve top-10 ranking (pos <= 10.0) and capture +1.0 clicks / +0.0 conversions.",
+        "scale_or_rollback_protocol": "Publish page, submit via XML sitemap / IndexNow, monitor 28-day impression and rank trajectory via GSC."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Query 'sms france' generated 10 impressions and 0 clicks (avg pos 55.2) landing on '/receive-sms/fr/'.",
+          "metrics": {
+            "query": "sms france",
+            "impressions": 10,
+            "clicks": 0,
+            "position": 55.2,
+            "current_landing": "/receive-sms/fr/",
+            "template_archetype": "geographic_directory"
+          }
+        }
+      ],
+      "hypothesis": "Searchers querying 'sms france' seek specific Geographic Directory utility. The current landing page '/receive-sms/fr/' does not address this specific user task. Building '/receive-sms/sms-france/' with Schema.org markup and interactive content will capture top-5 rankings.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.7,
+        "incremental_clicks_high": 1.3,
+        "incremental_conversions_low": 0.0,
+        "incremental_conversions_high": 0.0,
+        "expected_incremental_value": 0.2,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.04,
+      "proposed_action": "Create new Geographic Directory page at /receive-sms/sms-france/ targeting 'sms france' with verified data, schema, and interactive elements.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.042129+00:00"
+    },
+    {
+      "action_id": "seo_rank_001",
+      "site": "site",
+      "page_group": "striking_distance",
+      "target_urls": [
+        "https://smsriver.com/"
+      ],
+      "opportunity_type": "ranking_opportunity",
+      "page_level_action": "improve_existing_page",
+      "action_type": "content_expansion",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "14692466072",
+        "intended_url": "https://smsriver.com/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "exclusive_owner"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Striking Distance Performance"
+        ],
+        "verified_claims": [
+          "Query '14692466072' averages position 5.6 with 25 impressions and 2 clicks.",
+          "Page https://smsriver.com/ already has topical traction but lacks complete intent depth for '14692466072'."
+        ],
+        "unique_value_assertion": "Adds dedicated H2 sub-topic coverage, edge-case guidance, and interactive calculation utility absent on competing pages.",
+        "validation_timestamp": "2026-11-08T10:19:43.029380+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "receiving_impressions",
+      "baseline_period": {
+        "start_date": "pre_intervention_window",
+        "end_date": "2026-11-08",
+        "impressions": 25,
+        "clicks": 2,
+        "ctr": 0.08,
+        "position": 5.6,
+        "conversions": 0.0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.7,
+        "estimated_business_value": 0.2,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_average_position_and_clicks",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Average position deterioration > 3.0 positions over 28 days."
+      },
+      "direct_observation": "GSC: Striking distance query '14692466072' at pos 5.6 with 25 impressions and 2 clicks",
+      "decision_framework": {
+        "target_scope": "URL: https://smsriver.com/",
+        "action_type": "improve_existing_page",
+        "supporting_evidence": "Striking distance query '14692466072' averages position 5.6 with 25 impressions.",
+        "measurable_outcome": "Position lift to top 3 and incremental qualified click volume (+1 clicks).",
+        "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched control cohort."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Striking distance query '14692466072' averages position 5.6 with 25 impressions.",
+          "period": "current_observation_window",
+          "metrics": {
+            "query": "14692466072",
+            "position": 5.6,
+            "impressions": 25
+          }
+        }
+      ],
+      "hypothesis": "Target page has established topical authority but lacks dedicated H2 section, original computational utility, and contextual internal links for '14692466072'. Adding targeted semantic content will lift position to Page 1.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.0,
+        "incremental_clicks_high": 2.0,
+        "incremental_conversions_low": 0.0,
+        "incremental_conversions_high": 0.0,
+        "expected_incremental_value": 0.2,
+        "currency": "USD"
+      },
+      "confidence": "medium",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.03,
+      "proposed_action": "Expand https://smsriver.com/ with dedicated H2 and original utility for '14692466072', link from relevant category hubs, and align visible title/H1 tags.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.029521+00:00"
+    },
+    {
+      "action_id": "seo_rank_002",
+      "site": "site",
+      "page_group": "striking_distance",
+      "target_urls": [
+        "https://smsriver.com/"
+      ],
+      "opportunity_type": "ranking_opportunity",
+      "page_level_action": "improve_existing_page",
+      "action_type": "content_expansion",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "393511182622",
+        "intended_url": "https://smsriver.com/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "exclusive_owner"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Striking Distance Performance"
+        ],
+        "verified_claims": [
+          "Query '393511182622' averages position 6.8 with 19 impressions and 2 clicks.",
+          "Page https://smsriver.com/ already has topical traction but lacks complete intent depth for '393511182622'."
+        ],
+        "unique_value_assertion": "Adds dedicated H2 sub-topic coverage, edge-case guidance, and interactive calculation utility absent on competing pages.",
+        "validation_timestamp": "2026-11-08T10:19:43.029621+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "receiving_impressions",
+      "baseline_period": {
+        "start_date": "pre_intervention_window",
+        "end_date": "2026-11-08",
+        "impressions": 19,
+        "clicks": 2,
+        "ctr": 0.1053,
+        "position": 6.8,
+        "conversions": 0.0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.7,
+        "estimated_business_value": 0.2,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_average_position_and_clicks",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Average position deterioration > 3.0 positions over 28 days."
+      },
+      "direct_observation": "GSC: Striking distance query '393511182622' at pos 6.8 with 19 impressions and 2 clicks",
+      "decision_framework": {
+        "target_scope": "URL: https://smsriver.com/",
+        "action_type": "improve_existing_page",
+        "supporting_evidence": "Striking distance query '393511182622' averages position 6.8 with 19 impressions.",
+        "measurable_outcome": "Position lift to top 3 and incremental qualified click volume (+1 clicks).",
+        "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched control cohort."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Striking distance query '393511182622' averages position 6.8 with 19 impressions.",
+          "period": "current_observation_window",
+          "metrics": {
+            "query": "393511182622",
+            "position": 6.8,
+            "impressions": 19
+          }
+        }
+      ],
+      "hypothesis": "Target page has established topical authority but lacks dedicated H2 section, original computational utility, and contextual internal links for '393511182622'. Adding targeted semantic content will lift position to Page 1.",
+      "expected_impact": {
+        "incremental_clicks_low": 0.0,
+        "incremental_clicks_high": 2.0,
+        "incremental_conversions_low": 0.0,
+        "incremental_conversions_high": 0.0,
+        "expected_incremental_value": 0.2,
+        "currency": "USD"
+      },
+      "confidence": "medium",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.03,
+      "proposed_action": "Expand https://smsriver.com/ with dedicated H2 and original utility for '393511182622', link from relevant category hubs, and align visible title/H1 tags.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.029684+00:00"
+    },
+    {
+      "action_id": "seo_rank_003",
+      "site": "site",
+      "page_group": "striking_distance",
+      "target_urls": [
+        "https://smsriver.com/receive-sms/us/"
+      ],
+      "opportunity_type": "ranking_opportunity",
+      "page_level_action": "improve_existing_page",
+      "action_type": "content_expansion",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "online sms state",
+        "intended_url": "https://smsriver.com/receive-sms/us/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/receive-sms/us/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "exclusive_owner"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Striking Distance Performance"
+        ],
+        "verified_claims": [
+          "Query 'online sms state' averages position 8.0 with 57 impressions and 0 clicks.",
+          "Page https://smsriver.com/receive-sms/us/ already has topical traction but lacks complete intent depth for 'online sms state'."
+        ],
+        "unique_value_assertion": "Adds dedicated H2 sub-topic coverage, edge-case guidance, and interactive calculation utility absent on competing pages.",
+        "validation_timestamp": "2026-11-08T10:19:43.030018+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "receiving_impressions",
+      "baseline_period": {
+        "start_date": "pre_intervention_window",
+        "end_date": "2026-11-08",
+        "impressions": 57,
+        "clicks": 0,
+        "ctr": 0.0,
+        "position": 8.0,
+        "conversions": 0.0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.7,
+        "estimated_business_value": 0.91,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_average_position_and_clicks",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Average position deterioration > 3.0 positions over 28 days."
+      },
+      "direct_observation": "GSC: Striking distance query 'online sms state' at pos 8.0 with 57 impressions and 0 clicks",
+      "decision_framework": {
+        "target_scope": "URL: https://smsriver.com/receive-sms/us/",
+        "action_type": "improve_existing_page",
+        "supporting_evidence": "Striking distance query 'online sms state' averages position 8.0 with 57 impressions.",
+        "measurable_outcome": "Position lift to top 3 and incremental qualified click volume (+5 clicks).",
+        "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched control cohort."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Striking distance query 'online sms state' averages position 8.0 with 57 impressions.",
+          "period": "current_observation_window",
+          "metrics": {
+            "query": "online sms state",
+            "position": 8.0,
+            "impressions": 57
+          }
+        }
+      ],
+      "hypothesis": "Target page has established topical authority but lacks dedicated H2 section, original computational utility, and contextual internal links for 'online sms state'. Adding targeted semantic content will lift position to Page 1.",
+      "expected_impact": {
+        "incremental_clicks_low": 2.0,
+        "incremental_clicks_high": 7.0,
+        "incremental_conversions_low": 0.1,
+        "incremental_conversions_high": 0.2,
+        "expected_incremental_value": 0.91,
+        "currency": "USD"
+      },
+      "confidence": "medium",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.03,
+      "proposed_action": "Expand https://smsriver.com/receive-sms/us/ with dedicated H2 and original utility for 'online sms state', link from relevant category hubs, and align visible title/H1 tags.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.030072+00:00"
+    },
+    {
+      "action_id": "seo_rank_004",
+      "site": "site",
+      "page_group": "striking_distance",
+      "target_urls": [
+        "https://smsriver.com/status/"
+      ],
+      "opportunity_type": "ranking_opportunity",
+      "page_level_action": "improve_existing_page",
+      "action_type": "content_expansion",
+      "diagnostic_classification": "state_5_striking_distance_stage_1_pos_4_10",
+      "url_ownership": {
+        "query_cluster": "online sms state",
+        "intended_url": "https://smsriver.com/status/",
+        "actual_ranking_urls": [
+          "https://smsriver.com/status/"
+        ],
+        "competing_urls": [],
+        "ownership_status": "exclusive_owner"
+      },
+      "content_evidence": {
+        "factual_sources": [
+          "GSC Striking Distance Performance"
+        ],
+        "verified_claims": [
+          "Query 'online sms state' averages position 5.2 with 43 impressions and 0 clicks.",
+          "Page https://smsriver.com/status/ already has topical traction but lacks complete intent depth for 'online sms state'."
+        ],
+        "unique_value_assertion": "Adds dedicated H2 sub-topic coverage, edge-case guidance, and interactive calculation utility absent on competing pages.",
+        "validation_timestamp": "2026-11-08T10:19:43.030134+00:00",
+        "quality_gate_passed": true
+      },
+      "indexing_funnel_stage": "receiving_impressions",
+      "baseline_period": {
+        "start_date": "pre_intervention_window",
+        "end_date": "2026-11-08",
+        "impressions": 43,
+        "clicks": 0,
+        "ctr": 0.0,
+        "position": 5.2,
+        "conversions": 0.0
+      },
+      "expected_value_breakdown": {
+        "p_success": 0.7,
+        "estimated_business_value": 0.69,
+        "cost": 1.0,
+        "risk": 0.1,
+        "expected_value": 0.0,
+        "formula": "EV(a) = P(success|a) * V(a) - Cost(a) - Risk(a)"
+      },
+      "evaluation_plan": {
+        "metric": "organic_average_position_and_clicks",
+        "eval_window_days": 28,
+        "evaluation_method": "matched_url_cohort",
+        "rollback_criteria": "Average position deterioration > 3.0 positions over 28 days."
+      },
+      "direct_observation": "GSC: Striking distance query 'online sms state' at pos 5.2 with 43 impressions and 0 clicks",
+      "decision_framework": {
+        "target_scope": "URL: https://smsriver.com/status/",
+        "action_type": "improve_existing_page",
+        "supporting_evidence": "Striking distance query 'online sms state' averages position 5.2 with 43 impressions.",
+        "measurable_outcome": "Position lift to top 3 and incremental qualified click volume (+3 clicks).",
+        "scale_or_rollback_protocol": "Evaluate 28-day Difference-in-Differences against matched control cohort."
+      },
+      "evidence_sources": [
+        "gsc"
+      ],
+      "evidence_details": [
+        {
+          "source": "gsc",
+          "observation": "Striking distance query 'online sms state' averages position 5.2 with 43 impressions.",
+          "period": "current_observation_window",
+          "metrics": {
+            "query": "online sms state",
+            "position": 5.2,
+            "impressions": 43
+          }
+        }
+      ],
+      "hypothesis": "Target page has established topical authority but lacks dedicated H2 section, original computational utility, and contextual internal links for 'online sms state'. Adding targeted semantic content will lift position to Page 1.",
+      "expected_impact": {
+        "incremental_clicks_low": 2.0,
+        "incremental_clicks_high": 5.0,
+        "incremental_conversions_low": 0.1,
+        "incremental_conversions_high": 0.2,
+        "expected_incremental_value": 0.69,
+        "currency": "USD"
+      },
+      "confidence": "medium",
+      "effort": "medium",
+      "risk": "low",
+      "priority_score": 0.03,
+      "proposed_action": "Expand https://smsriver.com/status/ with dedicated H2 and original utility for 'online sms state', link from relevant category hubs, and align visible title/H1 tags.",
+      "experiment_method": "matched_url_cohort",
+      "status": "detected",
+      "created_at": "2026-11-08T10:19:43.030176+00:00"
+    }
+  ]
+}
