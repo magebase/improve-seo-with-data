@@ -64,6 +64,7 @@
         "improve_shared_template",
         "build_new_template",
         "consolidate_overlapping_pages",
+        "differentiate_overlapping_pages",
         "no_change"
       ],
       "description": "The exact high-level page decision executed."

@@ -48,6 +48,15 @@ import urllib.parse
 from typing import Any, Dict, List, Optional, Tuple
 
 
+# --- Detector-Noise Gates (2026-11-06 fleet disposition addendum) ---
+# New-page creation needs real demand: 1-10 impression queries must never
+# spawn page-creation actions (7-factor demand-factor failure).
+MIN_NEW_PAGE_IMPRESSIONS = 20
+# Below this volume, split-query actions keep detection visibility but
+# prescribe per-URL intent differentiation instead of destructive
+# canonicalize/301 consolidation contracts (State-8 micro-volume downgrade).
+MIN_CONSOLIDATION_IMPRESSIONS = 250
+
 # --- Benchmark Models ---
 # Organic Search CTR Benchmarks by Google Position (desktop baseline)
 POSITION_CTR_BENCHMARKS = {
@@ -1034,7 +1043,7 @@ def detect_content_expansion_and_cannibalization(
                     risk=0.5 * 0.5,
                 )
 
-                actions.append({
+                action = {
                     "action_id": f"seo_cannibal_{idx:03d}",
                     "site": rows[0].get("site", "site"),
                     "page_group": "cannibalization_clusters",
@@ -1105,7 +1114,22 @@ def detect_content_expansion_and_cannibalization(
                     "experiment_method": "matched_url_cohort",
                     "status": "detected",
                     "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                })
+                }
+                if total_imp < MIN_CONSOLIDATION_IMPRESSIONS:
+                    # State-8 micro-volume downgrade (2026-11-06 disposition):
+                    # keep detection visibility but prescribe per-URL intent
+                    # differentiation instead of canonicalize/301 consolidation
+                    # contracts (e.g. never 301 a homepage onto a country page).
+                    action["page_level_action"] = "differentiate_overlapping_pages"
+                    action["decision_framework"]["action_type"] = "differentiate_overlapping_pages"
+                    action["proposed_action"] = (
+                        f"Keep both URLs live and differentiate per-URL intent for '{q}': "
+                        f"sharpen {urls[0]} toward the primary intent and re-angle "
+                        f"{', '.join(urls[1:])} toward distinct sub-intents; "
+                        f"re-check the split after 28 days before considering any "
+                        f"stronger measure at >= {MIN_CONSOLIDATION_IMPRESSIONS} impressions."
+                    )
+                actions.append(action)
                 idx += 1
 
     actions.sort(key=lambda a: a["priority_score"], reverse=True)
@@ -1199,7 +1223,8 @@ def detect_new_page_opportunities(
 
     for q, data in query_agg.items():
         total_imp = data["impressions"]
-        if total_imp < effective_min_imp:
+        # Demand floor: page-creation actions require real demand.
+        if total_imp < max(effective_min_imp, MIN_NEW_PAGE_IMPRESSIONS):
             continue
 
         landing_pages = list(data["landing_pages"])
@@ -1217,6 +1242,26 @@ def detect_new_page_opportunities(
 
         # If an existing non-hub URL ranks <= 15.0, creating a new page creates cannibalization!
         if best_existing_pos <= 15.0 and non_hub_landings:
+            continue
+
+        # Majority-ownership gate (2026-11-06 disposition, Invariant 14):
+        # if a non-hub landing already receives >= 50% of the query's
+        # impressions, that URL owns the query at any position — improving
+        # that page (Track 1) beats spawning a competing page. A position-56
+        # article landing still receives 100% of the query's impressions.
+        imp_by_landing: Dict[str, int] = {}
+        for r in query_page_rows:
+            if r.get("query", "").strip().lower() != q:
+                continue
+            lp_path = urllib.parse.urlparse(r.get("page", "/")).path
+            imp_by_landing[lp_path] = imp_by_landing.get(lp_path, 0) + int(r.get("impressions", 0))
+        non_hub_majority_owner = any(
+            lp not in generic_hubs
+            and lp.rstrip("/") not in generic_hubs
+            and (imp / total_imp) >= 0.5
+            for lp, imp in imp_by_landing.items()
+        )
+        if non_hub_majority_owner:
             continue
 
         # Check if query keywords appear in current landing URL path
@@ -1455,16 +1500,10 @@ def orchestrate_seo_growth(
         with open(telemetry_file, "r", encoding="utf-8") as f:
             telemetry_data = json.load(f)
 
-    # If rows are empty, simulate representative data from current GSC property for demo
-    if not query_page_rows:
-        query_page_rows = [
-            {"site": site, "query": "calcsite", "page": "/", "impressions": 19, "clicks": 1, "position": 10.1, "device": "DESKTOP"},
-            {"site": site, "query": "fmcg scheme calculation", "page": "/calculators/fmcg-scheme/", "impressions": 120, "clicks": 28, "position": 1.8, "device": "MOBILE"},
-            {"site": site, "query": "btu to cfm conversion", "page": "/calculators/btu-to-cfm/", "impressions": 85, "clicks": 4, "position": 14.0, "device": "DESKTOP"},
-            {"site": site, "query": "crypto margin calculator", "page": "/calculators/crypto-margin/", "impressions": 60, "clicks": 3, "position": 11.0, "device": "MOBILE"},
-            {"site": site, "query": "5-ma calc", "page": "/calculators/crypto-average/", "impressions": 40, "clicks": 1, "position": 17.6, "device": "DESKTOP"},
-            {"site": site, "query": "trip cost estimator", "page": "/tools/solar-trip-cost/", "impressions": 35, "clicks": 0, "position": 21.5, "device": "MOBILE"},
-        ]
+    # Empty property = zero demand observed. Never fabricate representative
+    # data (Invariant 11): an empty GSC property must yield an empty,
+    # explicitly-marked action queue instead of speculative actions built
+    # from hardcoded demo rows.
 
     # Run Track 1 Detectors (Improve Existing Pages & Shared Templates)
     ctr_actions = detect_ctr_opportunities(query_page_rows, conversion_rate, conversion_value)
@@ -1513,6 +1552,10 @@ def orchestrate_seo_growth(
         "site": site,
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "total_actions_detected": len(all_actions),
+        "data_coverage": {
+            "state": "no_gsc_query_data" if not query_page_rows else "gsc_query_data",
+            "query_page_rows": len(query_page_rows),
+        },
         "actions_by_type": {
             "ctr_improvement": len(ctr_actions),
             "ranking_opportunity": len(rank_actions),
