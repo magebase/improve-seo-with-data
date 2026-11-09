@@ -228,3 +228,14 @@ run_audit.py from the gerber-guide seed: 89 pages crawled, 18 high / 55 medium /
   surfaces (/docs/api/, /privacy/, /queue/, older /convert/* routes), queued for
   the next content pass; title width is a Rule 15 debt item.
 - NO-OP - h1_missing on /queue/ and redirected_url on /tools/shopify-feed-audit/.
+
+## Independent verification of the wave owner's run-8 fix
+
+PR #7 MERGED (57665f2c). The audit's broken_internal_link finding (my WONT-FIX-HERE
+disposition) was root-caused and fixed by droid-ofc-seo's run-8 shell gate: a shared
+base.html nav gate removed the dead nav links (9->0). Independently verified live:
+0 occurrences of /ads/, /cockpit/, /affiliates/portal/, /admin/ hrefs in the
+rendered homepage and gerber-guide nav; the URLs themselves still 404 but nothing
+links to them. This closes the audit's only real action item. Remaining open:
+GitHub billing (CI/CD dead fleet-wide), PR #8 green run, mainline reconciliation,
+Stage-4 window 2026-11-23..12-07.
