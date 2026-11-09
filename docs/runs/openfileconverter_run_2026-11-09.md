@@ -287,3 +287,30 @@ variance (1-3s TBT) under a load-average-46 machine (co-agent ffmpeg/pytest jobs
 on the 18-CPU box) is measurement starvation; payload is byte-equal at 124KiB
 and the earlier quiet-machine run measured perf 96 / TBT 40ms on this page.
 Re-measure perf on a quiet machine before drawing conclusions.
+
+## GSC re-pull 2026-11-10: outage cost quantified; no action triggered
+
+Fresh pull with `dataState=all`, window 2026-11-01..09 (Nov 8-9 now substantially
+finalized; late-day Nov 9 rows may still shift slightly).
+
+- OFC daily (imps/clicks/avg pos): Nov 7 = 37/0/68.6, Nov 8 = 32/0/50.3,
+  Nov 9 (outage day) = 23/0/65.7. Window total: 161 imps / 2 clicks in 9 days.
+  Outage verdict: ~9-14 lost impressions vs the Nov 7-8 level (-25-30%), zero
+  click damage (the property was clickless on those days regardless). The daily
+  series is too small and position-noisy (pos 50-70 band) for finer attribution.
+  No indexation-damage signal; recovery to 30+ imps/day is a Stage-4-window
+  (Nov 23..Dec 7) health check.
+- smsriver Nov 1-09: 175 imps / 23 clicks (CTR 13.1%) - the healthy brand+digit
+  profile continues: 'smsriver' 4 clicks at pos 1.0 to /, digit-number queries
+  (33754057766, 393511182622) 1 click each at pos ~6.8 to /. Nov 9's 4 imps is
+  fresh-data lag, not a collapse (Nov 1-8 averaged ~21 imps/day).
+  Label-flip gate: ~27 clicked rows in the pooled history - still below the >=50
+  flip; no retrain. Stage-4 join window (2026-11-23..12-07) unchanged.
+
+## Monitor verification (first 24h+ of coverage)
+
+Better Stack monitor 5206772 availability 97.24% over Nov 9-10: 3 incidents,
+all "Status 503", all inside the known Nov 9 outage window (09:08, 09:39,
+11:09 UTC; 8-10 min each, auto-resolved), ZERO incidents since - the PR #7
+hardened build has held through Nov 10. The monitor correctly catches the
+hard-500/503 failure mode it was built for.
