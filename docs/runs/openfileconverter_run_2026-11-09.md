@@ -82,3 +82,14 @@ deliberate branch deploy, which I did NOT do to avoid another outage window.
 Status: production stable on 198df49a. Wave remains blocked. Do NOT deploy
 agent/ofc-seo-growth-gsc to prod until its populate-death is fixed - the branch owner
 is actively iterating on exactly this init contract.
+
+## Evening GSC re-pull (routine, no action triggered)
+
+- OFC: byte-stable at 40 (query,page) rows / 69 imps / 1 click through Nov 7.
+  Nov 7 = 37 imps at deep avg pos ~68, 0 clicks (Nov 8 outage day not yet finalized).
+  Action queue unchanged; wave prescriptions still blocked.
+- smsriver (cross-property pulse): window moved 449->454 rows, 24->25 clicked,
+  1138->1151 imps, 32->35 clicks as Nov 7 finalized (25 imps, 3 clicks, avg pos ~5).
+  Healthy click profile: brand + digit-number queries landing on / and
+  /receive-sms/us/ at pos 1-6.8. Label-flip gate (>=50 clicked rows) not near at 25;
+  no retrain. Daily table still ends Nov 7.
