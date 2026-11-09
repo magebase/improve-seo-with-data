@@ -206,3 +206,25 @@ action. TASKS.md records a NEW fleet blocker from the wave owner: GitHub Actions
 billing failure kills every CI/CD job (<3s, zero steps); operator must fix billing.
 Until then OFC deploys are local-script only (already the enforced path) and PR #7
 awaits a green run. Prod verified 200 on the hardened build.
+
+## Post-deploy technical audit (closed-loop verification of the live wave)
+
+run_audit.py from the gerber-guide seed: 89 pages crawled, 18 high / 55 medium /
+76 low findings. Disposition of every open action item:
+
+- FIXED/VERIFIED-OK - server_error (2 URLs): /convert/step-to-stl/ and
+  /convert/webp-to-jpg/ both serve 200 on direct re-check; the crawl hit cold
+  isolates (13 slow_response URLs incl. / and both new guides - the known
+  cold-start marginality PR #7 addresses). Not a live defect. Re-verify in the
+  Stage-4 window that neither shows in GSC as errors.
+- WONT-FIX-HERE (report to wave owner) - broken_internal_link (9) and
+  client_error (7): /admin/, /ads/, /affiliates/portal/, /cockpit/ and friends
+  404 for anonymous crawlers but are linked from internal nav. Fix = nav
+  cleanup or routes, in file_converter templates (wave owner's lane; main is
+  diverged so not patched from here).
+- REVIEW - noindex (45) and nofollow (45) on /convert/* pairs: deliberate
+  rollout gating, confirmed intended.
+- REVIEW - meta_description_duplicate (10) and title_too_wide (16): pre-existing
+  surfaces (/docs/api/, /privacy/, /queue/, older /convert/* routes), queued for
+  the next content pass; title width is a Rule 15 debt item.
+- NO-OP - h1_missing on /queue/ and redirected_url on /tools/shopify-feed-audit/.
