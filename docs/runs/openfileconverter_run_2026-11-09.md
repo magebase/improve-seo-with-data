@@ -189,3 +189,12 @@ Stage-4 verification for these surfaces: schedule a GSC comparison at 14-28 days
 (2026-11-23..12-07) - success = first impressions on the guide routes and the
 274x cluster (currently pos 12.7-17.3 on /studio/gerber/) consolidating onto
 /articles/rs-274x-gerber-viewer/.
+
+## Addendum: pin revert acknowledged
+
+The wave owner staged a revert of the wrangler pin back to unpinned latest. Not
+contested (their call; the pin was hardening, not the outage fix). Noted in TASKS.md:
+if the concern is CI stability, the middle path is pinning to a wrangler whose
+workerd supports the worker's 2026-09-14 compat date (4.158.0 verified locally on
+this exact bundle) rather than fully-unpinned latest. Health re-verified after the
+PR #7 deploy: home/guide/keyLocation all 200.
