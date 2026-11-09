@@ -162,6 +162,20 @@ npx wrangler@4.158.0 dev (after 4.113's workerd proved too old for the worker's
 - This turn unblocked the wave WITHOUT the operator-gated mainline reconciliation;
   the reconciliation is still required to make the wave part of main.
 
+## Root cause CORRECTED by the wave owner (supersedes the wrangler theory)
+
+droid-ofc-seo captured the live traceback on the broken versions and found the true
+mechanism: the earlier PR #5 force-serve guard built a WSGIHandler against a torn
+restored registry and load_middleware crashed with AppRegistryNotReady, poisoning
+populate on every cold isolate. PR #7 (agent/ofc-cpu-ceiling-boot-heal) fixes it by
+resetting stale registry state on torn-snapshot restores (and restores cpu_ms=5000;
+a prior commit had lowered it to 1000). Their local build cb3c240b is live and
+healthy. My wrangler-version divergence theory explained my observations but was NOT
+the root cause - it is demoted to hardening. The hardening still landed on local main
+(79b7bcfe): OFC's deploy script npx fallback is now pinned to wrangler@4.113.0. Same
+unpinned fallback exists in 10 other deploy scripts - reported in TASKS.md, left to
+those lanes' owners. My TASKS.md row updated to reflect prod on cb3c240b.
+
 ## IndexNow submission + GEO verification (wave discovery acceleration)
 
 After the wave went live, submitted 10 URLs to api.indexnow.org (HTTP 200): the 7
