@@ -161,3 +161,17 @@ npx wrangler@4.158.0 dev (after 4.113's workerd proved too old for the worker's
 - TASKS.md blocker rewritten with the refined diagnosis; claim protocol stands.
 - This turn unblocked the wave WITHOUT the operator-gated mainline reconciliation;
   the reconciliation is still required to make the wave part of main.
+
+## IndexNow submission + GEO verification (wave discovery acceleration)
+
+After the wave went live, submitted 10 URLs to api.indexnow.org (HTTP 200): the 7
+new /articles/ guides (las-viewer, laz-file-viewer, mesh-to-cad,
+open-source-file-converters, uzanti-degistirme-programi, rs-274x-gerber-viewer,
+png-to-svg) plus /, /studio/gerber/, /convert/png-to-svg/. Verified:
+- keyLocation /6f9c2e4789b1405cb7931ef1a6902cd5.txt serves 200 (ownership valid).
+- sitemap.xml carries all 7 /articles/ routes.
+- llms.txt lists all 7 guides with substantive descriptions.
+Stage-4 verification for these surfaces: schedule a GSC comparison at 14-28 days
+(2026-11-23..12-07) - success = first impressions on the guide routes and the
+274x cluster (currently pos 12.7-17.3 on /studio/gerber/) consolidating onto
+/articles/rs-274x-gerber-viewer/.
