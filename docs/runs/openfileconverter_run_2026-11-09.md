@@ -93,3 +93,12 @@ is actively iterating on exactly this init contract.
   Healthy click profile: brand + digit-number queries landing on / and
   /receive-sms/us/ at pos 1-6.8. Label-flip gate (>=50 clicked rows) not near at 25;
   no retrain. Daily table still ends Nov 7.
+
+## Uptime monitor created (external detection gap closed)
+
+Better Stack had ZERO active fleet monitors (one paused legacy adstim.net entry), which
+is why every OFC outage today was discovered manually. Created status monitor 5206772
+"OpenFileConverter (openfileconverter.com)" - GET / every 60s from us+eu, 30s timeout,
+email alerts, 60s confirm/recover. Status-type chosen deliberately: today's populate
+death served hard 500s at 80-150ms TTFB; only a status-code check catches that.
+Fleet gap remains open for the other properties.
