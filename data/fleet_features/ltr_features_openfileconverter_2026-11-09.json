@@ -1,0 +1,768 @@
+{
+  "site": "openfileconverter.com",
+  "generated_at": "2026-11-09T15:43:59.824201",
+  "gsc_rows": 40,
+  "dataforseo_enriched": 39,
+  "rows": [
+    {
+      "query": "274x",
+      "page": "https://openfileconverter.com/studio/gerber/",
+      "cluster_id": "studio",
+      "clicks_30d": 0.0,
+      "impressions": 7.0,
+      "current_pos": 17.285714285714285,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.25,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 17.285714285714285,
+        "search_volume_log": 1.80618,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "274x",
+      "page": "https://www.openfileconverter.com/screen/37/",
+      "cluster_id": "screen",
+      "clicks_30d": 0.0,
+      "impressions": 7.0,
+      "current_pos": 14.571428571428571,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.25,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 14.571428571428571,
+        "search_volume_log": 1.80618,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "open source file converter",
+      "page": "https://www.openfileconverter.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 5.0,
+      "current_pos": 87.8,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.375,
+        "title_exact_match_rate": 0.125,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 87.8,
+        "search_volume_log": 1.556303,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "3mf to stl",
+      "page": "https://openfileconverter.com/convert/3mf-to-stl/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 78.25,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.888889,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 78.25,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "pdf to docx",
+      "page": "https://openfileconverter.com/convert/pdf-to-docx/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 4.0,
+      "current_pos": 52.75,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.333333,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 52.75,
+        "search_volume_log": 1.39794,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "stl to obj",
+      "page": "https://openfileconverter.com/convert/stl-to-obj/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 3.0,
+      "current_pos": 67.33333333333333,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 1.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 67.33333333333333,
+        "search_volume_log": 1.20412,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "png to svg online",
+      "page": "https://openfileconverter.com/convert/png-to-svg/",
+      "cluster_id": "convert",
+      "clicks_30d": 1.0,
+      "impressions": 2.0,
+      "current_pos": 85.0,
+      "ctr": 0.5,
+      "features": {
+        "domain_centroid_sim": 1.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.555556,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 85.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "png to vector",
+      "page": "https://openfileconverter.com/convert/png-to-svg/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 92.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.408248,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.25,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 92.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "rs 274x",
+      "page": "https://openfileconverter.com/studio/gerber/",
+      "cluster_id": "studio",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 88.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.428571,
+        "title_exact_match_rate": 0.428571,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 88.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "step to dxf",
+      "page": "https://openfileconverter.com/convert/step-to-dxf/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 96.5,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.5,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 96.5,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "step to scad",
+      "page": "https://openfileconverter.com/convert/stl-to-step/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 2.0,
+      "current_pos": 75.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 75.0,
+        "search_volume_log": 0.954243,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "cad model to toolpath comparison",
+      "page": "https://openfileconverter.com/compare/step-vs-stl/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 42.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 42.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "convert obj to stl",
+      "page": "https://openfileconverter.com/convert/obj-to-stl/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 79.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.5,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 79.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "convert pdf to word docx",
+      "page": "https://openfileconverter.com/convert/pdf-to-docx/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 86.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 86.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "converterflow.io",
+      "page": "https://openfileconverter.com/convert/cad/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 49.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 49.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "da dxf a svg",
+      "page": "https://openfileconverter.com/convert/dxf-to-svg/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 84.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.408248,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.875,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 84.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "docx to pdf convert online",
+      "page": "https://openfileconverter.com/convert/docx-to-pdf/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 79.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.288675,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.222222,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 79.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "docx to pdf online",
+      "page": "https://openfileconverter.com/convert/docx-to-pdf/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 87.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.333333,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.333333,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 87.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "download file gratis",
+      "page": "https://openfileconverter.com/download/",
+      "cluster_id": "download",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 95.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 95.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "dxf to pdf",
+      "page": "https://openfileconverter.com/convert/dxf-to-pdf/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 97.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.875,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 97.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "file converter download",
+      "page": "https://openfileconverter.com/download/",
+      "cluster_id": "download",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 80.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.555556,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 80.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "file converter io download",
+      "page": "https://openfileconverter.com/download/",
+      "cluster_id": "download",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 89.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.125,
+        "serp_pixel_crowding": 3.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 89.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "file converter pdf to docx",
+      "page": "https://openfileconverter.com/convert/pdf-to-docx/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 94.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.222222,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 94.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "gbr to dxf converter",
+      "page": "https://openfileconverter.com/convert/gbr-to-dxf/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 53.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 53.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "las viewer",
+      "page": "https://openfileconverter.com/studio/lidar/",
+      "cluster_id": "studio",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 100.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 0.25,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 100.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "laz file viewer",
+      "page": "https://openfileconverter.com/studio/lidar/",
+      "cluster_id": "studio",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 77.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 77.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "mesh to cad",
+      "page": "https://openfileconverter.com/studio/cad/",
+      "cluster_id": "studio",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 68.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.285714,
+        "title_exact_match_rate": 0.428571,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 68.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "obj to stl",
+      "page": "https://openfileconverter.com/convert/obj-to-stl/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 84.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.125,
+        "title_exact_match_rate": 1.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 84.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "online camera scanner",
+      "page": "https://openfileconverter.com/m/scanner/",
+      "cluster_id": "m",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 90.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.333333,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.111111,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 90.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "ooxml to pdf",
+      "page": "https://openfileconverter.com/convert/docx-to-pdf/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 94.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 94.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "open file converter",
+      "page": "https://www.openfileconverter.com/",
+      "cluster_id": "",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 45.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 45.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "pdf to dox",
+      "page": "https://openfileconverter.com/convert/pdf-to-docx/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 22.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 22.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "step to obj",
+      "page": "https://openfileconverter.com/convert/step-to-obj/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 51.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.666667,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 51.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "step vs stl",
+      "page": "https://openfileconverter.com/compare/step-vs-stl/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 83.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.166667,
+        "title_exact_match_rate": 1.0,
+        "serp_pixel_crowding": 4.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 83.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "stl to 3mf file converter",
+      "page": "https://openfileconverter.com/convert/stl-to-3mf/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 84.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.222222,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 84.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "stl to step",
+      "page": "https://openfileconverter.com/convert/stl-to-step/",
+      "cluster_id": "convert",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 90.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.25,
+        "title_exact_match_rate": 0.875,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 90.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "stl vs step",
+      "page": "https://openfileconverter.com/compare/step-vs-stl/",
+      "cluster_id": "compare",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 80.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.166667,
+        "title_exact_match_rate": 0.5,
+        "serp_pixel_crowding": 4.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 80.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "tsremux",
+      "page": "https://www.openfileconverter.com/file-converter/studio/video-remux/",
+      "cluster_id": "file-converter",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 55.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.111111,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 55.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "uzant\u0131 de\u011fi\u015ftirme program\u0131",
+      "page": "https://openfileconverter.com/download/",
+      "cluster_id": "download",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 66.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.0,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 2.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 66.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    },
+    {
+      "query": "whisper audio processing services",
+      "page": "https://openfileconverter.com/studio/whisper/",
+      "cluster_id": "studio",
+      "clicks_30d": 0.0,
+      "impressions": 1.0,
+      "current_pos": 66.0,
+      "ctr": 0.0,
+      "features": {
+        "domain_centroid_sim": 0.0,
+        "serp_forum_ratio": 0.333333,
+        "title_exact_match_rate": 0.0,
+        "serp_pixel_crowding": 1.0,
+        "parent_hub_internal_links": 0.0,
+        "current_pos": 66.0,
+        "search_volume_log": 0.60206,
+        "conversion_intent_score": 0.0
+      }
+    }
+  ]
+}
