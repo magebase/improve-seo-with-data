@@ -276,3 +276,14 @@ Diagnoses:
 - skrino/autopublishai spot-checks: TBT 750-910ms is the main drag (JS hydration);
   autopublishai SEO 82 (meta/crawl basics) - owners' lanes.
 - figiva: great as-is (SI 15s single-run artifact; LCP 2.1s, TBT 0).
+
+## a11y fixes DEPLOYED and verified live
+
+Rebased the a11y branch onto the wave owner's 9749f917 tip (no conflicts; their
+new commit was docs-only) and deployed via the local script (per the claim
+protocol). Smoke 6/6. Post-deploy Lighthouse: accessibility 96 (was 69) -
+load-independent static check, holds across 3 runs. NOTE on performance: TBT/LCP
+variance (1-3s TBT) under a load-average-46 machine (co-agent ffmpeg/pytest jobs
+on the 18-CPU box) is measurement starvation; payload is byte-equal at 124KiB
+and the earlier quiet-machine run measured perf 96 / TBT 40ms on this page.
+Re-measure perf on a quiet machine before drawing conclusions.
