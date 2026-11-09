@@ -239,3 +239,40 @@ rendered homepage and gerber-guide nav; the URLs themselves still 404 but nothin
 links to them. This closes the audit's only real action item. Remaining open:
 GitHub billing (CI/CD dead fleet-wide), PR #8 green run, mainline reconciliation,
 Stage-4 window 2026-11-23..12-07.
+
+## Fleet Lighthouse audit (all 4 core domains + 2 spot-checks)
+
+Lighthouse 13.5 (mobile, 4 categories) on homepage + top GSC page per domain:
+
+| URL | Perf | A11y | BP | SEO | LCP | CLS | TBT |
+|---|---|---|---|---|---|---|---|
+| figiva.com/ | 87 | 95 | 100 | 100 | 2.1s | 0 | 0ms |
+| figiva.com/calculators/fmcg-scheme/ | 90 | 96 | 100 | 100 | 2.0s | 0 | 10ms |
+| openfileconverter.com/ | 96 | 69->fixed* | 100 | 100 | 2.2s | 0.03 | 40ms |
+| openfileconverter.com/articles/rs-274x-gerber-viewer/ | 94 | 93 | 100 | 100 | 1.8s | 0 | 0ms |
+| smsriver.com/ | 62 | 97 | 77 | 100 | 4.0s | 0 | 470ms |
+| smsriver.com/receive-sms/us/ | 85 | 96 | 81 | 100 | 3.5s | 0 | 210ms |
+| incomecanvas.com/article/medicare-advantage-part-c-.../ | 59 | 94 | 73 | 100 | 7.2s | 0 | 90ms |
+| incomecanvas.com/article/unsecured-personal-loan-aprs-.../ | 87 | 94 | 73 | 100 | 3.1s | 0 | 150ms |
+| skrino.com/ (spot) | 79 | 95 | 73 | 100 | 2.0s | 0 | 750ms |
+| autopublishai.com/ (spot) | 77 | 85 | 81 | 82 | 2.2s | 0 | 910ms |
+
+*Fixed on branch agent/ofc-homepage-a11y (c0286e07): labels for file input /
+quality select / matrix search / benchmark sliders, heading order (h4->h3 under
+h2 sections in format matrix + footer), 24px+ family-hub link targets,
+AA-contrast tokens for 24 low-contrast small texts. 19 tests pass. NOT deployed
+(would regress the run-8 build; owner folds + deploys).
+
+Diagnoses:
+- smsriver / 62: warm TTFB is 102-250ms (excellent) - the 6.3s root-document
+  response was a COLD isolate on the no-store homepage (same marginality as the
+  OFC 1102s; PR #7-style ceiling/self-heal should be ported to smsriver).
+  Real fix beyond cold starts: TBT 470ms / main-thread 3.2s from the live
+  waterfall JS - defer/trim hydration.
+- incomecanvas medicare 59: 2,930ms in a redirect CHAIN (www->apex->/finance/
+  medicare-advantage-rates->/article/medicare-advantage-part-c-...) - collapse
+  to a single hop (direct /finance/* -> final /article/* 301) + unused JS
+  155KiB + third-party cookie. FCP 6.8s also reflects cold worker on each hop.
+- skrino/autopublishai spot-checks: TBT 750-910ms is the main drag (JS hydration);
+  autopublishai SEO 82 (meta/crawl basics) - owners' lanes.
+- figiva: great as-is (SI 15s single-run artifact; LCP 2.1s, TBT 0).
