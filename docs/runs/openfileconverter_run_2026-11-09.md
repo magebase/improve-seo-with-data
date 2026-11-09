@@ -198,3 +198,11 @@ if the concern is CI stability, the middle path is pinning to a wrangler whose
 workerd supports the worker's 2026-09-14 compat date (4.158.0 verified locally on
 this exact bundle) rather than fully-unpinned latest. Health re-verified after the
 PR #7 deploy: home/guide/keyLocation all 200.
+
+## Late re-pull: windows byte-stable; CI/CD billing outage noted
+
+Both properties unchanged (OFC 40/69/1 through Nov 7; smsriver 454/25/1151/35). No
+action. TASKS.md records a NEW fleet blocker from the wave owner: GitHub Actions
+billing failure kills every CI/CD job (<3s, zero steps); operator must fix billing.
+Until then OFC deploys are local-script only (already the enforced path) and PR #7
+awaits a green run. Prod verified 200 on the hardened build.
