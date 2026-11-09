@@ -42,3 +42,43 @@
   the homepage CPU hardening, and 5 other lanes in one pass.
 - Coordination gap: two agents mutated the worker concurrently; the deployment log was
   the only shared surface. Recommend a claim/lease check before incident mutations.
+
+## Redeploy experiment (15:5x, post-rollback) — decisive negative result
+
+Operator re-invoked the skill on openfileconverter.com; treated as authorization to
+retry the wave shipping. Re-read of the original evidence showed the "branch reproduces
+1102" conclusion rested on ONE observed 503, while known-good also showed a transient
+500 once before settling warm. Bounded experiment: redeployed the wave branch head
+(agent/ofc-seo-growth-gsc @ 877a1bec) via workflow_dispatch, then measured homepage
+cold/warm 10x over ~3 minutes.
+
+Result: NOT a CPU-marginality reproduction. After two cold 503s, the worker settled
+into fast consistent 500s (TTFB 80-150ms) on EVERY route including edge-cached money
+pages: "500 Worker Initialization Exception ... django apps.populate() died
+mid-initialization (apps.loading=True with no populate in flight)". The wave branch's
+deployment snapshot is hard-broken; the fail-fast init gate (ported from figiva by the
+branch owner, with its own test contract) converts the died-populate state into
+permanent hard 500s.
+
+Rollback executed immediately (scripts/deploy_openfileconverter_worker.py from a
+detached 198df49a worktree, version 8def3a9f, edge purged). Smoke 6/6, homepage warm
+200s at 70-110ms, /studio/gerber/ 200. Production healthy.
+
+Corroborating root-cause evidence found on the branch: its wrangler.toml comment
+records the other agent's independent diagnosis of the same 1102 - the KV cache
+binding in the request path burns CPU through the Pyodide run_sync bridge (full KV
+round trip per cache op; outcome exceededCpu on the homepage). Their mitigation
+removes the CF_KV_BINDING_NAME var (cache runs per-isolate). Complementary to my
+homepage-no-store diagnosis: BOTH the cold render and KV-per-op CPU burn push the
+homepage past the CPU ceiling. Neither lineage's current fix is production-green:
+198df49a still intermittently 1102s cold; the branch head hard-500s at populate.
+
+Static checks ruled out new third-party imports (all stdlib in changed app files; no
+pyproject/uv.lock diff). The populate-death trigger is inside the branch's new worker
+init path (hydrate_worker_env / late-runtime-secrets / cache-init interaction) and
+needs the real first-failure traceback - obtainable via `wrangler tail` during a
+deliberate branch deploy, which I did NOT do to avoid another outage window.
+
+Status: production stable on 198df49a. Wave remains blocked. Do NOT deploy
+agent/ofc-seo-growth-gsc to prod until its populate-death is fixed - the branch owner
+is actively iterating on exactly this init contract.
