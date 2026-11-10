@@ -164,6 +164,25 @@ def score_rows(rows: list[dict[str, Any]], models_dir: str) -> dict[str, Any]:
     return {"mode": "trained_model", "label_mode": label_mode, "rows": rows}
 
 
+def merge_leased_into_output(output_path: str, leased: list, hygiene: dict) -> None:
+    """Records the slow-path lease + preflight results in the output JSON.
+
+    The fast path already embeds ``leased``/``hygiene`` in its output; the
+    slow path writes the queue JSON BEFORE the lease runs (the queue file is
+    the artifact), so this re-opens it and attaches the lease. The executor
+    adjudicates from this file - a wave whose lease is invisible cannot be
+    audited (wave-63 gap).
+    """
+    if not leased and not hygiene:
+        return
+    with open(output_path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    payload["leased"] = leased
+    payload["hygiene"] = hygiene
+    with open(output_path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--features", default="data/ltr_features.json")
@@ -484,6 +503,10 @@ def main(argv: list[str] | None = None) -> int:
                 f"  LEASED {task['action_code']} -> {task['page']}"
                 + (f" ({task['file_target']})" if task.get("file_target") else "")
             )
+        # Wave-63 gap fix: the fast path records leased tasks in its output
+        # JSON; the slow path must too (the executor adjudicates from this
+        # file, and a wave whose lease is invisible cannot be audited).
+        merge_leased_into_output(args.output, leased, hygiene)
         conn.close()
     if consolidation_tasks:
         print(

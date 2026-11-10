@@ -300,11 +300,18 @@ def test_lease_type_caps_force_task_diversity(conn):
     from collections import Counter
 
     counts = Counter(t["action_code"] for t in leased)
-    assert counts == {
+    # Wave-64 two-tier contract: type caps are QUOTA PREFERENCES. Tier 0
+    # (within cap) is leased first - exactly 2 per code - then tier-1
+    # backfill fills the wave from the highest-scoring remaining rows.
+    tier0 = Counter(t["action_code"] for t in leased[:6])
+    assert tier0 == {
         "INJECT_EXACT_TITLE_AND_H2": 2,
         "ADD_D1_SPEC_COMPARISON_TABLE": 2,
         "BOOST_CLUSTER_CROSS_LINKS": 2,
-    }
+    }, "quota tier 0 must lead the wave with the capped split"
+    assert sum(counts.values()) == 18, (
+        "empty quota tiers backfill the wave to its limit"
+    )
 
 
 def test_default_type_caps_reflect_the_wave62_split():

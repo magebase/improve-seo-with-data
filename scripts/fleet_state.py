@@ -38,7 +38,9 @@ DEFAULT_DB_PATH = str(DEFAULT_DB_DIR / "fleet_state.db")
 
 GSC_SNAPSHOT_TTL_HOURS = 24
 SERP_CACHE_TTL_DAYS = 30
-DEFAULT_DAILY_SERP_BUDGET = 100
+# Wave-64: FLEET-WIDE daily cap across every property in the unified cursor
+# DB (was 100 per per-domain DB before unification).
+DEFAULT_DAILY_SERP_BUDGET = 150
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS gsc_snapshots (
@@ -453,6 +455,12 @@ def lease_tasks(
       (8x D1 tables, 8x inlinks, 6x CTR hooks, 5x title/H2 intents,
       3x programmatic routes). Uncapped codes ride ``default_type_cap``
       (0 = unlimited when ``type_caps`` is None, i.e. back-compat).
+      Wave-64 two-tier backfill: type caps are QUOTA PREFERENCES, not hard
+      exclusions. Rows within their cap rank as quota_pass 0; rows beyond it
+      rank as quota_pass 1 and still fill the wave when the quota tiers
+      alone cannot reach ``limit`` (empty buckets backfill from the
+      highest-scoring remaining rows). Final order:
+      ``quota_pass ASC, priority_score DESC``.
     - file-target locks: a wave never leases a PENDING task whose
       ``file_target`` is already held by an ACTIVE lease in another agent
       worktree (NULL/empty file targets are exempt - legacy tasks and
@@ -474,24 +482,29 @@ def lease_tasks(
             f"AND family_rank <= ?)"
         )
         family_params.extend([*caps.keys(), default_family_cap])
-    type_filters = []
-    type_params: list = []
+    # Wave-64 two-tier quotas: rows within their type cap rank quota_pass 0
+    # (preferred); rows beyond it rank quota_pass 1 (backfill). Both tiers
+    # are leasable; preference ordering picks tier 0 first.
     tcaps = dict(type_caps or {})
+    quota_params: list = []
     if tcaps or default_type_cap > 0:
+        case_parts = []
         for code in sorted(tcaps):
-            type_filters.append("(action_code = ? AND type_rank <= ?)")
-            type_params.extend([code, tcaps[code]])
+            case_parts.append("(action_code = ? AND type_rank <= ?)")
+            quota_params.extend([code, tcaps[code]])
         if default_type_cap > 0:
-            type_filters.append(
+            case_parts.append(
                 f"(action_code NOT IN ({', '.join('?' * len(tcaps)) or "''"}) "
                 f"AND type_rank <= ?)"
             )
-            type_params.extend([*tcaps.keys(), default_type_cap])
+            quota_params.extend([*tcaps.keys(), default_type_cap])
+        quota_case = "CASE WHEN " + " OR ".join(case_parts) + " THEN 0 ELSE 1 END"
+    else:
+        quota_case = "0"
     family_where = " OR ".join(family_filters) if family_filters else "1 = 1"
-    type_where = " OR ".join(type_filters) if type_filters else "1 = 1"
-    sql = (
+    select_sql = (
         "WITH ranked_pending AS ("
-        "  SELECT id, route_family, action_code, priority_score,"
+        "  SELECT id, route_family, action_code, priority_score, file_target,"
         "         ROW_NUMBER() OVER ("
         "             PARTITION BY route_family ORDER BY priority_score DESC"
         "         ) AS family_rank,"
@@ -500,26 +513,39 @@ def lease_tasks(
         "         ) AS type_rank"
         "  FROM atomic_task_backlog"
         f"  WHERE status = 'PENDING' {domain_filter}"
-        "), diversified_wave AS ("
-        "  SELECT id FROM ranked_pending"
-        f"  WHERE ({family_where}) AND ({type_where})"
+        "), pass_tagged AS ("
+        "  SELECT id, priority_score, " + quota_case + " AS quota_pass"
+        "  FROM ranked_pending"
+        f"  WHERE ({family_where})"
         "    AND (file_target IS NULL OR file_target = '' OR file_target NOT IN ("
-        "        SELECT DISTINCT file_target FROM atomic_task_backlog"
-        "        WHERE status = 'LEASED' AND file_target IS NOT NULL AND file_target != ''"
+        "        SELECT DISTINCT bt.file_target FROM atomic_task_backlog bt"
+        "        WHERE bt.status = 'LEASED' AND bt.file_target IS NOT NULL "
+        "          AND bt.file_target != ''"
         "    ))"
-        "  ORDER BY priority_score DESC LIMIT ?"
-        ")"
+        ") "
+        "SELECT id, priority_score FROM pass_tagged"
+        " ORDER BY quota_pass ASC, priority_score DESC LIMIT ?"
+    )
+    cursor = conn.execute(
+        select_sql,
+        # Placeholder order: domain filter (ranked_pending) -> quota CASE
+        # (pass_tagged SELECT list) -> family-cap filters (pass_tagged WHERE)
+        # -> LIMIT.
+        (*([domain] if domain else []), *quota_params, *family_params, limit),
+    )
+    wave_ids = [row[0] for row in cursor.fetchall()]
+    if not wave_ids:
+        conn.commit()
+        return []
+    # Flip exactly the selected rows; the status='PENDING' guard makes a
+    # concurrent lease of the same rows a no-op instead of a double-lease.
+    update_sql = (
         "UPDATE atomic_task_backlog SET status = 'LEASED', leased_at = ? "
-        "WHERE id IN (SELECT id FROM diversified_wave) "
+        f"WHERE id IN ({', '.join('?' * len(wave_ids))}) AND status = 'PENDING' "
         "RETURNING id, domain, page, query, action_code, target_component, "
         "file_target, tdd_assertion, lgbm_score, priority_score, route_family"
     )
-    cursor = conn.execute(
-        sql,
-        # Placeholder order: domain filter (ranked_pending) -> family-cap
-        # filters -> type-cap filters (diversified_wave) -> LIMIT -> stamp.
-        (*([domain] if domain else []), *family_params, *type_params, limit, stamp),
-    )
+    cursor = conn.execute(update_sql, (stamp, *wave_ids))
     leased = [
         {
             "id": row[0],
@@ -537,7 +563,11 @@ def lease_tasks(
         }
         for row in cursor.fetchall()
     ]
-    leased.sort(key=lambda t: t["priority_score"], reverse=True)
+    # Wave order is the selection order: quota_pass tier 0 (within type
+    # caps) first, then tier-1 backfill, each priority DESC. Do NOT re-sort
+    # by priority alone - that would destroy the tier preference.
+    leased_by_id = {t["id"]: t for t in leased}
+    leased = [leased_by_id[i] for i in wave_ids if i in leased_by_id]
     conn.commit()
     return leased
 

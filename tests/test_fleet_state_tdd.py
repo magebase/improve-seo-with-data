@@ -276,6 +276,128 @@ def test_lease_tasks_stratifies_families_per_wave():
     assert len(wave) == 4  # caps bind before the limit fills
 
 
+# ------------------------------------------------- wave-64 two-tier backfill
+
+
+def test_lease_tasks_backfills_empty_type_buckets_to_limit():
+    """Wave-64: empty quota buckets no longer shrink the wave.
+
+    Wave-63 leased 21 slots from an 8/8/6/5/3 quota table; several buckets
+    were empty so the wave came home undersized and the adjudication window
+    collapsed. quota_pass=1 backfill must now fill the wave to `limit`.
+    """
+    conn = connect_state_db(":memory:")
+    # 12 tasks all of one UNQUOTA'd action code (rank beyond any cap),
+    # plus 3 tasks of a quota'd code at rank 1 (within its cap of 2... use
+    # cap 2 so 1 row sits in tier 0)
+    backlog = [
+        {
+            "domain": "a.com",
+            "page": f"https://a.com/guides/{i}/",
+            "query": f"uncapped q{i}",
+            "action_code": "UNCAPPED_CODE",
+            "priority_score": 20.0 - i,
+        }
+        for i in range(12)
+    ]
+    backlog.append(
+        {
+            "domain": "a.com",
+            "page": "https://a.com/guides/hero/",
+            "query": "quota'd hero query",
+            "action_code": "QUOTA_CODE",
+            "priority_score": 30.0,
+        }
+    )
+    enqueue_tasks(conn, backlog)
+    wave = lease_tasks(
+        conn,
+        limit=6,
+        type_caps={"QUOTA_CODE": 2},
+        default_type_cap=0,
+    )
+    assert len(wave) == 6, "empty tiers must backfill to the full limit"
+    # tier 0 (within cap) first, then tier-1 backfill by priority
+    codes = [t["action_code"] for t in wave]
+    assert codes[0] == "QUOTA_CODE"
+    assert codes[1:].count("UNCAPPED_CODE") == 5
+
+
+def test_lease_tasks_two_tier_preference_overrides_priority_within_tiers():
+    """quota_pass ASC outranks priority_score: a capped-type task within its
+    cap beats a higher-priority uncapped task in the backfill tier."""
+    conn = connect_state_db(":memory:")
+    rows = [
+        {
+            "domain": "a.com",
+            "page": "https://a.com/guides/uncapped-monster/",
+            "query": "uncapped monster",
+            "action_code": "UNCAPPED_CODE",
+            "priority_score": 99.0,
+        },
+        {
+            "domain": "a.com",
+            "page": "https://a.com/guides/quota-modest/",
+            "query": "quota modest",
+            "action_code": "QUOTA_CODE",
+            "priority_score": 10.0,
+        },
+    ]
+    enqueue_tasks(conn, rows)
+    wave = lease_tasks(
+        conn,
+        limit=2,
+        type_caps={"QUOTA_CODE": 1},
+        default_type_cap=0,
+    )
+    assert [t["action_code"] for t in wave] == ["QUOTA_CODE", "UNCAPPED_CODE"]
+
+
+def test_lease_tasks_backfill_respects_family_and_file_locks():
+    """Backfill rows still respect hard family caps and file-target locks."""
+    conn = connect_state_db(":memory:")
+    backlog = [
+        {
+            "domain": "a.com",
+            "page": f"https://a.com/number/{i}/",
+            "query": f"n{i}",
+            "action_code": "UNCAPPED_CODE",
+            "priority_score": 20.0 - i,
+        }
+        for i in range(8)
+    ]
+    enqueue_tasks(conn, backlog)
+    wave = lease_tasks(
+        conn,
+        limit=8,
+        family_caps={"number": 3},
+        default_family_cap=0,
+        type_caps={"UNCAPPED_CODE": 2},
+        default_type_cap=0,
+    )
+    assert len(wave) == 3, "family cap stays HARD even when quotas backfill"
+
+
+def test_lease_tasks_backfill_never_dups_page_action_pair():
+    """Two leases in a row never hand out the same (page, action_code)."""
+    conn = connect_state_db(":memory:")
+    rows = [
+        {
+            "domain": "a.com",
+            "page": f"https://a.com/guides/{i}/",
+            "query": f"q{i}",
+            "action_code": "UNCAPPED_CODE",
+            "priority_score": 10.0,
+        }
+        for i in range(10)
+    ]
+    enqueue_tasks(conn, rows)
+    first = lease_tasks(conn, limit=4, type_caps={"QUOTA_CODE": 2}, default_type_cap=0)
+    second = lease_tasks(conn, limit=4, type_caps={"QUOTA_CODE": 2}, default_type_cap=0)
+    pairs = {(t["page"], t["action_code"]) for t in first + second}
+    assert len(pairs) == len(first) + len(second)
+
+
 def test_lease_tasks_never_hands_out_locked_file_targets():
     conn = connect_state_db(":memory:")
     # Simulate another worktree having leased file_target 'templates/home.html'

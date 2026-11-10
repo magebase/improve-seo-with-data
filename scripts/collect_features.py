@@ -59,6 +59,10 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from candidate_hygiene import (
+    canonicalize_and_dedupe_candidates,
+    resolve_redirects,
+)
 from dataforseo_client import DataForSEOClient, resolve_credentials
 from fleet_state import (
     DailyBudgetGate,
@@ -995,6 +999,19 @@ def main(argv: list[str] | None = None) -> int:
         "results cached 7 days in the state DB)",
     )
     parser.add_argument(
+        "--redirect-map",
+        action="append",
+        default=[],
+        help="JSON file mapping legacy/301 URLs to canonical URLs "
+        "(repeatable; executor-built from urls.py/RedirectView). Also "
+        "auto-loads ~/.seo_fleet/redirect_map.json when it exists",
+    )
+    parser.add_argument(
+        "--no-live-redirects",
+        action="store_true",
+        help="skip live HTTP redirect probing (file redirect_map only)",
+    )
+    parser.add_argument(
         "--state-db",
         default="",
         help="SQLite fleet state DB: 24h GSC snapshot fast path, 30d SERP "
@@ -1112,6 +1129,50 @@ def main(argv: list[str] | None = None) -> int:
             )
         except Exception as exc:  # noqa: BLE001 - sitemap fetch must never kill collection
             print(f"      orphan detection skipped ({exc}).")
+
+    # Wave-64 candidate hygiene: resolve 301s, scrub utility/brand-typo rows,
+    # and collapse duplicate (page, query) rows BEFORE any SERP enrichment
+    # spend or LGBMRanker scoring. Wave-63 leased 4 duplicate legacy URLs and
+    # 4 utility/typo rows because this step did not exist upstream.
+    try:
+        file_map: dict = {}
+        map_paths = list(args.redirect_map)
+        auto_map = os.path.expanduser("~/.seo_fleet/redirect_map.json")
+        if os.path.isfile(auto_map):
+            map_paths.append(auto_map)
+        for map_path in map_paths:
+            with open(map_path, "r", encoding="utf-8") as fh:
+                file_map.update(json.load(fh))
+        live_map: dict = {}
+        if not args.no_live_redirects:
+            probe_pages = [
+                c["page"]
+                for c in sorted(
+                    candidates,
+                    key=lambda c: -float(c.get("impressions", 0) or 0),
+                )
+            ]
+            probed: set = set()
+            probe_list = []
+            for pg in probe_pages:
+                if pg not in probed and pg.startswith("http"):
+                    probed.add(pg)
+                    probe_list.append(pg)
+            probe_list = probe_list[:200]
+            if probe_list:
+                live_map = resolve_redirects(probe_list)
+        merged, hygiene_report = canonicalize_and_dedupe_candidates(
+            candidates, redirect_map={**file_map, **live_map}, domain=args.site
+        )
+        print(
+            f"      candidate hygiene: {hygiene_report['canonicalized']} "
+            f"canonicalized, {hygiene_report['scrubbed']} scrubbed, "
+            f"{hygiene_report['deduped_away']} deduped "
+            f"({len(candidates)} -> {len(merged)} rows)."
+        )
+        candidates = merged
+    except Exception as exc:  # noqa: BLE001 - hygiene must never kill collection
+        print(f"      candidate hygiene skipped ({exc}).")
 
     # URL Inspection coverageState enrichment (2,000 free calls/day/property,
     # 7-day result cache, daily gate): tells the compiler WHY a route has zero

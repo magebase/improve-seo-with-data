@@ -369,3 +369,35 @@ Four verification & guard mechanisms (Stage 4, `log_outcomes_and_retrain.py`):
 | [`references/conversion_diagnosis_and_experimentation.md`](./references/conversion_diagnosis_and_experimentation.md) | Joining search demand to conversions, PostHog funnels, Clarity heuristics, and matched-cohort experimentation. |
 | [`templates/seo_action_queue.md`](./templates/seo_action_queue.md) | Executive markdown template for the prioritized action queue. |
 | [`templates/experiment_plan.md`](./templates/experiment_plan.md) | Pre-formatted test plan for SEO matched-cohort and CRO visitor-level experiments. |
+
+---
+
+## 11. Wave 64+ Execution Upgrades
+
+Post-wave-63 hardening directives. Every execution wave from wave 64 onward MUST observe these invariants.
+
+### 11.1 Candidate Hygiene Runs Before Enrichment and Scoring (Mandatory)
+
+Resolve redirects BEFORE scoring and SERP enrichment. Never lease a 301/302 URL: a legacy path and its canonical target are the SAME page, and leasing both wastes SERP credits, splits demand signal, and produces duplicate edits. Hard-block utility routes and brand-typo queries pre-DataForSEO.
+
+- `scripts/candidate_hygiene.py` runs inside `collect_features.py` between candidate assembly and the enrichment selection:
+  - `resolve_redirects` probes the live site (no-follow) so legacy 301/302 URLs map to canonical; product-side redirect tables (`urls.py` / `RedirectView` / middleware) are supplied by the EXECUTOR via `--redirect-map` JSON (the skill cannot import the saas-factory codebase) and take precedence over live probes; `~/.seo_fleet/redirect_map.json` is auto-loaded when present.
+  - `is_valid_seo_candidate` rejects `NON_SEO_PATH_RE` utility/legal/auth/system routes (`/privacy`, `/terms`, `/api`, `/admin`, ...) and brand-stem typos (`incomecanvascom`, `wwwincomecanvascom`, `brand login`) that are navigational, never informational.
+  - `canonicalize_and_dedupe_candidates` collapses duplicate `(page, query)` rows post-redirect, SUMMING impressions and clicks and keeping the BEST (minimum) position, so demand signal is de-duplicated, never lost.
+- `score_backlog.py` applies the same validity gate as a second defense before leasing.
+
+### 11.2 Two-Tier Lease Backfill (Empty Quota Buckets No Longer Shrink Waves)
+
+Wave-63 leased 21 slots whose quota buckets could not fill the wave; adjudication collapsed to 4 real edits. `lease_tasks` now ranks rows `quota_pass ASC, priority_score DESC`: rows within their type cap are tier 0 (preferred), rows beyond it are tier 1 (backfill), and the wave ALWAYS fills to `limit` from the highest-scoring remaining rows. Family caps and file-target locks stay HARD. At most one task per canonical URL + `action_code` pair exists per wave.
+
+### 11.3 One Unified Fleet Cursor DB (No Per-Domain Fragmentation)
+
+All properties share ONE SQLite cursor: `~/.seo_fleet/fleet_state.db`, keyed by the `domain` column. Per-domain DBs (e.g. wave-63's `incomecanvas.db`) are forbidden: they fragment the backlog cursor, fork the SERP cache, and hide fleet-wide budget burn. `scripts/unify_fleet_db.py` merges legacy per-domain DBs (preserving REJECTED adjudications, summing daily budgets) and retires the source as `<name>.migrated-bak`. The daily DataForSEO budget gate is FLEET-WIDE: ≤150 SERPs/day across all properties (`DEFAULT_DAILY_SERP_BUDGET = 150`).
+
+### 11.4 Stale-Export GSC Fallback Tagging
+
+When GSC access is 403/DENIED (property not verified in the authenticated account), fall back to the newest local export and tag every emitted task and queue with `gsc_source_mode = "stale_export:<YYYY-MM-DD>"` so downstream waves know the demand data is frozen. Max 2 GSC-dependent orphan re-runs on the same static export; after that, shift the property to Tier 3/4 work (orphan routes, internal links, technical hygiene) until live access is restored.
+
+### 11.5 Deterministic Title Tie-Breaker (Demand Frontloading Wins the Stem)
+
+On any title-contract conflict, demand frontloading ALWAYS wins the stem: the `<title>` must START with the demand query stem. When appending the brand suffix (`| Income Canvas`, `| SMSRiver`, ...) pushes the rendered title over 65 characters, the template/title helper MUST auto-drop or abbreviate the suffix (e.g. `| IC`) when the base meta_title alone exceeds 50 characters. Never truncate the demand stem to fit the suffix. Legacy hardcoded assertions that pinned suffix-included lengths get updated to this rule, not deleted.
