@@ -50,10 +50,10 @@ import base64
 import json
 import os
 import sys
-import time
 import urllib.error
 import urllib.request
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from collections.abc import Callable, Iterable
+from typing import Any
 
 BASE_URL = "https://api.dataforseo.com/v3"
 
@@ -77,7 +77,7 @@ FORUM_UGC_DOMAINS = (
 # SERP blocks that push organic results below the fold (CTR suppressors).
 CROWDING_BLOCK_TYPES = ("ai_overview", "local_pack", "shopping")
 
-Transport = Callable[..., Dict[str, Any]]
+Transport = Callable[..., dict[str, Any]]
 
 
 def estimate_serp_cost(num_keywords: int, mode: str = "queue") -> float:
@@ -90,9 +90,9 @@ def estimate_serp_cost(num_keywords: int, mode: str = "queue") -> float:
 
 
 def resolve_credentials(
-    login: Optional[str] = None,
-    password: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
+    login: str | None = None,
+    password: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Resolves DataForSEO Basic-auth credentials with documented precedence.
 
@@ -123,7 +123,7 @@ def _tokenize(query: str) -> set[str]:
     return {tok for tok in query.lower().split() if tok}
 
 
-def extract_serp_features(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+def extract_serp_features(items: list[dict[str, Any]]) -> dict[str, Any]:
     """Extracts revenue-relevant SERP feature flags from a SERP items array.
 
     AI Overviews, People Also Ask, and featured snippets are present in the base
@@ -131,7 +131,7 @@ def extract_serp_features(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     load_async_ai_overview flag needed.
     """
     total = len(items)
-    features: Dict[str, Any] = {
+    features: dict[str, Any] = {
         "ai_overview": False,
         "people_also_ask": False,
         "featured_snippet": False,
@@ -155,7 +155,7 @@ def extract_serp_features(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     return features
 
 
-def serp_vulnerability_score(items: List[Dict[str, Any]], query: str) -> Dict[str, Any]:
+def serp_vulnerability_score(items: list[dict[str, Any]], query: str) -> dict[str, Any]:
     """Scores how beatable a SERP is for `query` (0-100) and flags weak spots.
 
     Components:
@@ -188,7 +188,9 @@ def serp_vulnerability_score(items: List[Dict[str, Any]], query: str) -> Dict[st
         ) / len(top5)
     else:
         title_match_rate = 0.0
-    crowding_penalty = sum(1 for item in items if str(item.get("type", "")) in CROWDING_BLOCK_TYPES)
+    crowding_penalty = sum(
+        1 for item in items if str(item.get("type", "")) in CROWDING_BLOCK_TYPES
+    )
 
     forum_share_top5 = forum_ugc_count / len(items) if items else 0.0
     score = int(
@@ -212,8 +214,16 @@ def serp_vulnerability_score(items: List[Dict[str, Any]], query: str) -> Dict[st
     }
 
 
-def _default_transport(method: str, url: str, body: Optional[str] = None, headers: Optional[Dict[str, str]] = None, timeout: float = 60) -> Dict[str, Any]:
-    req = urllib.request.Request(url, data=body.encode("utf-8") if body is not None else None, method=method)
+def _default_transport(
+    method: str,
+    url: str,
+    body: str | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: float = 60,
+) -> dict[str, Any]:
+    req = urllib.request.Request(
+        url, data=body.encode("utf-8") if body is not None else None, method=method
+    )
     for key, value in (headers or {}).items():
         req.add_header(key, value)
     try:
@@ -225,56 +235,184 @@ def _default_transport(method: str, url: str, body: Optional[str] = None, header
             return json.loads(e.read().decode("utf-8"))
         except Exception:
             raise RuntimeError(f"DataForSEO HTTP error {e.code} for {url}") from e
-    except Exception as e:  # noqa: BLE001 - surfaced verbatim without credentials
+    except Exception as e:
         raise RuntimeError(f"DataForSEO request failed: {e}") from e
 
 
 class DataForSEOClient:
     """Cost-routed DataForSEO v3 client (stdlib-only, injectable transport)."""
 
-    def __init__(self, login: str, password: str, transport: Optional[Transport] = None):
+    def __init__(
+        self, login: str, password: str, transport: Transport | None = None
+    ):
         self._auth_pair = (login, password)
-        self._auth_header = "Basic " + base64.b64encode(f"{login}:{password}".encode()).decode()
+        self._auth_header = (
+            "Basic " + base64.b64encode(f"{login}:{password}".encode()).decode()
+        )
         self._transport = transport or _default_transport
-        self.last_queue_state: Dict[str, Any] = {}
+        self.last_queue_state: dict[str, Any] = {}
 
     # ------------------------------------------------------------------ posts
 
-    def _post(self, path: str, payload: Any) -> Dict[str, Any]:
+    def _post(self, path: str, payload: Any) -> dict[str, Any]:
         body = json.dumps(payload)
         try:
             data = self._transport(
                 "POST",
                 f"{BASE_URL}{path}",
                 body=body,
-                headers={"Authorization": self._auth_header, "Content-Type": "application/json"},
+                headers={
+                    "Authorization": self._auth_header,
+                    "Content-Type": "application/json",
+                },
             )
         except RuntimeError:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise RuntimeError(f"DataForSEO request failed: {e}") from e
         if not isinstance(data, dict) or data.get("status_code") != 20000:
-            status = data.get("status_code") if isinstance(data, dict) else "no-envelope"
+            status = (
+                data.get("status_code") if isinstance(data, dict) else "no-envelope"
+            )
             message = data.get("status_message") if isinstance(data, dict) else data
             raise RuntimeError(f"DataForSEO API error {status}: {message}")
         return data
 
-    def _get(self, path: str) -> Dict[str, Any]:
+    def _get(self, path: str) -> dict[str, Any]:
         try:
-            data = self._transport("GET", f"{BASE_URL}{path}", headers={"Authorization": self._auth_header})
+            data = self._transport(
+                "GET", f"{BASE_URL}{path}", headers={"Authorization": self._auth_header}
+            )
         except RuntimeError:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise RuntimeError(f"DataForSEO request failed: {e}") from e
         if not isinstance(data, dict) or data.get("status_code") != 20000:
-            status = data.get("status_code") if isinstance(data, dict) else "no-envelope"
+            status = (
+                data.get("status_code") if isinstance(data, dict) else "no-envelope"
+            )
             message = data.get("status_message") if isinstance(data, dict) else data
             raise RuntimeError(f"DataForSEO API error {status}: {message}")
         return data
 
+    # ------------------------------------------------------------ labs (live)
+
+    def keyword_suggestions(
+        self,
+        seeds: list[str],
+        *,
+        location_code: int = 2840,
+        language_name: str = "english",
+        limit: int = 100,
+        min_volume: int = 50,
+        max_difficulty: int = 35,
+        include_serp_info: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Labs keyword_suggestions/live: net-new candidates for thin/0-row sites.
+
+        GSC can only rank queries a site already has impressions for; 0-row
+        properties are invisible to a GSC-only collector. Seeding with 3-5
+        domain seed terms injects 200-500 net-new scoreable candidates per
+        call. LIVE Labs endpoint (not the Standard Queue) — call it behind an
+        explicit CLI flag so cost is always a deliberate choice.
+        """
+        payload = [
+            {
+                "keywords": [s.strip() for s in seeds if s.strip()][:200],
+                "location_code": location_code,
+                "language_name": language_name,
+                "include_serp_info": include_serp_info,
+                "limit": limit,
+                "filters": [
+                    ["keyword_info.search_volume", ">", max(0, min_volume - 1)],
+                    ["keyword_info.keyword_difficulty", "<", max_difficulty],
+                ],
+                "logic": "and",
+            }
+        ]
+        data = self._post("/dataforseo_labs/google/keyword_suggestions/live", payload)
+        items: list[dict[str, Any]] = []
+        for task in data.get("tasks") or []:
+            for result in task.get("result") or []:
+                items.extend(result.get("items") or [])
+        normalized: list[dict[str, Any]] = []
+        for item in items:
+            info = item.get("keyword_info") or {}
+            if not item.get("keyword"):
+                continue
+            normalized.append(
+                {
+                    "keyword": str(item["keyword"]),
+                    "volume": float(info.get("search_volume") or 0),
+                    "difficulty": info.get("keyword_difficulty"),
+                    "serp_items": (item.get("serp_info") or {}).get("se_items") or [],
+                }
+            )
+        return normalized
+
+    def domain_intersection(
+        self,
+        targets: list[str],
+        *,
+        location_code: int = 2840,
+        language_name: str = "english",
+        limit: int = 100,
+        min_volume: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Labs domain_intersection/live: bootstrap 0-row sites from competitors.
+
+        Returns the exact keywords driving 2-3 direct niche competitors'
+        estimated traffic, so brand-new domains get dozens of scoreable
+        LAUNCH_PSEO_ROUTE candidates without any GSC history of their own.
+        LIVE Labs endpoint — call it behind an explicit CLI flag.
+        """
+        payload = [
+            {
+                "targets": [t.strip() for t in targets if t.strip()][:3],
+                "location_code": location_code,
+                "language_name": language_name,
+                "limit": limit,
+                "filters": [
+                    [
+                        "keyword_data.keyword_info.search_volume",
+                        ">",
+                        max(0, min_volume - 1),
+                    ]
+                ],
+            }
+        ]
+        data = self._post("/dataforseo_labs/google/domain_intersection/live", payload)
+        rows: list[dict[str, Any]] = []
+        for task in data.get("tasks") or []:
+            for result in task.get("result") or []:
+                for item in result.get("items") or []:
+                    kdata = item.get("keyword_data") or {}
+                    info = kdata.get("keyword_info") or {}
+                    rank = item.get("rank_info") or {}
+                    if not kdata.get("keyword"):
+                        continue
+                    rows.append(
+                        {
+                            "keyword": str(kdata["keyword"]),
+                            "volume": float(info.get("search_volume") or 0),
+                            "difficulty": info.get("keyword_difficulty"),
+                            "position": rank.get("pos"),
+                            "url": item.get("ranked_url"),
+                        }
+                    )
+        return rows
+
     @staticmethod
-    def _task(keyword: str, location_code: int, language_code: str, depth: int, tag: Optional[str], stop_crawl_on_match: Optional[List[str]], offset: Optional[int]) -> Dict[str, Any]:
-        task: Dict[str, Any] = {
+    def _task(
+        keyword: str,
+        location_code: int,
+        language_code: str,
+        depth: int,
+        tag: str | None,
+        stop_crawl_on_match: list[str] | None,
+        offset: int | None,
+    ) -> dict[str, Any]:
+        task: dict[str, Any] = {
             "keyword": keyword,
             "location_code": location_code,
             "language_code": language_code,
@@ -298,10 +436,10 @@ class DataForSEOClient:
         location_code: int = DEFAULT_LOCATION_CODE,
         language_code: str = DEFAULT_LANGUAGE_CODE,
         depth: int = DEFAULT_DEPTH,
-        tag: Optional[str] = None,
-        stop_crawl_on_match: Optional[List[str]] = None,
-        offset: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        tag: str | None = None,
+        stop_crawl_on_match: list[str] | None = None,
+        offset: int | None = None,
+    ) -> dict[str, Any]:
         """Posts keywords to the Standard Queue SERP endpoint ($0.0006/SERP).
 
         NEVER append search operators (site:, inurl:, intitle:) to keywords —
@@ -309,7 +447,15 @@ class DataForSEOClient:
         Top-N and filter locally.
         """
         payload = [
-            self._task(kw, location_code, language_code, depth, tag, stop_crawl_on_match, offset)
+            self._task(
+                kw,
+                location_code,
+                language_code,
+                depth,
+                tag,
+                stop_crawl_on_match,
+                offset,
+            )
             for kw in keywords
         ]
         return self._post("/serp/google/organic/task_post", payload)
@@ -320,7 +466,7 @@ class DataForSEOClient:
         location_code: int = DEFAULT_LOCATION_CODE,
         language_code: str = DEFAULT_LANGUAGE_CODE,
         depth: int = DEFAULT_DEPTH,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Synchronous Live SERP fetch (~$0.002/SERP, >3x queue cost).
 
         Returns result entries in the same shape as `collect_ready_tasks`
@@ -329,9 +475,13 @@ class DataForSEOClient:
         """
         envelope = self._post(
             "/serp/google/organic/live/regular",
-            [self._task(keyword, location_code, language_code, depth, None, None, None)],
+            [
+                self._task(
+                    keyword, location_code, language_code, depth, None, None, None
+                )
+            ],
         )
-        fetched: List[Dict[str, Any]] = []
+        fetched: list[dict[str, Any]] = []
         for task in envelope.get("tasks") or []:
             result_payload = task.get("result") or []
             if isinstance(result_payload, dict):
@@ -344,7 +494,7 @@ class DataForSEOClient:
 
     # ------------------------------------------------------------------ queue
 
-    def collect_ready_tasks(self) -> List[Dict[str, Any]]:
+    def collect_ready_tasks(self) -> list[dict[str, Any]]:
         """Single sweep of the Standard Queue; returns completed SERP results.
 
         Queue turnaround is typically ~5 minutes; this method never blocks —
@@ -360,14 +510,21 @@ class DataForSEOClient:
         `related_searches`, `discussions_and_forums`) that the pixel-crowding
         and forum-ratio features consume — at the same $0.0006 queue price.
         """
-        fetched: List[Dict[str, Any]] = []
-        self.last_queue_state = {"completed": [], "pending": 0, "fetched": 0, "skipped": []}
+        fetched: list[dict[str, Any]] = []
+        self.last_queue_state = {
+            "completed": [],
+            "pending": 0,
+            "fetched": 0,
+            "skipped": [],
+        }
         ready = self._get("/serp/google/organic/tasks_ready")
         for envelope in ready.get("tasks") or []:
             descriptors = envelope.get("result") or []
             result_count = envelope.get("result_count") or 0
             if envelope.get("status_code") == 20000:
-                self.last_queue_state["pending"] += max(0, int(result_count) - len(descriptors))
+                self.last_queue_state["pending"] += max(
+                    0, int(result_count) - len(descriptors)
+                )
             else:
                 # A failed tasks_ready call proves nothing about queue emptiness.
                 self.last_queue_state["pending"] += 1
@@ -378,8 +535,7 @@ class DataForSEOClient:
                     or task.get("endpoint_regular")
                     or f"/serp/google/organic/task_get/advanced/{task_id}"
                 )
-                if endpoint.startswith("/v3"):
-                    endpoint = endpoint[len("/v3"):]
+                endpoint = endpoint.removeprefix("/v3")
                 try:
                     detail = self._get(endpoint)
                 except Exception as exc:  # noqa: BLE001 - one expired/evicted task id
@@ -405,9 +561,9 @@ class DataForSEOClient:
     # ----------------------------------------------------------------- output
 
     @staticmethod
-    def score_fetched_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def score_fetched_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Attaches SERP feature flags + vulnerability scores to fetched results."""
-        scored: List[Dict[str, Any]] = []
+        scored: list[dict[str, Any]] = []
         for entry in results:
             items = entry.get("items") or []
             keyword = entry.get("keyword") or ""
@@ -432,19 +588,46 @@ class DataForSEOClient:
         return scored
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Cost-routed DataForSEO SERP intelligence (weak-spot scanning, rank tracking, cost caps).")
-    parser.add_argument("--keywords-file", required=True, help="File with one query per line")
-    parser.add_argument("--mode", choices=["queue", "live"], default="queue", help="queue = Standard Queue $0.0006/SERP (default); live = synchronous $0.002/SERP")
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Cost-routed DataForSEO SERP intelligence (weak-spot scanning, rank tracking, cost caps)."
+    )
+    parser.add_argument(
+        "--keywords-file", required=True, help="File with one query per line"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["queue", "live"],
+        default="queue",
+        help="queue = Standard Queue $0.0006/SERP (default); live = synchronous $0.002/SERP",
+    )
     parser.add_argument("--location-code", type=int, default=DEFAULT_LOCATION_CODE)
     parser.add_argument("--language-code", default=DEFAULT_LANGUAGE_CODE)
     parser.add_argument("--depth", type=int, default=DEFAULT_DEPTH)
-    parser.add_argument("--max-tasks", type=int, default=500, help="Hard cap on keywords per run (cost guard)")
-    parser.add_argument("--rank-track-domain", default=None, help="Adds stop_crawl_on_match for this domain (refunds unused depth)")
-    parser.add_argument("--offset", type=int, default=None, help="Deep-page crawl via search_param '&start=N' (e.g. 30 = page 4)")
+    parser.add_argument(
+        "--max-tasks",
+        type=int,
+        default=500,
+        help="Hard cap on keywords per run (cost guard)",
+    )
+    parser.add_argument(
+        "--rank-track-domain",
+        default=None,
+        help="Adds stop_crawl_on_match for this domain (refunds unused depth)",
+    )
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=None,
+        help="Deep-page crawl via search_param '&start=N' (e.g. 30 = page 4)",
+    )
     parser.add_argument("--tag", default=None, help="Optional task tag")
     parser.add_argument("--output-json", default=None)
-    parser.add_argument("--dry-run", action="store_true", help="Print the payload plan + cost estimate; touch no network")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the payload plan + cost estimate; touch no network",
+    )
     parser.add_argument("--login", default=None)
     parser.add_argument("--password", default=None)
     args = parser.parse_args(argv)
@@ -469,7 +652,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.rank_track_domain:
         print(f"Rank tracking: stop_crawl_on_match={stop_list}")
     if args.offset:
-        print(f"Offset crawling: search_param=&start={args.offset} (skipping paid depth you don't need)")
+        print(
+            f"Offset crawling: search_param=&start={args.offset} (skipping paid depth you don't need)"
+        )
 
     if args.dry_run:
         print("DRY-RUN: no network calls made. First 5 task payloads:")
@@ -477,7 +662,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(
                 "  "
                 + json.dumps(
-                    DataForSEOClient._task(kw, args.location_code, args.language_code, args.depth, args.tag, stop_list, args.offset)
+                    DataForSEOClient._task(
+                        kw,
+                        args.location_code,
+                        args.language_code,
+                        args.depth,
+                        args.tag,
+                        stop_list,
+                        args.offset,
+                    )
                 )
             )
         return 0
@@ -488,7 +681,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.mode == "live":
         scored = []
         for kw in keywords:
-            for entry in client.fetch_serp_live(kw, args.location_code, args.language_code, args.depth):
+            for entry in client.fetch_serp_live(
+                kw, args.location_code, args.language_code, args.depth
+            ):
                 scored.extend(DataForSEOClient.score_fetched_results([entry]))
     else:
         client.post_serp_tasks(
@@ -500,12 +695,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             stop_crawl_on_match=stop_list,
             offset=args.offset,
         )
-        print(f"Queued {len(keywords)} tasks; polling tasks_ready (queue turnaround is typically ~5 minutes)...")
+        print(
+            f"Queued {len(keywords)} tasks; polling tasks_ready (queue turnaround is typically ~5 minutes)..."
+        )
         results = client.collect_ready_tasks()
         scored = DataForSEOClient.score_fetched_results(results)
         pending = client.last_queue_state.get("pending", 0)
         if pending:
-            print(f"[INFO] {pending} task(s) still in queue; re-run collect to fetch them.")
+            print(
+                f"[INFO] {pending} task(s) still in queue; re-run collect to fetch them."
+            )
 
     weak_spots = [row for row in scored if row["vulnerability"]["weak_spot"]]
     print(f"Scored {len(scored)} SERPs; weak spots: {len(weak_spots)}")
@@ -517,7 +716,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
     if args.output_json:
         with open(args.output_json, "w", encoding="utf-8") as fh:
-            json.dump({"generated_by": "improve-seo-with-data/dataforseo_client", "results": scored}, fh, indent=2)
+            json.dump(
+                {
+                    "generated_by": "improve-seo-with-data/dataforseo_client",
+                    "results": scored,
+                },
+                fh,
+                indent=2,
+            )
         print("Wrote", args.output_json)
     return 0
 

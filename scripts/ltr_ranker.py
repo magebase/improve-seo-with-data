@@ -41,7 +41,9 @@ import json
 import math
 import os
 import random
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import numpy as np
 
@@ -50,14 +52,14 @@ META_FILE = "seo_lgbm_ranker.meta.json"
 
 # Canonical 8-feature vector. Order is load-bearing: MONOTONE_CONSTRAINTS maps 1:1.
 FEATURES = [
-    "domain_centroid_sim",       # +1: closer to our topical core is always better
-    "serp_forum_ratio",          # +1: more weak forums in Top 10 is always easier
-    "title_exact_match_rate",    # -1: fewer exact-match competitors is better
-    "serp_pixel_crowding",       # -1: less SERP clutter above the fold is better
-    "parent_hub_internal_links", # +1: stronger internal hub is better
-    "current_pos",               #  0: unconstrained (non-linear sweet spot Pos 8-20)
-    "search_volume_log",         # +1: higher volume ceiling is better
-    "conversion_intent_score",   # +1: higher historical conversion propensity is better
+    "domain_centroid_sim",  # +1: closer to our topical core is always better
+    "serp_forum_ratio",  # +1: more weak forums in Top 10 is always easier
+    "title_exact_match_rate",  # -1: fewer exact-match competitors is better
+    "serp_pixel_crowding",  # -1: less SERP clutter above the fold is better
+    "parent_hub_internal_links",  # +1: stronger internal hub is better
+    "current_pos",  #  0: unconstrained (non-linear sweet spot Pos 8-20)
+    "search_volume_log",  # +1: higher volume ceiling is better
+    "conversion_intent_score",  # +1: higher historical conversion propensity is better
 ]
 
 MONOTONE_CONSTRAINTS = [1, 1, -1, -1, 1, 0, 1, 1]
@@ -95,7 +97,7 @@ MIN_TRAINABLE_ROWS = 10
 def expected_ctr(position: float) -> float:
     """Position-impression propensity curve: ECTR(p) ~= 0.28 / p^1.15."""
     p = max(1.0, float(position))
-    return 0.28 / (p ** 1.15)
+    return 0.28 / (p**1.15)
 
 
 def position_adjusted_clicks(clicks_30d: float, start_position: float) -> float:
@@ -110,7 +112,9 @@ def position_adjusted_clicks(clicks_30d: float, start_position: float) -> float:
     return float(clicks_30d) * min(5.0, lift)
 
 
-def clicks_to_relevance_grade(clicks_30d: np.ndarray, conversions_30d: np.ndarray) -> np.ndarray:
+def clicks_to_relevance_grade(
+    clicks_30d: np.ndarray, conversions_30d: np.ndarray
+) -> np.ndarray:
     """Maps 30-day clicks/conversions into 0-4 integer lambdarank grades.
 
     0 Dead: 0 clicks | 1 Traction: 1-10 | 2 Contributor: 11-50
@@ -126,7 +130,7 @@ def clicks_to_relevance_grade(clicks_30d: np.ndarray, conversions_30d: np.ndarra
     return grades
 
 
-def bucket_histogram(grades: np.ndarray) -> Dict[int, int]:
+def bucket_histogram(grades: np.ndarray) -> dict[int, int]:
     """Count distribution over the 5 grades; rejects non-integer grades."""
     arr = np.asarray(grades)
     if arr.size and not np.allclose(arr, np.round(arr)):
@@ -153,7 +157,11 @@ def heuristic_base_score(
     baseline, so the model can never underperform the heuristic while young.
     """
     target_ctr = expected_ctr(current_pos)
-    return math.log10(float(impressions) + 1.0) * (target_ctr - float(current_ctr)) * float(conv_value)
+    return (
+        math.log10(float(impressions) + 1.0)
+        * (target_ctr - float(current_ctr))
+        * float(conv_value)
+    )
 
 
 def cold_start_score(
@@ -186,13 +194,13 @@ def train_seo_ranker(
     y: np.ndarray,
     cluster_ids: np.ndarray,
     objective: str = "lambdarank",
-    init_score: Optional[np.ndarray] = None,
+    init_score: np.ndarray | None = None,
     feature_names: Sequence[str] = FEATURES,
     constraints: Sequence[int] = MONOTONE_CONSTRAINTS,
     train_fraction: float = 0.8,
     random_state: int = 42,
-    min_data_in_leaf: Optional[int] = None,
-) -> Tuple[Any, Dict[str, Any]]:
+    min_data_in_leaf: int | None = None,
+) -> tuple[Any, dict[str, Any]]:
     """Trains a LightGBM LambdaRanker with cluster-integrity splitting.
 
     Uses the NATIVE `lgb.train()` API (not `LGBMRanker`), which needs only
@@ -290,7 +298,9 @@ def train_seo_ranker(
         params,
         train_set=train_set,
         valid_sets=valid_sets,
-        callbacks=[lgb.early_stopping(stopping_rounds=40, verbose=False)] if valid_sets else [],
+        callbacks=[lgb.early_stopping(stopping_rounds=40, verbose=False)]
+        if valid_sets
+        else [],
     )
 
     meta = {
@@ -304,8 +314,8 @@ def train_seo_ranker(
         "train_row_clusters": sorted(set(clusters[is_train].tolist())),
         "val_row_clusters": sorted(set(clusters[~is_train].tolist())),
         "used_init_score": init_score is not None,
-        "train_rows": int(len(train_df)),
-        "val_rows": int(len(val_df)),
+        "train_rows": len(train_df),
+        "val_rows": len(val_df),
     }
     return booster, meta
 
@@ -321,20 +331,20 @@ class IsotonicCalibrator:
     mathematically valid.
     """
 
-    def __init__(self, knots_x: List[float], knots_y: List[float]):
+    def __init__(self, knots_x: list[float], knots_y: list[float]):
         self.knots_x = [float(v) for v in knots_x]
         self.knots_y = [float(v) for v in knots_y]
 
     @classmethod
-    def fit(cls, raw_scores: np.ndarray, realized: np.ndarray) -> "IsotonicCalibrator":
+    def fit(cls, raw_scores: np.ndarray, realized: np.ndarray) -> IsotonicCalibrator:
         raw = np.asarray(raw_scores, dtype=float)
         real = np.asarray(realized, dtype=float)
         order = np.argsort(raw, kind="stable")
         raw, real = raw[order], real[order]
 
         # Merge tied raw scores (mean realized outcome per unique raw value).
-        unique_x: List[float] = []
-        pooled_y: List[float] = []
+        unique_x: list[float] = []
+        pooled_y: list[float] = []
         i = 0
         while i < len(raw):
             j = i
@@ -345,9 +355,9 @@ class IsotonicCalibrator:
             i = j + 1
 
         # Pool-adjacent-violators: enforce a non-decreasing sequence.
-        stack_x: List[float] = []
-        stack_y: List[float] = []
-        stack_w: List[int] = []
+        stack_x: list[float] = []
+        stack_y: list[float] = []
+        stack_w: list[int] = []
         for x, y_val in zip(unique_x, pooled_y):
             weight = 1
             stack_x.append(x)
@@ -363,8 +373,8 @@ class IsotonicCalibrator:
                 # keep the smaller x as the knot anchor
                 stack_x.append(stack_x.pop() if False else x2)
         # Collapse consecutive identical x anchors (keep first).
-        knots_x: List[float] = []
-        knots_y: List[float] = []
+        knots_x: list[float] = []
+        knots_y: list[float] = []
         for x, y_val in zip(stack_x, stack_y):
             if not knots_x or x > knots_x[-1]:
                 knots_x.append(x)
@@ -392,18 +402,23 @@ class IsotonicCalibrator:
                     flat_out[idx] = y0 + frac * (y1 - y0)
         return out
 
-    def to_dict(self) -> Dict[str, List[float]]:
+    def to_dict(self) -> dict[str, list[float]]:
         return {"knots_x": self.knots_x, "knots_y": self.knots_y}
 
     @classmethod
-    def from_dict(cls, blob: Dict[str, List[float]]) -> "IsotonicCalibrator":
+    def from_dict(cls, blob: dict[str, list[float]]) -> IsotonicCalibrator:
         return cls(blob["knots_x"], blob["knots_y"])
 
 
 # ------------------------------------------------------- bundle persistence
 
 
-def save_bundle(out_dir: str, ranker: Any, meta: Dict[str, Any], calibrator: Optional[IsotonicCalibrator] = None) -> Tuple[str, str]:
+def save_bundle(
+    out_dir: str,
+    ranker: Any,
+    meta: dict[str, Any],
+    calibrator: IsotonicCalibrator | None = None,
+) -> tuple[str, str]:
     """Persists the ranker via LightGBM's native format (no joblib) + JSON sidecar."""
     model_path = os.path.join(out_dir, MODEL_FILE)
     meta_path = os.path.join(out_dir, META_FILE)
@@ -425,7 +440,7 @@ def save_bundle(out_dir: str, ranker: Any, meta: Dict[str, Any], calibrator: Opt
     return model_path, meta_path
 
 
-def load_bundle(out_dir: str) -> Dict[str, Any]:
+def load_bundle(out_dir: str) -> dict[str, Any]:
     """Loads a saved ranker bundle; `model` is a lightgbm.Booster ready to predict."""
     import lightgbm as lgb
 
@@ -434,7 +449,11 @@ def load_bundle(out_dir: str) -> Dict[str, Any]:
     booster = lgb.Booster(model_file=model_path)
     with open(meta_path, encoding="utf-8") as fh:
         blob = json.load(fh)
-    calibrator = IsotonicCalibrator.from_dict(blob["calibrator"]) if blob.get("calibrator") else None
+    calibrator = (
+        IsotonicCalibrator.from_dict(blob["calibrator"])
+        if blob.get("calibrator")
+        else None
+    )
     return {
         "model": booster,
         "features": blob["features"],
@@ -454,7 +473,7 @@ def prescribe_action(
     hub_links_shap: float,
     centroid_sim: float,
     forum_ratio: float,
-    shap: Optional[Dict[str, float]] = None,
+    shap: dict[str, float] | None = None,
 ) -> str:
     """Maps SHAP drivers + row state onto the 4 executable action families.
 
@@ -470,6 +489,210 @@ def prescribe_action(
     if hub_links_shap < 0:
         return "BOOST_INTERNAL_LINKS"
     return "REWRITE_SNIPPET_AND_TOP_300PX"
+
+
+# Atomic work-item families emitted by prescribe_all_actions beyond the four
+# primary families above. A single (query, page) row can carry several
+# simultaneous bottlenecks; each negative SHAP driver maps onto its own TDD
+# work item so one queue row can yield multiple distinct fixes.
+CTR_HOOK_MIN_IMPRESSIONS = 30.0
+SPIN_OUT_MAX_POS = 20.0
+SPIN_OUT_MIN_FORUM_RATIO = 0.4
+
+
+def prescribe_all_actions(
+    current_pos: float,
+    title_match_rate: float,
+    hub_links_shap: float,
+    centroid_sim: float,
+    forum_ratio: float,
+    impressions: float = 0.0,
+    clicks: float = 0.0,
+    shap: dict[str, float] | None = None,
+) -> list[str]:
+    """Explodes EVERY applicable atomic prescription for one row, primary first.
+
+    Extends prescribe_action (which stays the single primary classifier):
+    - REWRITE_CTR_TITLE_AND_TOP_300PX  decent position, real impressions,
+      zero clicks -> the snippet is the bottleneck (CTR hook failure).
+    - SPIN_OUT_DEDICATED_SUBROUTE      forum/UGC-heavy SERP within striking
+      distance -> a dedicated sub-route can outflank the forum block.
+    - BOOST_INTERNAL_LINKS             negative hub-equity SHAP driver.
+    The deterministic fallback (REWRITE_SNIPPET_AND_TOP_300PX) applies only
+    when nothing more specific fires, matching prescribe_action's default.
+    """
+    primary = prescribe_action(
+        current_pos=current_pos,
+        title_match_rate=title_match_rate,
+        hub_links_shap=hub_links_shap,
+        centroid_sim=centroid_sim,
+        forum_ratio=forum_ratio,
+        shap=shap,
+    )
+    actions: list[str] = [primary]
+    if current_pos <= 10.0 and impressions >= CTR_HOOK_MIN_IMPRESSIONS and clicks == 0:
+        actions.append("REWRITE_CTR_TITLE_AND_TOP_300PX")
+    if current_pos <= SPIN_OUT_MAX_POS and forum_ratio >= SPIN_OUT_MIN_FORUM_RATIO:
+        actions.append("SPIN_OUT_DEDICATED_SUBROUTE")
+    if hub_links_shap < 0 and "BOOST_INTERNAL_LINKS" not in actions:
+        actions.append("BOOST_INTERNAL_LINKS")
+    # Re-derive the primary guarantee: for unranked rows the classifier emits
+    # LAUNCH_PSEO_ROUTE and no further atomic fix is actionable on a page that
+    # does not exist yet; drop duplicates while preserving order.
+    deduped: list[str] = []
+    for action in actions:
+        if action not in deduped:
+            deduped.append(action)
+    return deduped
+
+
+# ----------------------------------------------------------------- queue policy
+#
+# The cooldown ledger and per-domain quota slicing live here so the Stage-3
+# scorer and the Stage-4 outcome logger share ONE definition of "shipped".
+
+
+def record_shipped(
+    queue: list[dict[str, Any]],
+    ledger_path: str,
+    deployed_at: str | None = None,
+) -> int:
+    """Appends executed queue tasks to the cooldown ledger (JSONL).
+
+    Each record: {query, page, domain, action_type(s), deployed_at}. Returns
+    the number of records written. Idempotent callers dedupe upstream; the
+    ledger itself is append-only history.
+    """
+    stamp = deployed_at or datetime.now(timezone.utc).isoformat()
+    directory = os.path.dirname(ledger_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    written = 0
+    with open(ledger_path, "a", encoding="utf-8") as fh:
+        for entry in queue:
+            page = str(entry.get("page", ""))
+            actions = entry.get("actions") or (
+                [entry["prescribed_action"]] if entry.get("prescribed_action") else []
+            )
+            record = {
+                "query": entry.get("query"),
+                "page": page,
+                "domain": _registered_domain(page),
+                "action_types": actions,
+                "deployed_at": stamp,
+            }
+            fh.write(json.dumps(record) + "\n")
+            written += 1
+    return written
+
+
+def _registered_domain(page: str) -> str:
+    """Lower-case registered domain from a URL (namespace-tolerant)."""
+    try:
+        from urllib.parse import urlparse
+
+        host = (urlparse(page).hostname or page).lower()
+        parts = host.split(".")
+        return ".".join(parts[-2:]) if len(parts) > 2 else host
+    except Exception:  # noqa: BLE001 - ledger keys degrade to the raw string
+        return page.lower()
+
+
+def load_cooldown_keys(
+    ledger_path: str,
+    within_days: int = 30,
+    now: datetime | None = None,
+) -> set[tuple[str, str]]:
+    """Returns {(page, action_type)} shipped within the cooldown window."""
+    if not os.path.exists(ledger_path):
+        return set()
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    cutoff = now - timedelta(days=within_days)
+    cooled: set = set()
+    with open(ledger_path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # a torn trailing line never blocks the queue
+            stamp = record.get("deployed_at")
+            if isinstance(stamp, str):
+                try:
+                    shipped = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+            elif isinstance(stamp, (int, float)):
+                shipped = datetime.fromtimestamp(stamp / 1000.0, tz=timezone.utc)
+            else:
+                continue
+            if shipped.tzinfo is None:
+                shipped = shipped.replace(tzinfo=timezone.utc)
+            if shipped > cutoff:
+                page = str(record.get("page", ""))
+                for action in record.get("action_types") or [record.get("action_type")]:
+                    if action:
+                        cooled.add((page, str(action)))
+    return cooled
+
+
+def filter_cooldown(
+    rows: list[dict[str, Any]],
+    cooled: set[tuple[str, str]],
+) -> tuple:
+    """Drops cooled (page, action_type) work items from scored rows.
+
+    A row survives with its remaining fresh actions; a row whose actions are
+    ALL inside the cooldown window is skipped entirely so the next wave of
+    unoptimized pages surfaces instead.
+    Returns (kept_rows, skipped_rows).
+    """
+    kept: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for row in rows:
+        page = str(row.get("page", ""))
+        actions = list(
+            row.get("actions")
+            or ([row["prescribed_action"]] if row.get("prescribed_action") else [])
+        )
+        fresh = [a for a in actions if (page, a) not in cooled]
+        if not actions:
+            kept.append(row)
+        elif not fresh:
+            skipped.append(row)
+        else:
+            row["actions"] = fresh
+            row["prescribed_action"] = fresh[0]
+            kept.append(row)
+    return kept, skipped
+
+
+def slice_per_domain(
+    queue: list[dict[str, Any]], per_domain_top: int
+) -> list[dict[str, Any]]:
+    """Caps the final queue at ``per_domain_top`` tasks per registered domain.
+
+    In a pooled fleet model a big property (hundreds of GSC rows) naturally
+    crowds younger properties out of the Top-N. Grouping the globally ranked
+    queue by domain and slicing keeps every enrolled property actionable on
+    demand. Global rank order is preserved within each domain's slice.
+    """
+    if per_domain_top <= 0:
+        return list(queue)
+    seen: dict[str, int] = {}
+    sliced: list[dict[str, Any]] = []
+    for entry in sorted(queue, key=lambda r: r.get("rank_score", 0.0), reverse=True):
+        domain = _registered_domain(str(entry.get("page", "")))
+        count = seen.get(domain, 0)
+        if count >= per_domain_top:
+            continue
+        seen[domain] = count + 1
+        sliced.append(entry)
+    return sliced
 
 
 def cold_start_depth_multiplier(current_pos: float, serp_forum_ratio: float) -> float:
@@ -491,11 +714,11 @@ def cold_start_depth_multiplier(current_pos: float, serp_forum_ratio: float) -> 
 
 
 def split_action_queue(
-    rows: List[Dict[str, Any]],
+    rows: list[dict[str, Any]],
     n_exploit: int = EXPLOIT_SLOTS,
     n_explore: int = EXPLORE_SLOTS,
     seed: int = 42,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Builds the 85/15 exploration/exploitation action queue.
 
     Exploitation: the top `n_exploit` calibrated/-ranked rows. Exploration:
@@ -507,7 +730,7 @@ def split_action_queue(
     if not rows:
         return []
     ranked = sorted(rows, key=lambda r: r.get("rank_score", 0.0), reverse=True)
-    queue: List[Dict[str, Any]] = []
+    queue: list[dict[str, Any]] = []
     for row in ranked[:n_exploit]:
         entry = dict(row)
         entry["slot"] = "exploit"
@@ -520,7 +743,7 @@ def split_action_queue(
         pool = ranked[n_exploit:]
 
     rng = random.Random(seed)
-    by_cluster: Dict[Any, List[Dict[str, Any]]] = {}
+    by_cluster: dict[Any, list[dict[str, Any]]] = {}
     for row in pool:
         by_cluster.setdefault(row.get("cluster_id"), []).append(row)
     for bucket in by_cluster.values():
@@ -531,7 +754,7 @@ def split_action_queue(
     cluster_cycle = list(by_cluster.keys())
     rng.shuffle(cluster_cycle)
 
-    chosen: List[Dict[str, Any]] = []
+    chosen: list[dict[str, Any]] = []
     exhausted = False
     while len(chosen) < n_explore and not exhausted:
         progressed = False
