@@ -850,10 +850,6 @@ def compile_wave_backlog(
             ),
         ),
         (
-            "CREATE_PROGRAMMATIC_ROUTE",
-            lambda r: float(r.get("current_pos", 0.0) or 0.0) >= 90.0,
-        ),
-        (
             "RESCUE_ORPHAN_ROUTE_INLINKS",
             lambda r: (
                 str(r.get("source", "")) == "orphan_route"
@@ -861,6 +857,10 @@ def compile_wave_backlog(
                 or str(r.get("coverage_state", ""))
                 == "Discovered - currently not indexed"
             ),
+        ),
+        (
+            "CREATE_PROGRAMMATIC_ROUTE",
+            lambda r: float(r.get("current_pos", 0.0) or 0.0) >= 90.0,
         ),
         (
             "ADD_D1_SPEC_COMPARISON_TABLE",

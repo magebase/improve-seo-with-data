@@ -35,3 +35,8 @@ reports/
 *.tmp
 models/dfs_surrogate_*.txt
 models/dfs_surrogate.meta.json
+
+# Transient data runs
+.serp_cache.json
+data/
+
