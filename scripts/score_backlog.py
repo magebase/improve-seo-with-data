@@ -199,7 +199,46 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="SQLite fleet state DB; when set, emitted tasks are enqueued and leased (PENDING -> LEASED)",
     )
+    parser.add_argument(
+        "--lease-size",
+        type=int,
+        default=35,
+        help="tasks leased per invocation from the state-DB cursor (the "
+        "backlog is replenished at FULL depth regardless; 0 leases everything "
+        "enqueued this run). When the cursor already holds >= lease-size "
+        "PENDING tasks, this invocation takes the fast path: lease only, no "
+        "collection/scoring.",
+    )
     args = parser.parse_args(argv)
+
+    # Fast path (the 50x/day cursor): when the backlog already holds a full
+    # wave of PENDING tasks, lease and return in well under a second — no
+    # feature file, no model, no network.
+    if args.state_db and args.lease_size > 0:
+        from fleet_state import (
+            connect_state_db as _connect,
+            lease_tasks as _lease,
+            pending_count as _pending,
+        )
+
+        fast_conn = _connect(args.state_db)
+        if _pending(fast_conn) >= args.lease_size:
+            leased = _lease(fast_conn, limit=args.lease_size)
+            os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+            with open(args.output, "w", encoding="utf-8") as fh:
+                json.dump({"fast_path": True, "leased": leased}, fh, indent=2)
+            print(
+                f"Fast path: leased {len(leased)} tasks from the backlog cursor "
+                f"(no collection/scoring; {_pending(fast_conn)} still pending)."
+            )
+            for task in leased[:5]:
+                print(
+                    f"  LEASED {task['action_code']} -> {task['page']}"
+                    + (f" ({task['file_target']})" if task.get("file_target") else "")
+                )
+            fast_conn.close()
+            return 0
+        fast_conn.close()
 
     if not os.path.exists(args.features):
         print(f"ERROR: {args.features} not found. Run collect_features.py first.")
@@ -283,18 +322,24 @@ def main(argv: list[str] | None = None) -> int:
             if args.cooldown_days > 0
             else set()
         )
-        wave_tasks = compile_wave_backlog(
+        # FULL-depth decomposition: the SQLite backlog gets EVERY rule hit
+        # across ALL scored rows (600-900 tasks), so runs 2..50 lease from the
+        # cursor without re-running collection/scoring. The JSON output keeps
+        # only the actionable --compile-wave slice of that inventory.
+        full_backlog = compile_wave_backlog(
             scored,
             shipped_ledger=cooled_keys,
-            target_wave_size=args.compile_wave,
+            target_wave_size=10_000_000,
             # Catalog families are derived from the rows themselves so a
             # top-ranked child route propagates its fix across every sibling
             # without a hand-maintained prefix map.
             sibling_counts=derive_sibling_counts(scored),
         )
+        wave_tasks = full_backlog[: max(0, args.compile_wave)]
         print(
-            f"Compiled {len(wave_tasks)} atomic wave task(s) "
-            f"(--compile-wave {args.compile_wave})."
+            f"Compiled {len(full_backlog)}-task backlog inventory; "
+            f"{len(wave_tasks)} in this wave slice (--compile-wave "
+            f"{args.compile_wave})."
         )
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
@@ -311,19 +356,27 @@ def main(argv: list[str] | None = None) -> int:
             indent=2,
         )
 
-    # Fleet state machine: enqueue emitted tasks, then lease the actionable
-    # slice so a concurrent coding agent picks work up without double-shipping.
+    # Fleet state machine: enqueue the FULL backlog inventory, then lease only
+    # --lease-size tasks so the next invocations lease fresh work (#36-70,
+    # #71-105, ...) instead of draining the cursor dry.
     if args.state_db:
         from fleet_state import connect_state_db
 
         conn = connect_state_db(args.state_db)
-        pending = wave_tasks + queue
+        pending = full_backlog + queue if args.compile_wave > 0 else queue
         added = enqueue_tasks(conn, pending)
-        leased = lease_tasks(conn, limit=len(pending))
+        lease_n = args.lease_size if args.lease_size > 0 else len(pending)
+        leased = lease_tasks(conn, limit=lease_n)
+        still_pending = pending_count(conn)
         print(
             f"State DB {args.state_db}: enqueued {added} new, leased {len(leased)} "
-            f"(PENDING -> LEASED), {pending_count(conn)} still pending."
+            f"(PENDING -> LEASED), {still_pending} still pending."
         )
+        if 0 < still_pending < 100:
+            print(
+                "      NOTE: backlog below 100 pending - the next collection "
+                "run will replenish it (waterfall + matrix + surrogate)."
+            )
         for task in leased[:5]:
             print(
                 f"  LEASED {task['action_code']} -> {task['page']}"

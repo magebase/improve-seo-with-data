@@ -41,6 +41,7 @@ import json
 import math
 import os
 import random
+from collections import Counter
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -794,6 +795,7 @@ def compile_wave_backlog(
     shipped_ledger: set | None = None,
     target_wave_size: int = 40,
     sibling_counts: dict[str, int] | None = None,
+    max_per_family: int = 3,
 ) -> list[dict[str, Any]]:
     """Compiles a ranked backlog into ATOMIC TDD tasks (35-60 per wave).
 
@@ -803,6 +805,17 @@ def compile_wave_backlog(
     re-deriving intent. Cooldown-masked (page, action) pairs from the shipped
     ledger are skipped, duplicates are impossible, and programmatic-route
     tasks propagate their template change across every catalog sibling.
+
+    ``target_wave_size`` caps the RETURNED list (the actionable wave); pass a
+    large value when replenishing the SQLite backlog, where full-depth
+    decomposition matters more than the per-invocation slice.
+
+    ``max_per_family`` (route-template cap) stops a single programmatic
+    subfolder from eating the wave quota: /number/<digits>/ pages share ONE
+    template, so more than ``max_per_family`` tasks for that family would be
+    25 edits of the same file. The first family hits carry the
+    catalog_propagation hint (one template change covers every sibling);
+    deeper hits are skipped so /guides/, /compare/ and /tools/ get scored in.
     """
     shipped_keys = {
         (str(page).rstrip("/"), str(code)) for page, code in (shipped_ledger or set())
@@ -883,11 +896,17 @@ def compile_wave_backlog(
     }
     tasks: list[dict[str, Any]] = []
     emitted: set = set()
+    family_counts: Counter = Counter()
     for row in sorted(rows, key=lambda r: r.get("rank_score", 0.0), reverse=True):
         page = str(row.get("page", ""))
         page_key = page.rstrip("/")
         query = str(row.get("query", ""))
         path = urlparse(page).path if page.startswith("http") else "/" + page.strip("/")
+        path_segments = [seg for seg in path.strip("/").split("/") if seg]
+        route_family = path_segments[0] if len(path_segments) > 1 else page_key
+        if max_per_family > 0 and family_counts[route_family] >= max_per_family:
+            continue  # this template family already filled its wave quota
+        tasks_before_row = len(tasks)
         propagation = None
         for prefix, count in sorted(sibling_counts.items(), key=lambda kv: -len(kv[0])):
             if path.startswith(prefix):
@@ -912,6 +931,7 @@ def compile_wave_backlog(
                 "action_code": code,
                 "query": query,
                 "page": page,
+                "domain": _registered_domain(page),
                 "file_target": file_target,
                 "tdd_assertion": assertions[code].format(
                     page=page,
@@ -926,6 +946,8 @@ def compile_wave_backlog(
             tasks.append(task)
             if len(tasks) >= target_wave_size:
                 return tasks
+        if len(tasks) > tasks_before_row:
+            family_counts[route_family] += 1  # cap DISTINCT pages per family
     return tasks
 
 

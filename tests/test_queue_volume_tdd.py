@@ -1334,8 +1334,16 @@ def test_compiler_coverage_state_triggers():
 def test_gsc_candidates_with_fallback_prefers_report_then_window():
     from collect_features import gsc_candidates_with_fallback
 
-    report_rows = [{"query": "q1", "page": "https://a.com/", "clicks": 1,
-                    "impressions": 10, "position": 5.0, "ctr": 0.1}]
+    report_rows = [
+        {
+            "query": "q1",
+            "page": "https://a.com/",
+            "clicks": 1,
+            "impressions": 10,
+            "position": 5.0,
+            "ctr": 0.1,
+        }
+    ]
     window_calls = []
 
     def run_report(report_id, site):
@@ -1343,13 +1351,24 @@ def test_gsc_candidates_with_fallback_prefers_report_then_window():
 
     def pull_window(site, start, end):
         window_calls.append((site, start, end))
-        return [{"query": "w1", "page": "https://a.com/x/", "clicks_30d": 2.0,
-                 "impressions": 30.0, "current_pos": 7.0, "ctr": 0.06,
-                 "window_days": 0, "source": "gsc_window"}]
+        return [
+            {
+                "query": "w1",
+                "page": "https://a.com/x/",
+                "clicks_30d": 2.0,
+                "impressions": 30.0,
+                "current_pos": 7.0,
+                "ctr": 0.06,
+                "window_days": 0,
+                "source": "gsc_window",
+            }
+        ]
 
     # Degraded report -> window fallback supplies the candidates.
     candidates, mode = gsc_candidates_with_fallback(
-        "sc-domain:a.com", run_report_fn=run_report, pull_window_fn=pull_window,
+        "sc-domain:a.com",
+        run_report_fn=run_report,
+        pull_window_fn=pull_window,
         window_days=28,
     )
     assert mode == "gsc_window"
@@ -1361,7 +1380,9 @@ def test_gsc_candidates_with_fallback_prefers_report_then_window():
         return {"rows": report_rows}
 
     candidates, mode = gsc_candidates_with_fallback(
-        "sc-domain:a.com", run_report_fn=healthy_report, pull_window_fn=pull_window,
+        "sc-domain:a.com",
+        run_report_fn=healthy_report,
+        pull_window_fn=pull_window,
     )
     assert mode == "report"
     assert candidates[0]["query"] == "q1"
@@ -1377,3 +1398,83 @@ def test_gsc_candidates_with_fallback_raises_when_both_sources_empty():
             run_report_fn=lambda rid, site: {},
             pull_window_fn=lambda site, start, end: [],
         )
+
+
+# ---------------------------------------------------------------------------
+# Round 6: backlog starvation fix (full-depth replenish + route-family cap)
+# ---------------------------------------------------------------------------
+
+
+def test_compile_wave_backlog_caps_tasks_per_route_family():
+    from ltr_ranker import compile_wave_backlog
+
+    rows = [
+        _scored(
+            f"num {i}",
+            f"https://a.com/number/1202555{i:04d}/",
+            8.0,
+            10.0,
+            1.0,
+            0.3,
+            2.0,
+        )
+        for i in range(10)
+    ]
+    rows += [
+        _scored("guide a", "https://a.com/guides/gdpr-sms/", 8.0, 10.0, 1.0, 0.3, 2.0),
+        _scored(
+            "guide b", "https://a.com/guides/pci-sms-otp/", 8.0, 10.0, 1.0, 0.3, 2.0
+        ),
+        _scored(
+            "compare a",
+            "https://a.com/compare/twilio-vs-infobip/",
+            8.0,
+            10.0,
+            1.0,
+            0.3,
+            2.0,
+        ),
+    ]
+    tasks = compile_wave_backlog(rows, shipped_ledger=set(), target_wave_size=100)
+    number_tasks = [t for t in tasks if "/number/" in t["page"]]
+    guide_tasks = [t for t in tasks if "/guides/" in t["page"]]
+    number_pages = {t["page"] for t in number_tasks}
+    assert len(number_pages) <= 3, "one template family must not eat the wave quota"
+    assert len(guide_tasks) >= 2
+    assert {"INJECT_EXACT_TITLE_AND_H2", "STRENGTHEN_HUB_INTERNAL_LINKS"} <= {
+        t["action_code"] for t in tasks
+    }
+    # Every task carries the registered domain for DB bookkeeping.
+    assert all(t["domain"] == "a.com" for t in tasks)
+
+
+def test_compile_wave_backlog_full_depth_exceeds_wave_size_when_asked():
+    from ltr_ranker import compile_wave_backlog
+
+    rows = [
+        _scored(f"q{i}", f"https://a.com/fam{i}/route/", 8.0, 10.0, 1.0, 0.3, 2.0)
+        for i in range(3)
+    ]  # each row triggers exactly 2 rules (title mismatch + weak hub links)
+    capped = compile_wave_backlog(rows, shipped_ledger=set(), target_wave_size=4)
+    full = compile_wave_backlog(rows, shipped_ledger=set(), target_wave_size=10_000)
+    assert len(capped) == 4
+    assert len(full) == 6, (
+        "replenish mode must decompose EVERY row, not stop at the wave size"
+    )
+
+
+def test_orphan_detector_never_emits_sitemap_index_files():
+    from collect_features import synthesize_orphan_rows
+
+    rows = synthesize_orphan_rows(
+        [
+            "https://a.com/sitemaps/tools.xml",
+            "https://a.com/sitemaps/guides.xml/",
+            "https://a.com/tools/bulk-validator/",
+        ],
+        gsc_pages=set(),
+        domain="a.com",
+    )
+    pages = [r["page"] for r in rows]
+    assert all(not p.endswith(".xml") for p in pages)
+    assert any("bulk-validator" in p for p in pages)

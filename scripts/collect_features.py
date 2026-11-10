@@ -575,6 +575,8 @@ def synthesize_orphan_rows(
         url = url.strip()
         if not url or url in seen or url in gsc_pages:
             continue
+        if url.lower().rstrip("/").endswith(".xml"):
+            continue  # sitemap index files are not pages; never emit tasks for them
         seen.add(url)
         path = url.split("://", 1)[-1].split("?", 1)[0].rstrip("/")
         slug = path.rsplit("/", 1)[-1] if "/" in path else path
@@ -637,7 +639,9 @@ def gsc_candidates_with_fallback(
     """
     report = (run_report_fn or run_seo_report)(report_id, site)
     if not report.get("ok", True) and "error" in report:
-        print(f"      report failed ({str(report['error'])[:120]}); trying gsc-query window.")
+        print(
+            f"      report failed ({str(report['error'])[:120]}); trying gsc-query window."
+        )
         report = {}
     rows = find_performance_rows(report)
     if rows:
@@ -1041,10 +1045,15 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "query": str(query),
                     "page": str(page),
-                    "clicks_30d": float(row.get("clicks", row.get("clicks_30d", 0)) or 0),
+                    "clicks_30d": float(
+                        row.get("clicks", row.get("clicks_30d", 0)) or 0
+                    ),
                     "impressions": float(row.get("impressions", 0) or 0),
                     "current_pos": float(
-                        row.get("position", row.get("current_pos", row.get("avg_position", 99)))
+                        row.get(
+                            "position",
+                            row.get("current_pos", row.get("avg_position", 99)),
+                        )
                         or 99
                     ),
                     "ctr": float(row.get("ctr", 0) or 0),
