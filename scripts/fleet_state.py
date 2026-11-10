@@ -15,6 +15,10 @@ Decouples DATA SYNC (once per day, network-bound) from WAVE GENERATION
                      SHIPPED at commit time, so back-to-back invocations never
                      emit the same fix twice.
 - dfs_budget         daily DataForSEO spend bucket (DailyBudgetGate).
+- url_inspections    7-day TTL cache of GSC URL Inspection coverageState
+                     results (the 2,000/day free allowance is guarded by a
+                     daily counter, so repeated invocations never re-inspect
+                     a URL already cached this week).
 
 All state lives under ~/.seo_fleet/ by default (override with --db-path).
 stdlib sqlite3 only — no new dependencies.
@@ -71,6 +75,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS backlog_open_task
 CREATE INDEX IF NOT EXISTS backlog_status_priority
     ON atomic_task_backlog (status, priority_score DESC);
 CREATE TABLE IF NOT EXISTS dfs_budget (
+    day         TEXT NOT NULL,
+    spent       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day)
+);
+CREATE TABLE IF NOT EXISTS url_inspections (
+    url             TEXT PRIMARY KEY,
+    site            TEXT NOT NULL,
+    coverage_state  TEXT,
+    indexing_state  TEXT,
+    last_crawl_time TEXT,
+    inspected_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS url_inspections_site_age
+    ON url_inspections (site, inspected_at);
+CREATE TABLE IF NOT EXISTS url_inspection_budget (
     day         TEXT NOT NULL,
     spent       INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (day)
@@ -355,3 +374,100 @@ class DailyBudgetGate:
             )
             self._conn.commit()
         return self.remaining(now=now)
+
+
+# ------------------------------------------------------- URL Inspection state
+
+INSPECTION_TTL_HOURS = 24 * 7  # coverage states are stable week-to-week
+DEFAULT_DAILY_INSPECTION_BUDGET = 2000  # GSC free allowance per property/day
+
+
+def save_url_inspections(
+    conn: sqlite3.Connection,
+    site: str,
+    results: dict,
+    now: Optional[datetime] = None,
+) -> None:
+    """Persists URL Inspection results keyed by URL (week-long TTL reads)."""
+    stamp = _iso(_utc_now(now))
+    for url, record in results.items():
+        conn.execute(
+            "INSERT OR REPLACE INTO url_inspections "
+            "(url, site, coverage_state, indexing_state, last_crawl_time, inspected_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                str(url),
+                str(site),
+                record.get("coverage_state"),
+                record.get("indexing_state"),
+                record.get("last_crawl_time"),
+                stamp,
+            ),
+        )
+    conn.commit()
+
+
+def load_url_inspections(
+    conn: sqlite3.Connection,
+    urls: list,
+    max_age_hours: int = INSPECTION_TTL_HOURS,
+    now: Optional[datetime] = None,
+) -> dict:
+    """Returns fresh (within TTL) inspection records for the requested URLs."""
+    stamp = _utc_now(now)
+    cutoff = stamp - timedelta(hours=max_age_hours)
+    fresh: dict[str, dict[str, Any]] = {}
+    for url in urls:
+        row = conn.execute(
+            "SELECT coverage_state, indexing_state, last_crawl_time, inspected_at "
+            "FROM url_inspections WHERE url = ?",
+            (str(url),),
+        ).fetchone()
+        if not row:
+            continue
+        try:
+            inspected = datetime.fromisoformat(row[3])
+        except ValueError:
+            continue
+        if inspected.tzinfo is None:
+            inspected = inspected.replace(tzinfo=timezone.utc)
+        if inspected >= cutoff:
+            fresh[str(url)] = {
+                "coverage_state": row[0],
+                "indexing_state": row[1],
+                "last_crawl_time": row[2],
+            }
+    return fresh
+
+
+def inspection_calls_remaining(
+    conn: sqlite3.Connection,
+    daily_cap: int = DEFAULT_DAILY_INSPECTION_BUDGET,
+    now: Optional[datetime] = None,
+) -> int:
+    """Free-tier guard: max 2,000 URL Inspection calls per UTC day."""
+    day = _utc_now(now).date().isoformat()
+    row = conn.execute(
+        "SELECT spent FROM url_inspection_budget WHERE day = ?", (day,)
+    ).fetchone()
+    return max(0, daily_cap - int(row[0] if row else 0))
+
+
+def record_inspection_calls(
+    conn: sqlite3.Connection,
+    n: int,
+    daily_cap: int = DEFAULT_DAILY_INSPECTION_BUDGET,
+    now: Optional[datetime] = None,
+) -> int:
+    """Records n inspection calls; returns the remaining budget."""
+    day = _utc_now(now).date().isoformat()
+    remaining = inspection_calls_remaining(conn, daily_cap=daily_cap, now=now)
+    allowed = min(max(0, int(n)), remaining)
+    if allowed:
+        conn.execute(
+            "INSERT INTO url_inspection_budget (day, spent) VALUES (?, ?) "
+            "ON CONFLICT(day) DO UPDATE SET spent = spent + ?",
+            (day, allowed, allowed),
+        )
+        conn.commit()
+    return inspection_calls_remaining(conn, daily_cap=daily_cap, now=now)

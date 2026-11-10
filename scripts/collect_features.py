@@ -64,9 +64,13 @@ from fleet_state import (
     DailyBudgetGate,
     connect_state_db,
     gsc_snapshot_fresh,
+    inspection_calls_remaining,
     load_cached_serps,
     load_gsc_snapshot,
+    load_url_inspections,
+    record_inspection_calls,
     save_gsc_snapshot,
+    save_url_inspections,
     upsert_serp_cache,
 )
 from gsc_analyzer import find_seo_binary, run_seo_report
@@ -173,6 +177,150 @@ def synthesize_unseen_rows(
 SITEMAP_URL_TIMEOUT = 30.0
 
 
+def three_way_matrix_from_sitemap(
+    sitemap_urls: list[str],
+    family_prefix: str,
+    modifiers: list[str],
+    templates: list[str],
+    max_rows: int = 100,
+) -> list[dict[str, Any]]:
+    """Exhaustion-guard expansion: entity x modifier long-tail candidates.
+
+    Engaged when the pairwise catalog space is exhausted (every pair already
+    built) or when the pending task backlog has burned below the exhaustion
+    threshold. Modifiers are semantic long-tail extensions ("free", "without
+    verification", "2026", ...) crossed with the family's entity vocabulary —
+    still zero network cost; demand is verified later by the surrogate or a
+    budget-gated SERP pull.
+    """
+    domain_match = re.match(
+        r"https?://([^/]+)/", (sitemap_urls[0] if sitemap_urls else "")
+    )
+    domain = (domain_match.group(1) if domain_match else "").lower()
+    prefix = family_prefix.strip("/")
+    single_pattern = re.compile(rf"/{re.escape(prefix)}/([a-z0-9-]+)/", re.IGNORECASE)
+    vocab: list[str] = []
+    for url in sitemap_urls:
+        single = single_pattern.search(url)
+        if single and single.group(1).lower() not in vocab:
+            vocab.append(single.group(1).lower())
+    vocab.sort()
+    rows: list[dict[str, Any]] = []
+    for template in templates:
+        for modifier in modifiers:
+            for entity in vocab:
+                query = template.format(entity=entity, modifier=modifier)
+                if "{entity}" in query or "{modifier}" in query:
+                    continue  # template not three-way compatible
+                slug = "-".join(tokenize(query)) or "expansion"
+                rows.append(
+                    {
+                        "query": query,
+                        "page": f"https://{domain}/{prefix}/{slug}/",
+                        "clicks_30d": 0.0,
+                        "impressions": 0.0,
+                        "current_pos": 100.0,
+                        "ctr": 0.0,
+                        "window_days": 0,
+                        "source": "three_way_matrix",
+                    }
+                )
+                if len(rows) >= max_rows:
+                    return rows
+    return rows
+
+
+def inspect_coverage_states(
+    site: str,
+    urls: list[str],
+    state_conn: Any = None,
+    max_calls: int = 40,
+    ttl_hours: int = 24 * 7,
+    runner: Any = None,
+) -> dict[str, dict[str, Any]]:
+    """Live GSC URL Inspection enrichment for the highest-value unindexed URLs.
+
+    The 2,000 calls/day/property allowance is free but per-property; the fleet
+    state DB caches every result for 7 days and counts every call against a
+    daily gate, so repeated invocations never re-inspect a fresh URL. Pass
+    ``runner(site, url) -> dict`` to inject a transport (tests); the default
+    shells out to the ``seo url-inspect`` CLI. Failures degrade to a skip —
+    an inspection outage must never kill collection.
+    """
+    import subprocess
+
+    targets: list[str] = []
+    seen: set = set()
+    for url in urls:
+        key = str(url).rstrip("/")
+        if key not in seen:
+            seen.add(key)
+            targets.append(str(url))
+
+    results: dict[str, dict[str, Any]] = {}
+    pending: list[str] = []
+    if state_conn is not None:
+        cached = load_url_inspections(state_conn, targets, max_age_hours=ttl_hours)
+        results.update(cached)
+        pending = [
+            u for u in targets if u.rstrip("/") not in {k.rstrip("/") for k in cached}
+        ]
+    else:
+        pending = targets
+    pending = pending[: max(0, max_calls)]
+    if not pending:
+        return results
+
+    if runner is None:
+        seo_bin = find_seo_binary()
+        if not seo_bin:
+            print("      URL inspection skipped: seo binary not found.")
+            return results
+
+        def runner(site: str, url: str) -> dict[str, Any]:
+            proc = subprocess.run(
+                [seo_bin, "url-inspect", "--site", site, "--url", url, "--json"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if proc.returncode != 0:
+                raise RuntimeError(proc.stderr or proc.stdout or "url-inspect failed")
+            return json.loads(proc.stdout)
+
+    budget_left = (
+        inspection_calls_remaining(state_conn)
+        if state_conn is not None
+        else len(pending)
+    )
+    inspected: dict[str, dict[str, Any]] = {}
+    for url in pending:
+        if budget_left <= 0:
+            print(
+                "      URL inspection daily budget exhausted - remaining URLs "
+                "retried tomorrow (cached results only)."
+            )
+            break
+        try:
+            payload = runner(site, url)
+        except Exception as exc:  # noqa: BLE001 - single URL failure must not kill the batch
+            print(f"      inspection failed for {url} ({exc}).")
+            continue
+        status = (payload.get("inspectionResult") or {}).get("indexStatusResult") or {}
+        inspected[url] = {
+            "coverage_state": status.get("coverageState"),
+            "indexing_state": status.get("indexingState"),
+            "last_crawl_time": status.get("lastCrawlTime"),
+        }
+        budget_left -= 1
+
+    if inspected and state_conn is not None:
+        save_url_inspections(state_conn, site, inspected)
+        record_inspection_calls(state_conn, len(inspected))
+    results.update(inspected)
+    return results
+
+
 def pairwise_matrix_from_sitemap(
     sitemap_urls: list[str],
     family_prefix: str,
@@ -248,6 +396,9 @@ def ensure_candidate_depth(
     min_rows: int = 150,
     matrix_fn: Any = None,
     suggest_fn: Any = None,
+    three_way_fn: Any = None,
+    pending_backlog: int | None = None,
+    exhaustion_threshold: int = 200,
     shipped_pairs: set | None = None,
 ) -> tuple:
     """4-tier waterfall guaranteeing >= min_rows scoreable candidates.
@@ -255,6 +406,12 @@ def ensure_candidate_depth(
     Tier 1: GSC candidates (minus recently shipped (page, query) pairs).
     Tier 2: zero-impression sitemap orphans (already collected upstream).
     Tier 3: combinatorial entity matrix via ``matrix_fn(need)``.
+    Tier 3.5 (exhaustion guard): ``three_way_fn(need)`` semantic modifier
+    expansion — engaged when the pairwise space is exhausted (the matrix
+    returned nothing) OR when the fleet's pending task backlog has burned
+    below ``exhaustion_threshold`` (default 200): high invocation frequency
+    consumes the finite pair catalog, so generation shifts to long-tail
+    modifiers before any paid tier runs.
     Tier 4: DataForSEO suggestions via ``suggest_fn(need)`` (the only
     potentially-costly tier; callers pass None to stay offline).
     Returns (rows, tier_report) — the report names every tier actually used.
@@ -278,9 +435,19 @@ def ensure_candidate_depth(
             active.extend(orphans[: _need()])
             tiers_used.append("sitemap_orphans")
 
+    matrix_yielded = False
     if _need() and matrix_fn is not None:
-        active.extend(matrix_fn(_need())[: _need()])
+        matrix_rows = matrix_fn(_need())[: _need()]
+        active.extend(matrix_rows)
         tiers_used.append("catalog_matrix")
+        matrix_yielded = bool(matrix_rows)
+
+    exhausted = (
+        pending_backlog is not None and pending_backlog < exhaustion_threshold
+    ) or (matrix_fn is not None and not matrix_yielded)
+    if _need() and exhausted and three_way_fn is not None:
+        active.extend(three_way_fn(_need())[: _need()])
+        tiers_used.append("three_way_expansion")
 
     if _need() and suggest_fn is not None:
         active.extend(suggest_fn(_need())[: _need()])
@@ -772,10 +939,23 @@ def main(argv: list[str] | None = None) -> int:
         help="skip the zero-cost sitemap orphan-route detector",
     )
     parser.add_argument(
+        "--no-inspect",
+        action="store_true",
+        help="skip the GSC URL Inspection coverageState enrichment",
+    )
+    parser.add_argument(
+        "--inspect-limit",
+        type=int,
+        default=40,
+        help="max URL Inspection calls per run (free tier: 2,000/day/property; "
+        "results cached 7 days in the state DB)",
+    )
+    parser.add_argument(
         "--state-db",
         default="",
         help="SQLite fleet state DB: 24h GSC snapshot fast path, 30d SERP "
-        "cache layer, and the daily DataForSEO budget gate",
+        "cache layer, daily DataForSEO budget gate, and the URL Inspection "
+        "coverageState cache",
     )
     args = parser.parse_args(argv)
 
@@ -884,6 +1064,41 @@ def main(argv: list[str] | None = None) -> int:
             )
         except Exception as exc:  # noqa: BLE001 - sitemap fetch must never kill collection
             print(f"      orphan detection skipped ({exc}).")
+
+    # URL Inspection coverageState enrichment (2,000 free calls/day/property,
+    # 7-day result cache, daily gate): tells the compiler WHY a route has zero
+    # impressions - "Crawled - currently not indexed" routes need unique data
+    # depth (thin-content gate), "Discovered - currently not indexed" routes
+    # need internal links (discovery gate). Requires --state-db so results are
+    # cached and budget-counted across invocations.
+    if state_conn is not None and not args.no_inspect:
+        inspection_targets = [
+            str(c["page"])
+            for c in candidates
+            if float(c.get("impressions", 0) or 0) == 0.0
+        ][: max(0, args.inspect_limit)]
+        if inspection_targets:
+            try:
+                inspections = inspect_coverage_states(
+                    args.site,
+                    inspection_targets,
+                    state_conn=state_conn,
+                    max_calls=args.inspect_limit,
+                )
+                enriched = 0
+                for cand in candidates:
+                    record = inspections.get(str(cand["page"])) or inspections.get(
+                        str(cand["page"]).rstrip("/")
+                    )
+                    if record and record.get("coverage_state"):
+                        cand["coverage_state"] = record["coverage_state"]
+                        enriched += 1
+                print(
+                    f"      URL inspection: {enriched} zero-impression candidates "
+                    f"enriched with coverageState ({len(inspection_targets)} targeted)."
+                )
+            except Exception as exc:  # noqa: BLE001 - inspection must never kill collection
+                print(f"      URL inspection skipped ({exc}).")
 
     # Domain topical centroid: token profile of our own winning pages' queries.
     domain_counter: Counter = Counter()
@@ -1054,6 +1269,7 @@ def main(argv: list[str] | None = None) -> int:
                 "current_pos": cand["current_pos"],
                 "ctr": cand["ctr"],
                 "source": cand.get("source", "gsc"),
+                "coverage_state": cand.get("coverage_state"),
                 "actions": cand.get("actions"),
                 "serp_meta": serp_item_metadata(
                     {"item_types": item_types_by_query.get(cand["query"], [])},

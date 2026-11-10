@@ -1099,3 +1099,228 @@ def test_refit_from_state_db_trains_and_predicts_on_real_cache_shapes():
     preds = surrogate.predict_serp_features(["widget question 999"])
     assert preds[0]["feature_source"] == "local_surrogate"
     assert 0.0 <= preds[0]["serp_forum_ratio"] <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Round 5: URL Inspection coverageState enrichment + combinatorial exhaustion
+# guard (three-way expansion)
+# ---------------------------------------------------------------------------
+
+
+def test_url_inspection_state_roundtrip_budget_and_ttl():
+    from datetime import datetime, timedelta, timezone
+
+    from fleet_state import (
+        inspection_calls_remaining,
+        load_url_inspections,
+        record_inspection_calls,
+        save_url_inspections,
+    )
+    import tempfile
+
+    from fleet_state import connect_state_db
+
+    conn = connect_state_db(tempfile.mktemp(suffix=".db"))
+    now = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
+    save_url_inspections(
+        conn,
+        "a.com",
+        {
+            "https://a.com/x/": {
+                "coverage_state": "Crawled - currently not indexed",
+                "indexing_state": "CRAWLED",
+                "last_crawl_time": "2026-11-09",
+            }
+        },
+        now=now,
+    )
+    fresh = load_url_inspections(conn, ["https://a.com/x/"], now=now)
+    assert (
+        fresh["https://a.com/x/"]["coverage_state"] == "Crawled - currently not indexed"
+    )
+    stale = load_url_inspections(
+        conn, ["https://a.com/x/"], now=now + timedelta(days=8)
+    )
+    assert stale == {}
+
+    assert record_inspection_calls(conn, 1998, now=now) == 2
+    assert (
+        record_inspection_calls(conn, 5, now=now) == 0
+    )  # capped at the daily allowance
+    assert inspection_calls_remaining(conn, now=now) == 0
+    tomorrow = now + timedelta(days=1)
+    assert inspection_calls_remaining(conn, now=tomorrow) == 2000
+
+
+def test_inspect_coverage_states_enriches_caches_and_skips_failures():
+    import tempfile
+
+    from collect_features import inspect_coverage_states
+
+    from fleet_state import connect_state_db
+
+    conn = connect_state_db(tempfile.mktemp(suffix=".db"))
+    calls = []
+
+    def fake_runner(site, url):
+        calls.append(url)
+        if url.endswith("broken/"):
+            raise RuntimeError("inspection failed")
+        return {
+            "inspectionResult": {
+                "indexStatusResult": {
+                    "coverageState": "Crawled - currently not indexed",
+                    "indexingState": "CRAWLED",
+                    "lastCrawlTime": "2026-11-09T00:00:00Z",
+                }
+            }
+        }
+
+    urls = ["https://a.com/one/", "https://a.com/two/", "https://a.com/broken/"]
+    result = inspect_coverage_states(
+        "a.com", urls, state_conn=conn, runner=fake_runner, max_calls=10
+    )
+    assert (
+        result["https://a.com/one/"]["coverage_state"]
+        == "Crawled - currently not indexed"
+    )
+    assert "https://a.com/broken/" not in result
+    assert len(calls) == 3
+
+    # Second invocation: everything served from the 7-day cache, zero new calls.
+    cached = inspect_coverage_states(
+        "a.com", urls, state_conn=conn, runner=fake_runner, max_calls=10
+    )
+    assert (
+        cached["https://a.com/two/"]["coverage_state"]
+        == "Crawled - currently not indexed"
+    )
+    assert (
+        len(calls) == 4
+    )  # successes cached; the failed URL is retried, never poisoned
+
+
+def test_three_way_matrix_expands_entities_with_modifiers():
+    from collect_features import three_way_matrix_from_sitemap
+
+    sitemap = [
+        "https://smsriver.com/receive-sms/us/",
+        "https://smsriver.com/receive-sms/gb/",
+        "https://smsriver.com/receive-sms/fr/",
+    ]
+    rows = three_way_matrix_from_sitemap(
+        sitemap,
+        family_prefix="receive-sms",
+        modifiers=["free", "without verification"],
+        templates=["receive sms online in {entity} {modifier}"],
+        max_rows=5,
+    )
+    assert len(rows) == 5
+    assert rows[0]["source"] == "three_way_matrix"
+    assert rows[0]["current_pos"] == 100.0
+    assert "{entity}" not in rows[0]["query"] and "{modifier}" not in rows[0]["query"]
+
+
+def test_ensure_candidate_depth_engages_three_way_on_exhaustion():
+    from collect_features import ensure_candidate_depth
+
+    gsc = [
+        {
+            "query": "q1",
+            "page": "https://a.com/one/",
+            "impressions": 10.0,
+            "current_pos": 8.0,
+            "clicks_30d": 0.0,
+            "ctr": 0.0,
+            "source": "gsc",
+        }
+    ]
+    three_way_fn = lambda need: [  # noqa: E731
+        {
+            "query": f"tw {i}",
+            "page": f"https://a.com/tw-{i}/",
+            "impressions": 0.0,
+            "current_pos": 100.0,
+            "clicks_30d": 0.0,
+            "ctr": 0.0,
+            "source": "three_way_matrix",
+        }
+        for i in range(need)
+    ]
+
+    # (a) exhausted pairwise space (matrix yields nothing) -> three-way engages
+    rows, report = ensure_candidate_depth(
+        "a.com",
+        gsc,
+        ["https://a.com/one/"],
+        min_rows=3,
+        matrix_fn=lambda need: [],
+        three_way_fn=three_way_fn,
+    )
+    assert "three_way_expansion" in report["tiers_used"]
+    assert len(rows) >= 3
+
+    # (b) pending backlog below the exhaustion threshold -> three-way engages
+    #     even when the pairwise matrix still returned rows
+    rows, report = ensure_candidate_depth(
+        "a.com",
+        gsc,
+        ["https://a.com/one/"],
+        min_rows=4,
+        matrix_fn=lambda need: [
+            {
+                "query": "pair",
+                "page": "https://a.com/pair/",
+                "impressions": 0.0,
+                "current_pos": 100.0,
+                "clicks_30d": 0.0,
+                "ctr": 0.0,
+            }
+        ],
+        three_way_fn=three_way_fn,
+        pending_backlog=50,
+    )
+    assert "three_way_expansion" in report["tiers_used"]
+
+    # (c) healthy backlog and matrix delivering rows -> three-way stays idle
+    rows, report = ensure_candidate_depth(
+        "a.com",
+        gsc,
+        ["https://a.com/one/"],
+        min_rows=3,
+        matrix_fn=lambda need: [
+            {
+                "query": f"pair {i}",
+                "page": f"https://a.com/pair-{i}/",
+                "impressions": 0.0,
+                "current_pos": 100.0,
+                "clicks_30d": 0.0,
+                "ctr": 0.0,
+            }
+            for i in range(need)
+        ],
+        three_way_fn=three_way_fn,
+        pending_backlog=500,
+    )
+    assert "three_way_expansion" not in report["tiers_used"]
+
+
+def test_compiler_coverage_state_triggers():
+    from ltr_ranker import compile_wave_backlog
+
+    crawled = _scored("thin page", "https://a.com/thin/", 8.0, 10.0, 1.0, 0.9, 6.0)
+    crawled["coverage_state"] = "Crawled - currently not indexed"
+    discovered = _scored(
+        "hidden page", "https://a.com/hidden/", 95.0, 0.0, 0.0, 0.9, 1.0
+    )
+    discovered["coverage_state"] = "Discovered - currently not indexed"
+    tasks = compile_wave_backlog(
+        [crawled, discovered], shipped_ledger=set(), target_wave_size=10
+    )
+    codes = {t["action_code"] for t in tasks}
+    assert (
+        "ADD_D1_SPEC_COMPARISON_TABLE" in codes
+    )  # crawled-not-indexed: thin-content gate
+    assert (
+        "RESCUE_ORPHAN_ROUTE_INLINKS" in codes
+    )  # discovered-not-indexed: discovery gate

@@ -845,11 +845,16 @@ def compile_wave_backlog(
             lambda r: (
                 str(r.get("source", "")) == "orphan_route"
                 or bool(r.get("is_sitemap_orphan"))
+                or str(r.get("coverage_state", ""))
+                == "Discovered - currently not indexed"
             ),
         ),
         (
             "ADD_D1_SPEC_COMPARISON_TABLE",
-            lambda r: bool((r.get("dom_gaps") or {}).get("missing_data_table")),
+            lambda r: (
+                bool((r.get("dom_gaps") or {}).get("missing_data_table"))
+                or str(r.get("coverage_state", "")) == "Crawled - currently not indexed"
+            ),
         ),
         (
             "INJECT_PAA_SEMANTIC_SECTIONS",
