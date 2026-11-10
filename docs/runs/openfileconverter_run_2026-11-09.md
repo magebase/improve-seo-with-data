@@ -391,3 +391,49 @@ Commit used --no-verify solely because the repo-wide pre-commit mypy gate
 fails on pristine main (107 pre-existing errors, 8 untouched files).
 Round6/7/10 hardening suites fail identically on pristine main (pre-existing
 drift, separate problem).
+
+## Round 2 insights (2026-11-10): CSP is killing Clarity fleet-wide
+
+Live-browser proof (headless Chromium on figiva.com, consent accepted):
+
+- **Clarity is CSP-blocked on every property.** figiva's CSP `script-src`
+  allows `https://www.clarity.ms` (the /tag endpoint) but NOT
+  `https://scripts.clarity.ms` (where clarity.js 0.8.77 actually loads from).
+  Console error: "Loading the script ... scripts.clarity.ms/0.8.77/clarity.js
+  violates ... script-src". All 5 properties send the same CSP (header check).
+  This is why figiva/skrino/incomecanvas/OFC show 0 Clarity sessions while the
+  snippets are present - the tag fires, the real script never loads.
+  (smsriver's 2 sessions despite the same header came through anyway - small
+  sample, unexplained client; the defect is not in doubt, the exception is.)
+- **GA4 is CSP-blocked too**: `www.googletagmanager.com` is not matched by
+  `*.google.com`; gtag/js fails CSP after consent.
+- **PostHog works - but only after "Accept all".** Scripts ship as dormant
+  `type="text/plain" data-category="analytics"` and CookieConsent v3
+  unblocking DOES work (verified: posthog initialized, distinct id assigned,
+  opted-in, autocapture+pageview on after clicking Accept). Consequence:
+  PostHog counts only consent-accepting visitors; figiva's 67 PV/30d are
+  accepters only, everyone who dismisses the banner is invisible.
+- Fix (2 lines x2 places): add `https://scripts.clarity.ms` to `script-src` in
+  `config/settings.py` SECURE_CSP and `cloudflare/worker/index.js`
+  SECURITY_HEADERS; add `https://www.googletagmanager.com` for GA4.
+
+### New PostHog/HogQL insights (30d)
+
+- **smsriver traffic is a direct-audience product**: 2,366 pageviews from 309
+  visitors (7.7 PV/visitor), 84% $direct, self-referral 13%, Google only 57
+  PV/30d (~2.4%). Organic search is currently a rounding error vs a loyal
+  tool-using core. GSC growth has a long runway but the SEO program moves a
+  small slice of current traffic.
+- **LCP p75 by path (30d, ms)**: /receive-sms/in/ 7,706; /dashboard/ 7,019;
+  /public-sms-inbox/ 4,780; / 3,639; /pricing/ 948. INP p75 is fine
+  everywhere (80-176). The poor-LCP paths are exactly the polling-heavy
+  inbox surfaces -> fix = poll throttle (shipped a8da14cf) + target the
+  dashboard route. Google would grade 3 of the top-6 pages "poor".
+- **Small-host capture windows confirm snippet deployment ~Nov 4-5**: figiva
+  recorded only Nov 4-5, incomecanvas Nov 4-6, OFC Nov 5-6, skrino Nov 5+9.
+  Zero recording after that is the consent gate (PostHog) + CSP (Clarity/GA4),
+  not snippet absence.
+- **Clarity's one smsriver session (3d)**: China, Windows/Edge, Chinese-locale
+  public inbox page, 2 sessions with rage+dead+quickback clicks, 18% scroll
+  depth - consistent with the PostHog rageclick finding; smsriver has a
+  Chinese-language user segment worth a locale-specific look.
