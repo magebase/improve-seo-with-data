@@ -499,6 +499,17 @@ CTR_HOOK_MIN_IMPRESSIONS = 30.0
 SPIN_OUT_MAX_POS = 20.0
 SPIN_OUT_MIN_FORUM_RATIO = 0.4
 
+# Prescription set for ORPHAN routes: live sitemap URLs with zero GSC
+# impressions. These pages ALREADY EXIST in code, so LAUNCH_PSEO_ROUTE would
+# be wrong — they need internal-link equity and route depth, not a new route.
+ORPHAN_ACTIONS = ["BOOST_INTERNAL_LINKS", "EXPAND_THIN_ROUTE"]
+
+# Cannibalization: queries carried by >= CANNIBAL_MIN_URLS distinct pages ALL
+# ranking worse than CANNIBAL_MAX_POS (a page inside the Top 10 is a winner —
+# Guardrail 2 protects it from consolidation).
+CANNIBAL_MIN_URLS = 2
+CANNIBAL_MAX_POS = 10.0
+
 
 def prescribe_all_actions(
     current_pos: float,
@@ -669,6 +680,64 @@ def filter_cooldown(
             row["prescribed_action"] = fresh[0]
             kept.append(row)
     return kept, skipped
+
+
+def detect_cannibalization(
+    scored_rows: list[dict[str, Any]],
+    *,
+    min_urls: int = CANNIBAL_MIN_URLS,
+    max_pos: float = CANNIBAL_MAX_POS,
+) -> tuple:
+    """Flags queries split across >= min_urls distinct pages, all beyond max_pos.
+
+    Both (or all) competing URLs must sit worse than ``max_pos`` — a page
+    inside the Top 10 is a winning owner protected by Guardrail 2. Returns
+    (rows, consolidation_tasks): each affected keeper row gains
+    ``cannibalized_pages`` + a ``CONSOLIDATE_CANNIBALIZED_URLS`` action; each
+    task carries the full competing-URL set with 301/canonical/title-split
+    remedy hints for the implementing agent.
+    """
+    by_query: dict[str, list[dict[str, Any]]] = {}
+    for row in scored_rows:
+        by_query.setdefault(str(row.get("query", "")).strip().lower(), []).append(row)
+
+    tasks: list[dict[str, Any]] = []
+    for query, group in by_query.items():
+        pages = {str(r.get("page", "")) for r in group}
+        if len(pages) < min_urls:
+            continue
+        positions = [float(r.get("current_pos", 100) or 100) for r in group]
+        if min(positions) <= max_pos:
+            continue  # someone already owns a Top-10 slot; leave it alone
+        sorted_pages = sorted(
+            group, key=lambda r: float(r.get("current_pos", 100) or 100)
+        )
+        primary = sorted_pages[0]
+        competitors = [str(r.get("page", "")) for r in sorted_pages[1:]]
+        tasks.append(
+            {
+                "query": primary.get("query"),
+                "page": primary.get("page"),
+                "action": "CONSOLIDATE_CANNIBALIZED_URLS",
+                "pages": [str(primary.get("page", ""))] + competitors,
+                "positions": {
+                    str(r.get("page", "")): float(r.get("current_pos", 100) or 100)
+                    for r in group
+                },
+                "remedies": [
+                    "301 the weakest duplicate into the strongest page",
+                    "or differentiate title/h1 modifiers onto separate sub-intents",
+                    "or set rel=canonical to the strongest page",
+                ],
+            }
+        )
+        for row in group:
+            others = competitors if row is primary else [str(primary.get("page", ""))]
+            row.setdefault("cannibalized_pages", others)
+            if "CONSOLIDATE_CANNIBALIZED_URLS" not in row["actions"]:
+                row["actions"].append("CONSOLIDATE_CANNIBALIZED_URLS")
+
+    return scored_rows, tasks
 
 
 def slice_per_domain(

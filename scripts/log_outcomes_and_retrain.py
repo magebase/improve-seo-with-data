@@ -70,6 +70,74 @@ POSITION_DROP_THRESHOLD = 4.0
 IMPRESSION_DROP_SHARE = 0.30
 PROTECTED_POSITION_BAND = (4.0, 15.0)
 
+# coverageState -> automated fix family (URL Inspection index.inspect export).
+# 'Discovered': Google knows the URL (sitemap) but lacks crawl priority ->
+# inject it into the homepage's dynamic trending/recent internal-link block.
+# 'Crawled': Googlebot fetched the HTML and rejected it as too thin/similar ->
+# add DISTINCT data (D1 rows/benchmarks), not title tweaks.
+# Canonical mismatch: Google folds the route into another page (shingle
+# similarity) -> DOM-branch the template or prune the duplicate route.
+INSPECTION_COVERAGE_TASKS = {
+    "Discovered - currently not indexed": "BOOST_INTERNAL_LINKS",
+    "Crawled - currently not indexed": "INJECT_UNIQUE_DATA_TABLE",
+    "Duplicate, Google chose different canonical than user": "PRUNE_DUPLICATE_ROUTE",
+}
+
+
+def recrawl_from_inspection(
+    page: str,
+    inspection: dict[str, dict[str, Any]],
+    deployed_at: datetime,
+    *,
+    min_days_after: int = MIN_GRADE_DAYS_AFTER_DEPLOY,
+) -> bool:
+    """URL Inspection evidence: lastCrawlTime > deployed_at + min_days_after."""
+    record = inspection.get(page) or {}
+    raw = record.get("lastCrawlTime")
+    if not raw:
+        return False
+    if isinstance(raw, (int, float)):
+        crawled = datetime.fromtimestamp(float(raw) / 1000.0, tz=timezone.utc)
+    else:
+        try:
+            crawled = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            return False
+    if crawled.tzinfo is None:
+        crawled = crawled.replace(tzinfo=timezone.utc)
+    if deployed_at.tzinfo is None:
+        deployed_at = deployed_at.replace(tzinfo=timezone.utc)
+    return crawled > deployed_at + timedelta(days=min_days_after)
+
+
+def triage_inspection_states(
+    inspection: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Maps indexStatusResult.coverageState onto executable fix tasks.
+
+    Consumed for pages the recrawl-lag guard kept pending: the inspection
+    export tells us WHY Google has not indexed them yet, which selects the
+    automated fix family (see INSPECTION_COVERAGE_TASKS). Canonical-mismatch
+    records also surface googleCanonical vs userCanonical for the pruning
+    agent.
+    """
+    tasks: list[dict[str, Any]] = []
+    for page, record in inspection.items():
+        coverage = str(record.get("coverageState", ""))
+        action = INSPECTION_COVERAGE_TASKS.get(coverage)
+        if not action:
+            continue
+        task = {"page": page, "action": action, "coverage_state": coverage}
+        if (
+            record.get("googleCanonical")
+            and record.get("userCanonical")
+            and record.get("googleCanonical") != record.get("userCanonical")
+        ):
+            task["google_canonical"] = record["googleCanonical"]
+            task["user_canonical"] = record["userCanonical"]
+        tasks.append(task)
+    return tasks
+
 
 def has_recrawl_evidence(
     page: str, post_deploy_outcomes: dict[str, dict[str, Any]]
@@ -136,9 +204,7 @@ def detect_regressions(
     return regressions
 
 
-def load_outcomes(
-    path: str | None, site: str | None
-) -> dict[str, dict[str, Any]]:
+def load_outcomes(path: str | None, site: str | None) -> dict[str, dict[str, Any]]:
     """Loads fresh-window GSC outcomes from a file or the seo binary."""
     if path:
         with open(path, encoding="utf-8") as fh:
@@ -288,6 +354,12 @@ def main(argv: list[str] | None = None) -> int:
         default="data/shipped_actions.jsonl",
         help="cooldown ledger appended with graded shipped tasks",
     )
+    parser.add_argument(
+        "--inspection",
+        default="",
+        help="URL Inspection export JSON (url -> {coverageState, lastCrawlTime, "
+        "googleCanonical, userCanonical}); upgrades recrawl evidence and triages pending pages",
+    )
     args = parser.parse_args(argv)
 
     with open(args.executed, encoding="utf-8") as fh:
@@ -307,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---------------------------------------------------- recrawl-lag guard
     pending: list[dict[str, Any]] = []
+    pending_triage: list[dict[str, Any]] = []
     graded = queue
     post_window: dict[str, dict[str, Any]] = {}
     if args.require_recrawl:
@@ -342,17 +415,38 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 post_window = {}
             post_pages = _pages_with_impressions(post_window)
+            inspection: dict[str, dict[str, Any]] = {}
+            if args.inspection:
+                with open(args.inspection, encoding="utf-8") as fh:
+                    inspection = json.load(fh)
             graded, pending = [], []
             for entry in queue:
                 page = str(entry.get("page", ""))
-                if has_recrawl_evidence(page, post_pages):
+                evidence = has_recrawl_evidence(page, post_pages) or (
+                    recrawl_from_inspection(page, inspection, deployed)
+                    if inspection
+                    else False
+                )
+                if evidence:
                     graded.append(entry)
                 else:
                     pending.append(entry)
             print(
                 f"Recrawl evidence: {len(graded)} graded, {len(pending)} pending "
-                "(no post-deploy impressions yet -> kept out of training)."
+                "(no post-deploy impressions and no inspection crawl past the "
+                "7-day rule -> kept out of training)."
             )
+            if pending and inspection:
+                pending_triage = triage_inspection_states(inspection)
+                pending_pages = {str(e.get("page", "")) for e in pending}
+                pending_triage = [
+                    t for t in pending_triage if t["page"] in pending_pages
+                ]
+                if pending_triage:
+                    print(
+                        f"coverageState triage: {len(pending_triage)} automated fix "
+                        "task(s) for pending pages (written with pending_verification.json)."
+                    )
 
     # ------------------------------------------- negative-delta auto-rollback
     regressions: list[dict[str, Any]] = []
@@ -395,7 +489,7 @@ def main(argv: list[str] | None = None) -> int:
             os.path.dirname("data/pending_verification.json") or ".", exist_ok=True
         )
         with open("data/pending_verification.json", "w", encoding="utf-8") as fh:
-            json.dump({"pending": pending}, fh, indent=2)
+            json.dump({"pending": pending, "triage": pending_triage}, fh, indent=2)
         print(
             f"Pending verification (not graded): {len(pending)} -> data/pending_verification.json"
         )

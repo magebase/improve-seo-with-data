@@ -41,6 +41,7 @@ from ltr_ranker import (
     EXPLORE_SLOTS,
     FEATURES,
     MIN_TRAINABLE_ROWS,
+    detect_cannibalization,
     filter_cooldown,
     heuristic_base_score,
     load_bundle,
@@ -138,16 +139,19 @@ def score_rows(rows: list[dict[str, Any]], models_dir: str) -> dict[str, Any]:
         )
         # Multi-prescription explosion: one row can carry several atomic
         # bottlenecks; each becomes its own TDD work item (primary first).
-        row["actions"] = prescribe_all_actions(
-            current_pos=feats["current_pos"],
-            title_match_rate=feats["title_exact_match_rate"],
-            hub_links_shap=shap["parent_hub_internal_links"],
-            centroid_sim=feats["domain_centroid_sim"],
-            forum_ratio=feats["serp_forum_ratio"],
-            impressions=float(row.get("impressions", 0) or 0),
-            clicks=float(row.get("clicks_30d", 0) or 0),
-            shap=shap,
-        )
+        # Rows arriving with an explicit prescription set (orphan routes) keep
+        # it — their routes exist, so the generic pos=100 explosion is wrong.
+        if not row.get("actions"):
+            row["actions"] = prescribe_all_actions(
+                current_pos=feats["current_pos"],
+                title_match_rate=feats["title_exact_match_rate"],
+                hub_links_shap=shap["parent_hub_internal_links"],
+                centroid_sim=feats["domain_centroid_sim"],
+                forum_ratio=feats["serp_forum_ratio"],
+                impressions=float(row.get("impressions", 0) or 0),
+                clicks=float(row.get("clicks_30d", 0) or 0),
+                shap=shap,
+            )
     return {"mode": "trained_model", "label_mode": label_mode, "rows": rows}
 
 
@@ -196,6 +200,13 @@ def main(argv: list[str] | None = None) -> int:
     result = score_rows(rows, args.models_dir)
     scored = result["rows"]
 
+    # Cannibalization detector: BEFORE the per-query collapse (which discards
+    # the competitor rows), flag queries carried by >= 2 distinct pages all
+    # ranking beyond position 10. The keeper row gains the
+    # CONSOLIDATE_CANNIBALIZED_URLS action; full competing-URL sets are
+    # emitted alongside the queue for the implementing agent.
+    scored, consolidation_tasks = detect_cannibalization(scored)
+
     # One action per query: cannibalised (query, page) pairs collapse onto the
     # best-scoring row (the URL-ownership model allows a single owner per task).
     by_query: dict[str, dict[str, Any]] = {}
@@ -204,6 +215,13 @@ def main(argv: list[str] | None = None) -> int:
         if keeper is None or row.get("rank_score", 0.0) > keeper.get("rank_score", 0.0):
             by_query[row["query"]] = row
     scored = list(by_query.values())
+
+    # Orphan-route rows already prescribe BOOST_INTERNAL_LINKS /
+    # EXPAND_THIN_ROUTE (the routes exist); preserve that override instead of
+    # letting the generic pos=100 -> LAUNCH_PSEO_ROUTE mapping win.
+    for row in scored:
+        if row.get("source") == "orphan_route" and row.get("actions"):
+            row["prescribed_action"] = row["actions"][0]
 
     # Cooldown: drop (page, action) pairs already shipped recently so back-to-
     # back runs surface the NEXT wave of unoptimized pages instead of the
@@ -248,10 +266,19 @@ def main(argv: list[str] | None = None) -> int:
                 "site": payload.get("site"),
                 "scoring_mode": result["mode"],
                 "queue": queue,
+                "consolidation": consolidation_tasks,
             },
             fh,
             indent=2,
         )
+    if consolidation_tasks:
+        print(
+            f"\nCannibalization: {len(consolidation_tasks)} CONSOLIDATE_CANNIBALIZED_URLS task(s):"
+        )
+        for task in consolidation_tasks:
+            print(
+                f"  {task['query'][:50]!r}: {len(task['pages'])} competing URLs {task['positions']}"
+            )
 
     print(f"\nAction queue ({result['mode']}, {len(queue)} tasks) -> {args.output}")
     print(f"{'slot':<9} {'action':<32} {'score':>8} {'exp30d':>8}  query")

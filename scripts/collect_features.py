@@ -60,6 +60,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dataforseo_client import DataForSEOClient, resolve_credentials
 from gsc_analyzer import find_seo_binary, run_seo_report
+from ltr_ranker import ORPHAN_ACTIONS
 
 STOP_TOKENS = {
     "the",
@@ -157,6 +158,108 @@ def synthesize_unseen_rows(
             }
         )
     return rows
+
+
+SITEMAP_URL_TIMEOUT = 30.0
+
+
+def fetch_sitemap_urls(site: str, timeout: float = SITEMAP_URL_TIMEOUT) -> list[str]:
+    """Fetches the live /sitemap.xml <loc> URLs (one index level supported).
+
+    Zero-cost candidate source: a sitemap URL Google has NEVER served
+    (0 GSC impressions) is an orphaned/unindexed route the codebase already
+    deployed — the cheapest internal-link and depth-expansion targets there
+    are, before any DataForSEO spend.
+    """
+    import re
+    import urllib.request
+
+    base = site.replace("sc-domain:", "").strip().lower()
+    url = f"https://{base}/sitemap.xml"
+    req = urllib.request.Request(url, headers={"User-Agent": "seo-growth-skill/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = resp.read().decode("utf-8", errors="replace")
+    locs = re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", body)
+    if "<sitemapindex" in body:
+        nested: list[str] = []
+        for child in locs[:20]:  # bound: sitemap indexes rarely exceed this
+            try:
+                child_req = urllib.request.Request(
+                    child, headers={"User-Agent": "seo-growth-skill/1.0"}
+                )
+                with urllib.request.urlopen(child_req, timeout=timeout) as child_resp:
+                    nested.extend(
+                        re.findall(
+                            r"<loc>\s*([^<\s]+)\s*</loc>",
+                            child_resp.read().decode("utf-8", errors="replace"),
+                        )
+                    )
+            except Exception:  # noqa: BLE001 - one dead child sitemap must not kill the sweep
+                continue
+        locs.extend(nested)
+    return [loc.rstrip("/") + "/" for loc in locs if loc.startswith("http")]
+
+
+def synthesize_orphan_rows(
+    sitemap_urls: list[str],
+    gsc_pages: set,
+    domain: str,
+) -> list[dict[str, Any]]:
+    """Left-joins sitemap URLs against GSC pages; injects zero-impression orphans.
+
+    Orphan rows carry current_pos=100 and zero impressions (honest: no demand
+    signal yet), a slug-synthesized demand proxy query, and the ORPHAN_ACTIONS
+    prescription set (the route already exists — it needs links, not launch).
+    """
+    domain = domain.replace("sc-domain:", "").strip().lower()
+    rows: list[dict[str, Any]] = []
+    seen: set = set()
+    for url in sitemap_urls:
+        url = url.strip()
+        if not url or url in seen or url in gsc_pages:
+            continue
+        seen.add(url)
+        path = url.split("://", 1)[-1].split("?", 1)[0].rstrip("/")
+        slug = path.rsplit("/", 1)[-1] if "/" in path else path
+        query = " ".join(tokenize(slug)) or slug
+        rows.append(
+            {
+                "query": query,
+                "page": url,
+                "clicks_30d": 0.0,
+                "impressions": 0.0,
+                "current_pos": 100.0,
+                "ctr": 0.0,
+                "window_days": 0,
+                "source": "orphan_route",
+                "actions": list(ORPHAN_ACTIONS),
+                "prescribed_action": ORPHAN_ACTIONS[0],
+            }
+        )
+    return rows
+
+
+def serp_item_metadata(
+    result_block: dict[str, Any],
+    serp_items: list[dict[str, Any]],
+    query: str,
+) -> dict[str, Any]:
+    """Persists DataForSEO ``item_types`` as zero-cost row metadata.
+
+    Every SERP response carries result[0]['item_types'] — the full SERP
+    feature list ('organic', 'ai_overview', 'people_also_ask',
+    'discussions_and_forums', 'video', ...). Store the flags OUTSIDE the
+    canonical 8-feature vector (the vector's order is load-bearing; changing
+    it invalidates trained bundles) so prescriptions and triage can consume
+    them without retraining.
+    """
+    types = [str(t) for t in (result_block.get("item_types") or [])]
+    return {
+        "serp_item_types": types,
+        "has_ai_overview": "ai_overview" in types,
+        "has_forums": "discussions_and_forums" in types,
+        "has_people_also_ask": "people_also_ask" in types,
+    }
 
 
 def pull_gsc_window(site: str, start: str, end: str) -> list[dict[str, Any]]:
@@ -473,6 +576,11 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help="one-time (query, page) GSC backfill window in days (e.g. 365) to fast-forward clicked-row graduation",
     )
+    parser.add_argument(
+        "--no-orphans",
+        action="store_true",
+        help="skip the zero-cost sitemap orphan-route detector",
+    )
     args = parser.parse_args(argv)
 
     if args.gsc_json:
@@ -548,6 +656,23 @@ def main(argv: list[str] | None = None) -> int:
     ]
     print(f"      {len(candidates)} unique (query, page) candidates retained.")
 
+    # Orphan route detector: live sitemap URLs Google has never served (0 GSC
+    # impressions). Zero-cost candidates for BOOST_INTERNAL_LINKS /
+    # EXPAND_THIN_ROUTE work on routes the codebase already deployed.
+    if not args.no_orphans:
+        try:
+            sitemap_urls = fetch_sitemap_urls(args.site)
+            gsc_pages = {str(c["page"]).rstrip("/") + "/" for c in candidates} | {
+                str(c["page"]).rstrip("/") for c in candidates
+            }
+            orphans = synthesize_orphan_rows(sitemap_urls, gsc_pages, domain=args.site)
+            candidates.extend(orphans)
+            print(
+                f"      orphan routes: {len(orphans)} zero-impression sitemap URLs injected."
+            )
+        except Exception as exc:  # noqa: BLE001 - sitemap fetch must never kill collection
+            print(f"      orphan detection skipped ({exc}).")
+
     # Domain topical centroid: token profile of our own winning pages' queries.
     domain_counter: Counter = Counter()
     for cand in candidates:
@@ -567,12 +692,18 @@ def main(argv: list[str] | None = None) -> int:
 
     hub_links = load_hub_links(args.hub_links)
     serp_by_query: dict[str, list[dict[str, Any]]] = {}
+    item_types_by_query: dict[str, list[str]] = {}
     if client:
         serp_cache_path = os.path.abspath(".serp_cache.json")
-        cache: dict[str, list[dict[str, Any]]] = {}
+        # Cache values are {"items": [...], "item_types": [...]} since the
+        # item_types persistence upgrade; normalize legacy plain-list entries.
+        cache: dict[str, Any] = {}
         if os.path.exists(serp_cache_path):
             with open(serp_cache_path, encoding="utf-8") as fh:
                 cache = json.load(fh)
+        for keyword, value in list(cache.items()):
+            if isinstance(value, list):
+                cache[keyword] = {"items": value, "item_types": []}
         missing = [c["query"] for c in candidates if c["query"] not in cache]
         print(
             f"[2/3] DataForSEO: {len(cache)} cached, {len(missing)} to fetch (budget cap ${args.max_serp_cost:.2f}) ..."
@@ -600,13 +731,25 @@ def main(argv: list[str] | None = None) -> int:
                 keyword = str(entry.get("keyword", ""))
                 items = entry.get("items") or []
                 if keyword in affordable and items and keyword not in cache:
-                    cache[keyword] = items
+                    # Persist result-level item_types (SERP feature flags come
+                    # free with every response; no extra parser cost).
+                    cache[keyword] = {
+                        "items": items,
+                        "item_types": entry.get("item_types") or [],
+                    }
             got = sum(1 for q in affordable if q in cache)
             print(f"      {got}/{len(affordable)} fetched ...")
         with open(serp_cache_path, "w", encoding="utf-8") as fh:
             json.dump(cache, fh)
         serp_by_query = {
-            c["query"]: cache[c["query"]] for c in candidates if c["query"] in cache
+            c["query"]: (cache[c["query"]].get("items") or cache[c["query"]])
+            for c in candidates
+            if c["query"] in cache
+        }
+        item_types_by_query = {
+            c["query"]: (cache[c["query"]].get("item_types") or [])
+            for c in candidates
+            if c["query"] in cache and isinstance(cache[c["query"]], dict)
         }
         print(
             f"      SERP features available for {len(serp_by_query)}/{len(candidates)} candidates."
@@ -656,6 +799,13 @@ def main(argv: list[str] | None = None) -> int:
                 "impressions": cand["impressions"],
                 "current_pos": cand["current_pos"],
                 "ctr": cand["ctr"],
+                "source": cand.get("source", "gsc"),
+                "actions": cand.get("actions"),
+                "serp_meta": serp_item_metadata(
+                    {"item_types": item_types_by_query.get(cand["query"], [])},
+                    serp_items,
+                    cand["query"],
+                ),
                 "features": {
                     "domain_centroid_sim": round(
                         cosine(tokenize(cand["query"]), domain_counter), 6
