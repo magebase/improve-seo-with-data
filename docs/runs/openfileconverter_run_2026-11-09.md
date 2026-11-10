@@ -504,3 +504,32 @@ Fresh `/improve-seo-with-data openfileconverter.com` invocation. Findings:
 - www->apex 301, llms.txt decode, robots.txt: all healthy on OFC.
 - Rebuild claimed in TASKS.md; worker running test-green loop in
   /tmp/sf-agent-fleet-csp. Next: commit, CAS main, redeploy, verify live.
+
+## OFC rebuild shipped: routes, sitemap, CSP, un-gating all live (2026-11-10)
+
+Rebuild (worker + my integration) committed to local main in three commits:
+- `99c6206d` Restore OFC SEO surface reverted by checkpoint 0153f395
+  (FORMAT_PAIR_CATALOG 152 slugs incl. 16 GSC pairs; per-pair SERP
+  calibration; /screen/37/ -> /studio/gerber/ 301; /compare/<slug>/ routes;
+  sitemap pairs+compare (207 URLs); studio outbound links; widgets; cotton
+  footer/nav; quota session-identity contract; zero-drift test alignment).
+- `9596c46b` Graft ApexCanonicalMiddleware from origin/main (restored OFC
+  settings referenced it; Worker 500ed on boot without it).
+- `13c3a4d6` Restore fleet CSP allowances + OBSERVABILITY_CONSENT_GATED=False
+  inside OFC-local settings (the restored module predated d02e989f/db067e14).
+
+Evidence: gate files 95/95; OFC unit suite 375 passed, ZERO new failures vs
+pristine c35f9337 baseline, 122 baseline failures fixed; round4 + topical_mesh
+collect again; clarity-fleet conformance 6/6; ruff + mypy clean on changed
+files. Deploys: worker version e2da63fe live. Verified live:
+/convert/{ply-to-step,gbr-to-dxf,stl-to-step,3mf-to-mfl..}/ 200s (all
+previously 404), /screen/37/ 301s to /studio/gerber/, www->apex 301s, sitemap
+207 URLs incl. 11 /compare/ routes, CSP carries scripts.clarity.ms +
+googletagmanager + google-analytics, Clarity z77gyk5y1e + PostHog + gtag
+render UNGATED.
+
+Remaining known-broken (pre-existing main drift, untouched): 35 OFC unit
+failures that also fail on pristine baseline (round3/pwa/offerwall/
+edge_cache/indexnow/wave9-10 files), smsriver-origin drift per prior notes.
+Deploy-war hazard unchanged: local main is still ~ahead/behind vs origin/main;
+any concurrent window deploying origin/main re-stomps all of this.
