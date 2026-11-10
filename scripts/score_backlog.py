@@ -55,6 +55,7 @@ from ltr_ranker import (
     slice_per_domain,
     split_action_queue,
     train_seo_ranker,
+    derive_sibling_counts,
 )
 
 
@@ -286,6 +287,10 @@ def main(argv: list[str] | None = None) -> int:
             scored,
             shipped_ledger=cooled_keys,
             target_wave_size=args.compile_wave,
+            # Catalog families are derived from the rows themselves so a
+            # top-ranked child route propagates its fix across every sibling
+            # without a hand-maintained prefix map.
+            sibling_counts=derive_sibling_counts(scored),
         )
         print(
             f"Compiled {len(wave_tasks)} atomic wave task(s) "

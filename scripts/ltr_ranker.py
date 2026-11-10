@@ -765,6 +765,30 @@ def slice_per_domain(
     return sliced
 
 
+def derive_sibling_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Derives catalog-family sibling counts from the candidate rows themselves.
+
+    Groups distinct page URLs by their first path segment (e.g. /receive-sms/)
+    so the wave compiler can attach catalog_propagation hints without the
+    caller hand-maintaining a prefix map. Single-page prefixes (hub pages,
+    one-off routes) are excluded - there is nothing to propagate across.
+    """
+    buckets: dict[str, set] = {}
+    for row in rows:
+        page = str(row.get("page", ""))
+        path = urlparse(page).path if page.startswith("http") else "/" + page.strip("/")
+        segments = [seg for seg in path.split("/") if seg]
+        if len(segments) < 2:
+            continue  # root-level pages have no programmatic family
+        prefix = f"/{segments[0]}/"
+        buckets.setdefault(prefix, set()).add(page.rstrip("/"))
+    return {
+        prefix: len(pages)
+        for prefix, pages in sorted(buckets.items())
+        if len(pages) >= 2
+    }
+
+
 def compile_wave_backlog(
     rows: list[dict[str, Any]],
     shipped_ledger: set | None = None,
@@ -816,6 +840,29 @@ def compile_wave_backlog(
             "CREATE_PROGRAMMATIC_ROUTE",
             lambda r: float(r.get("current_pos", 0.0) or 0.0) >= 90.0,
         ),
+        (
+            "RESCUE_ORPHAN_ROUTE_INLINKS",
+            lambda r: (
+                str(r.get("source", "")) == "orphan_route"
+                or bool(r.get("is_sitemap_orphan"))
+            ),
+        ),
+        (
+            "ADD_D1_SPEC_COMPARISON_TABLE",
+            lambda r: bool((r.get("dom_gaps") or {}).get("missing_data_table")),
+        ),
+        (
+            "INJECT_PAA_SEMANTIC_SECTIONS",
+            lambda r: bool((r.get("dom_gaps") or {}).get("missing_paa_coverage")),
+        ),
+        (
+            "ADD_WEBAPP_JSONLD_SCHEMA",
+            lambda r: bool((r.get("dom_gaps") or {}).get("missing_app_schema")),
+        ),
+        (
+            "REWRITE_HIGH_CONTRAST_TITLE",
+            lambda r: bool((r.get("dom_gaps") or {}).get("title_ctr_deficit")),
+        ),
     ]
     assertions: dict[str, str] = {
         "BOOST_CLUSTER_CROSS_LINKS": "assert >=3 in-body contextual links from sibling cluster pages to {page}",
@@ -823,6 +870,11 @@ def compile_wave_backlog(
         "INJECT_EXACT_TITLE_AND_H2": "assert the page <h2> contains the exact token set of '{query}'",
         "STRENGTHEN_HUB_INTERNAL_LINKS": "assert the parent hub page contains a link to {page}",
         "CREATE_PROGRAMMATIC_ROUTE": "assert a new route for '{query}' resolves 200 with a unique <title>",
+        "RESCUE_ORPHAN_ROUTE_INLINKS": "assert the homepage or parent hub renders <a href='{page}'> with descriptive anchor text",
+        "ADD_D1_SPEC_COMPARISON_TABLE": "assert the response for '{query}' includes a semantic <table> with >=4 rows of concrete specs/metrics",
+        "INJECT_PAA_SEMANTIC_SECTIONS": "assert the DOM renders <details>/<h3> blocks answering the SERP PAA questions {paa}",
+        "ADD_WEBAPP_JSONLD_SCHEMA": "assert the response for '{query}' includes valid WebApplication JSON-LD (name, operatingSystem, applicationCategory, offers)",
+        "REWRITE_HIGH_CONTRAST_TITLE": "assert the <title> for '{query}' contains a bracketed value hook or number and stays within 60 characters",
     }
     tasks: list[dict[str, Any]] = []
     emitted: set = set()
@@ -848,12 +900,19 @@ def compile_wave_backlog(
                 if path.strip("/")
                 else "templates/index.html"
             )
+            paa_questions = [str(q) for q in (row.get("paa_questions") or [])[:3]] or [
+                "the top People-Also-Ask questions for the query"
+            ]
             task: dict[str, Any] = {
                 "action_code": code,
                 "query": query,
                 "page": page,
                 "file_target": file_target,
-                "tdd_assertion": assertions[code].format(page=page, query=query),
+                "tdd_assertion": assertions[code].format(
+                    page=page,
+                    query=query,
+                    paa=", ".join(f"'{q}'" for q in paa_questions),
+                ),
                 "rank_score": float(row.get("rank_score", 0.0) or 0.0),
                 "source": row.get("source", "gsc"),
             }

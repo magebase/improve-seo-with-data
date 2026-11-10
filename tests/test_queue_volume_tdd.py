@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -863,7 +864,7 @@ def test_surrogate_predicts_clipped_serp_features_offline():
             }
         )
     surrogate = OfflineDataForSEOSurrogate()
-    surrogate.fit(history)
+    surrogate.fit(history, models_dir=tempfile.mkdtemp())  # never pollute models/
     preds = surrogate.predict_serp_features(
         ["receive sms online 99 free tool", "vs compare x"]
     )
@@ -928,3 +929,173 @@ def test_dom_gap_flags_detect_missing_h2_table_and_schema():
     assert healthy["missing_data_table"] is False
     assert healthy["missing_app_schema"] is False
     assert healthy["weak_internal_inlinks"] is False
+
+
+# ---------------------------------------------------------------------------
+# Round 4: gap-flag compiler codes, title CTR deficit, sibling auto-derivation,
+# surrogate refit from the fleet state DB
+# ---------------------------------------------------------------------------
+
+
+def _flagged(query, page, dom_gaps=None, **extra):
+    row = _scored(query, page, 8.0, 10.0, 1.0, 0.3, 2.0)
+    if dom_gaps is not None:
+        row["dom_gaps"] = dom_gaps
+    row.update(extra)
+    return row
+
+
+def test_compile_wave_backlog_consumes_dom_gap_flags_and_orphan_source():
+    from ltr_ranker import compile_wave_backlog
+
+    rows = [
+        _flagged(
+            "convert heic to jpg",
+            "https://a.com/convert/heic-to-jpg/",
+            dom_gaps={
+                "missing_exact_h2": False,
+                "missing_data_table": True,
+                "missing_paa_coverage": True,
+                "missing_app_schema": True,
+                "weak_internal_inlinks": False,
+            },
+            paa_questions=["what is heic?", "is heic lossless?", "how to open heic?"],
+        ),
+        _flagged("sms france", "https://a.com/receive-sms/fr/", source="orphan_route"),
+        _flagged(
+            "cheap vpn 2026",
+            "https://a.com/vpn/",
+            dom_gaps={"title_ctr_deficit": True, "missing_data_table": False},
+        ),
+    ]
+    tasks = compile_wave_backlog(rows, shipped_ledger=set(), target_wave_size=25)
+    codes = {t["action_code"] for t in tasks}
+    assert "ADD_D1_SPEC_COMPARISON_TABLE" in codes
+    assert "INJECT_PAA_SEMANTIC_SECTIONS" in codes
+    assert "ADD_WEBAPP_JSONLD_SCHEMA" in codes
+    assert "RESCUE_ORPHAN_ROUTE_INLINKS" in codes
+    assert "REWRITE_HIGH_CONTRAST_TITLE" in codes
+    for task in tasks:
+        assert task["tdd_assertion"] and task["file_target"]
+    # No duplicate (url, action) pairs even when several flags fire at once.
+    keys = [(t["page"], t["action_code"]) for t in tasks]
+    assert len(keys) == len(set(keys))
+
+
+def test_compile_wave_backlog_flags_respect_cooldown():
+    from ltr_ranker import compile_wave_backlog
+
+    rows = [
+        _flagged(
+            "convert heic to jpg",
+            "https://a.com/convert/heic-to-jpg/",
+            dom_gaps={"missing_data_table": True, "missing_app_schema": True},
+        )
+    ]
+    shipped = {("https://a.com/convert/heic-to-jpg/", "ADD_D1_SPEC_COMPARISON_TABLE")}
+    tasks = compile_wave_backlog(rows, shipped_ledger=shipped, target_wave_size=10)
+    codes = [t["action_code"] for t in tasks]
+    assert "ADD_D1_SPEC_COMPARISON_TABLE" not in codes
+    assert "ADD_WEBAPP_JSONLD_SCHEMA" in codes
+
+
+def test_dom_gap_flags_title_ctr_deficit():
+    from collect_features import dom_gap_flags
+
+    weak = dom_gap_flags(
+        "<html><title>Cheap VPN Provider</title><h2>Cheap VPN Provider</h2></html>",
+        serp_items=[],
+        query="cheap vpn",
+        ctr=0.015,
+        current_pos=5.0,
+    )
+    assert weak["title_ctr_deficit"] is True
+    healthy = dom_gap_flags(
+        "<html><title>7 Best Cheap VPN Providers [2026]</title><h2>Cheap VPN</h2></html>",
+        serp_items=[],
+        query="cheap vpn",
+        ctr=0.05,
+        current_pos=5.0,
+    )
+    assert healthy["title_ctr_deficit"] is False
+    deep = dom_gap_flags(
+        "<html><title>Cheap VPN</title></html>",
+        serp_items=[],
+        query="cheap vpn",
+        ctr=0.001,
+        current_pos=40.0,
+    )
+    assert (
+        deep["title_ctr_deficit"] is False
+    )  # position > 12: CTR deficit is expected, not a title defect
+
+
+def test_derive_sibling_counts_groups_distinct_pages_per_prefix():
+    from ltr_ranker import derive_sibling_counts
+
+    rows = [
+        _scored("q1", f"https://a.com/receive-sms/{cc}/", 10.0, 5.0, 0.0, 0.1, 2.0)
+        for cc in ["fr", "de", "it", "es", "pl", "gb", "us", "ca", "au"]
+    ]
+    rows.append(_scored("q2", "https://a.com/status/", 5.0, 5.0, 1.0, 0.2, 9.0))
+    counts = derive_sibling_counts(rows)
+    assert counts["/receive-sms/"] == 9
+    assert "/status/" not in counts  # single page: no sibling family
+
+
+def test_refit_from_state_db_trains_and_predicts_on_real_cache_shapes():
+    from dataforseo_client import FORUM_UGC_DOMAINS
+    from dfs_surrogate import refit_from_state_db
+    from fleet_state import connect_state_db, upsert_serp_cache
+    import tempfile
+
+    db_path = tempfile.mktemp(suffix=".db")
+    conn = connect_state_db(db_path)
+    for i in range(25):
+        items = [
+            {
+                "type": "organic",
+                "domain": "competitor-x.com",
+                "title": f"widget guide {i}" if i % 2 else f"widget guide {i} free",
+            },
+            {
+                "type": "organic",
+                "domain": "competitor-y.com",
+                "title": f"widget {i} tutorial",
+            },
+            {
+                "type": "organic",
+                "domain": FORUM_UGC_DOMAINS[0],
+                "title": f"reddit thread {i}",
+            },
+            {
+                "type": "discussions_and_forums",
+                "domain": "community.org",
+                "title": f"thread {i}",
+            },
+            {
+                "type": "people_also_ask",
+                "questions": [f"what is widget {i}?", f"is widget {i} free?"],
+            },
+        ]
+        if i % 3 == 0:
+            items.append({"type": "ai_overview", "domain": "google.com"})
+        if i % 4 == 0:
+            items.append({"type": "keyword_info", "keyword_volume": 100 + i * 10})
+        upsert_serp_cache(
+            conn, f"widget question {i}", items, ["organic", "people_also_ask"]
+        )
+    conn.commit()
+    conn.close()
+
+    models_dir = tempfile.mkdtemp()
+    meta = refit_from_state_db(db_path, models_dir=models_dir)
+    assert meta["rows"] >= 20  # floor met -> refit actually trained
+
+    from dfs_surrogate import OfflineDataForSEOSurrogate
+
+    surrogate = OfflineDataForSEOSurrogate()
+    assert surrogate.load(models_dir=models_dir) is True
+    preds = surrogate.predict_serp_features(["widget question 999"])
+    assert preds[0]["feature_source"] == "local_surrogate"
+    assert 0.0 <= preds[0]["serp_forum_ratio"] <= 1.0

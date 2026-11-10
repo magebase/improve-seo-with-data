@@ -105,7 +105,7 @@ class OfflineDataForSEOSurrogate:
         valid = [
             r
             for r in rows
-            if all(r.get(t) is not None for t in TARGETS) and r.get("query")
+            if r.get("query") and any(r.get(t) is not None for t in TARGETS)
         ]
         if len(valid) < SURROGATE_MIN_ROWS:
             raise RuntimeError(
@@ -113,7 +113,6 @@ class OfflineDataForSEOSurrogate:
                 f"{SURROGATE_MIN_ROWS}-row floor. Collect more cached DataForSEO "
                 "SERPs before refitting."
             )
-        X = np.asarray([lexical_features(r["query"]) for r in valid], dtype="float64")
         meta: Dict[str, Any] = {"targets": list(TARGETS), "rows": len(valid)}
         os.makedirs(models_dir, exist_ok=True)
         # Native LightGBM API (the sklearn wrapper needs scikit-learn, which is
@@ -126,8 +125,18 @@ class OfflineDataForSEOSurrogate:
             "seed": 42,
             "verbose": -1,
         }
+        # Per-target fitting: SERP-only cache entries (no keyword-info volume
+        # block) still train the three SERP-structure targets;
+        # search_volume_log trains on whichever rows carry a volume.
         for target in TARGETS:
-            y = [float(r[target]) for r in valid]
+            subset = [r for r in valid if r.get(target) is not None]
+            if len(subset) < SURROGATE_MIN_ROWS:
+                meta[target] = None  # not enough labeled rows for this target yet
+                continue
+            X = np.asarray(
+                [lexical_features(r["query"]) for r in subset], dtype="float64"
+            )
+            y = [float(r[target]) for r in subset]
             dataset = self._lgb.Dataset(X, label=y)
             booster = self._lgb.train(params, dataset, num_boost_round=120)
             model_path = os.path.join(models_dir, f"{MODEL_PREFIX}_{target}.txt")
@@ -137,7 +146,9 @@ class OfflineDataForSEOSurrogate:
             os.path.join(models_dir, f"{MODEL_PREFIX}.meta.json"), "w", encoding="utf-8"
         ) as fh:
             json.dump(meta, fh, indent=2)
-        self.models = {t: self._lgb.Booster(model_file=meta[t]) for t in TARGETS}
+        self.models = {
+            t: self._lgb.Booster(model_file=meta[t]) for t in TARGETS if meta[t]
+        }
         self._fitted = True
         return meta
 
@@ -147,51 +158,54 @@ class OfflineDataForSEOSurrogate:
             return False
         with open(meta_path, encoding="utf-8") as fh:
             meta = json.load(fh)
-        self.models = {t: self._lgb.Booster(model_file=meta[t]) for t in TARGETS}
+        self.models = {
+            t: self._lgb.Booster(model_file=meta[t]) for t in TARGETS if meta.get(t)
+        }
         self._fitted = True
         return True
 
     # --------------------------------------------------------------- predict
 
     def predict_serp_features(self, queries: List[str]) -> List[Dict[str, Any]]:
-        """Predicts the four DataForSEO columns offline (clipped to valid ranges)."""
+        """Predicts the available DataForSEO columns offline (clipped to ranges).
+
+        Targets whose per-target training subset never reached the floor are
+        omitted (fit() records them as null in the meta file) instead of
+        guessing from an untrained model.
+        """
         if not self._fitted:
             raise RuntimeError(
                 "Surrogate not fitted/loaded; call fit() or load() first."
             )
         X = np.asarray([lexical_features(q) for q in queries], dtype="float64")
+        bounds = {
+            "search_volume_log": (0.5, 5.0),
+            "serp_forum_ratio": (0.0, 1.0),
+            "title_exact_match_rate": (0.0, 1.0),
+            "serp_pixel_crowding": (0.0, 6.0),
+        }
         out: List[Dict[str, Any]] = []
         for i, query in enumerate(queries):
-            preds = {t: float(self.models[t].predict(X[i : i + 1])[0]) for t in TARGETS}
-            out.append(
-                {
-                    "query": query,
-                    "search_volume_log": round(
-                        min(5.0, max(0.5, preds["search_volume_log"])), 6
-                    ),
-                    "serp_forum_ratio": round(
-                        min(1.0, max(0.0, preds["serp_forum_ratio"])), 6
-                    ),
-                    "title_exact_match_rate": round(
-                        min(1.0, max(0.0, preds["title_exact_match_rate"])), 6
-                    ),
-                    "serp_pixel_crowding": round(
-                        min(6.0, max(0.0, preds["serp_pixel_crowding"])), 6
-                    ),
-                    "feature_source": FEATURE_SOURCE,
-                }
-            )
+            row: Dict[str, Any] = {"query": query}
+            for target, (low, high) in bounds.items():
+                if target in self.models:
+                    raw = float(self.models[target].predict(X[i : i + 1])[0])
+                    row[target] = round(min(high, max(low, raw)), 6)
+            row["feature_source"] = FEATURE_SOURCE
+            out.append(row)
         return out
 
 
 def rows_from_serp_cache(cache: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Extracts surrogate training rows from a .serp_cache.json-shaped payload.
 
-    Volume is only present in keyword-info blocks (suggestions), so SERP-only
-    cache entries train the three SERP targets with volume=None (filtered by
-    fit()'s completeness check).
+    Uses the REAL extractor outputs: ``forum_ugc_ratio`` (extract_serp_features)
+    becomes serp_forum_ratio; ``title_exact_match_rate`` and the crowding-block
+    count come from serp_vulnerability_score's components. Volume is only
+    present in keyword-info blocks (suggestions), so SERP-only entries train
+    the three SERP targets; fit() trains each target on the rows that carry it.
     """
-    from dataforseo_client import extract_serp_features
+    from dataforseo_client import extract_serp_features, serp_vulnerability_score
 
     rows: List[Dict[str, Any]] = []
     for query, payload in cache.items():
@@ -199,6 +213,8 @@ def rows_from_serp_cache(cache: Dict[str, Any]) -> List[Dict[str, Any]]:
         if not items:
             continue
         feats = extract_serp_features(items)
+        vuln = serp_vulnerability_score(items, query)
+        components = vuln.get("components") or {}
         volume = None
         for item in items:
             if item.get("type") == "keyword_info" or "keyword_volume" in item:
@@ -210,9 +226,74 @@ def rows_from_serp_cache(cache: Dict[str, Any]) -> List[Dict[str, Any]]:
             {
                 "query": query,
                 "search_volume_log": math.log10(volume + 1) if volume else None,
-                "serp_forum_ratio": feats.get("serp_forum_ratio"),
-                "title_exact_match_rate": feats.get("title_exact_match_rate"),
-                "serp_pixel_crowding": feats.get("serp_pixel_crowding"),
+                "serp_forum_ratio": feats.get("forum_ugc_ratio"),
+                "title_exact_match_rate": components.get("title_exact_match_rate"),
+                "serp_pixel_crowding": components.get("crowding_penalty"),
             }
         )
     return rows
+
+
+def refit_from_state_db(
+    db_path: str,
+    models_dir: str = "models/",
+    serp_cache_path: Optional[str] = None,
+    max_age_days: int = 30,
+) -> Dict[str, Any]:
+    """Rebuilds the surrogate from the fleet's persisted SERP caches.
+
+    Reads every fresh (<= max_age_days) entry from the state DB's
+    ``dfs_serp_cache`` table, optionally merges a .serp_cache.json file, and
+    refits. This is the nightly active-learning half-step: the daily budget
+    gate spends the SERP quota, this turns the responses into model updates.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from fleet_state import connect_state_db
+
+    cache: Dict[str, Any] = {}
+    conn = connect_state_db(db_path)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+    for query, items_json in conn.execute(
+        "SELECT query, items_json FROM dfs_serp_cache WHERE fetched_at >= ?", (cutoff,)
+    ):
+        cache[str(query)] = json.loads(items_json)
+    conn.close()
+
+    if serp_cache_path and os.path.exists(serp_cache_path):
+        with open(serp_cache_path, encoding="utf-8") as fh:
+            file_cache = json.load(fh)
+        for query, value in file_cache.items():
+            if query not in cache:
+                cache[str(query)] = value
+
+    rows = rows_from_serp_cache(cache)
+    surrogate = OfflineDataForSEOSurrogate()
+    meta = surrogate.fit(rows, models_dir=models_dir)
+    meta["cache_entries"] = len(cache)
+    return meta
+
+
+if __name__ == "__main__":  # pragma: no cover - thin CLI wrapper
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--fit-from-state-db", default="", help="fleet state DB path to refit from"
+    )
+    parser.add_argument(
+        "--serp-cache", default=".serp_cache.json", help="file SERP cache to merge"
+    )
+    parser.add_argument("--models-dir", default="models/")
+    args = parser.parse_args()
+    if not args.fit_from_state_db:
+        parser.error("--fit-from-state-db is required")
+    summary = refit_from_state_db(
+        args.fit_from_state_db,
+        models_dir=args.models_dir,
+        serp_cache_path=args.serp_cache,
+    )
+    print(
+        f"Surrogate refit: {summary['rows']} training rows from "
+        f"{summary['cache_entries']} cache entries -> {args.models_dir}"
+    )

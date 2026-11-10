@@ -70,7 +70,7 @@ from fleet_state import (
     upsert_serp_cache,
 )
 from gsc_analyzer import find_seo_binary, run_seo_report
-from ltr_ranker import ORPHAN_ACTIONS
+from ltr_ranker import ORPHAN_ACTIONS, expected_ctr
 
 STOP_TOKENS = {
     "the",
@@ -295,12 +295,18 @@ def dom_gap_flags(
     query: str,
     internal_inlinks: float | None = None,
     is_tool_route: bool = False,
+    ctr: float | None = None,
+    current_pos: float | None = None,
 ) -> dict[str, Any]:
     """Six structural gap flags: our HTML vs the cached SERP winners.
 
     Zero-cost when fed from an already-fetched page (e.g. the top-N candidates
     the caller chose to crawl). Flags ride OUTSIDE the 8-feature vector as
     row metadata; compile_wave_backlog turns them into atomic TDD tasks.
+    ``title_ctr_deficit`` needs the row's realized CTR and position: it fires
+    only when the page underperforms its position-impression propensity curve
+    (ctr < 0.6 x expected_ctr(pos)) at position <= 12 AND the <title> carries
+    no bracketed hook or number.
     """
     html = (our_html or "").lower()
     query_tokens = set(tokenize(query))
@@ -317,6 +323,21 @@ def dom_gap_flags(
                     q if isinstance(q, str) else str(q.get("question", ""))
                 )
 
+    title_match = re.search(
+        r"<title[^>]*>(.*?)</title>", html, re.DOTALL | re.IGNORECASE
+    )
+    title_text = re.sub(r"<[^>]+>", " ", title_match.group(1)) if title_match else ""
+    has_ctr_hook = bool(title_text) and (
+        "[" in title_text or any(c.isdigit() for c in title_text)
+    )
+    ctr_deficit = (
+        current_pos is not None
+        and ctr is not None
+        and float(current_pos) <= 12.0
+        and float(ctr) < 0.6 * expected_ctr(float(current_pos))
+        and not has_ctr_hook
+    )
+
     return {
         "missing_exact_h2": bool(query_tokens)
         and not query_tokens.issubset(set(heading_text.split())),
@@ -328,6 +349,7 @@ def dom_gap_flags(
         "missing_app_schema": is_tool_route
         and "webapplication" not in html
         and "softwareapplication" not in html,
+        "title_ctr_deficit": ctr_deficit,
     }
 
 
