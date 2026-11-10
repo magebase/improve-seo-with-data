@@ -5,10 +5,10 @@ per-domain .db fragmentation (incomecanvas.db), with budget totals summed
 per day across merged DBs and REJECTED adjudications preserved.
 """
 
+import pathlib
 import sqlite3
 
 import pytest
-
 from unify_fleet_db import merge_state_db, retire_source
 
 
@@ -127,11 +127,60 @@ def test_merge_serp_cache_target_wins_shared_queries(target, source):
     # target's cache entry wins for shared queries (fresher provenance kept)
 
 
-def test_retire_source_renames_never_deletes(target, source):
+def test_retire_source_archives_to_durable_backups_with_manifest(
+    target, source, tmp_path, monkeypatch
+):
+    """Review R3: /tmp is wiped by tmpfiles/reboots; migrated state DBs are
+    the only record of pre-unification adjudications, so backups land in
+    ~/.seo_fleet/backups/ with a timestamped SHA-256 manifest."""
+    import hashlib
+    import json as jsonlib
+
+    backups_dir = tmp_path / "backups"
+    monkeypatch.setenv("SEO_FLEET_BACKUPS_DIR", str(backups_dir))
     merge_state_db(str(source), str(target))
-    retire_source(str(source))
+    backup_path = retire_source(str(source))
+    backup = pathlib.Path(backup_path)
     assert not source.exists()
-    assert (
-        source.with_suffix(".db.migrated-bak").exists()
-        or (source.parent / (source.name + ".migrated-bak")).exists()
+    assert backup.parent == backups_dir
+    assert backup.exists()
+    manifest = backups_dir / "manifest.jsonl"
+    assert manifest.exists()
+    entry = jsonlib.loads(manifest.read_text(encoding="utf-8").strip().splitlines()[-1])
+    assert entry["backup"] == str(backup)
+    assert entry["sha256"] == hashlib.sha256(backup.read_bytes()).hexdigest()
+    assert entry["original"] == str(source)
+
+
+def test_domain_budget_ledger_merges_per_day_and_domain(target, source):
+    """Review R3: the per-domain spend ledger (starvation floors) merges with
+    the same sum-per-key semantics as the fleet-wide daily budget."""
+    from unify_fleet_db import merge_state_db as _m  # noqa: F401 - parity check
+
+    sconn = sqlite3.connect(str(source))
+    sconn.execute(
+        "INSERT INTO dfs_budget_domain (day, domain, spent) VALUES ('2026-01-01', 'incomecanvas.com', 40)"
     )
+    sconn.execute(
+        "INSERT INTO dfs_budget_domain (day, domain, spent) VALUES ('2026-01-02', 'incomecanvas.com', 10)"
+    )
+    sconn.commit()
+    sconn.close()
+    tconn0 = sqlite3.connect(str(target))
+    tconn0.execute(
+        "INSERT INTO dfs_budget_domain (day, domain, spent) VALUES ('2026-01-01', 'smsriver.com', 25)"
+    )
+    tconn0.commit()
+    tconn0.close()
+    report = merge_state_db(str(source), str(target))
+    tconn = sqlite3.connect(str(target))
+    rows = dict(
+        ((d, dom), s)
+        for d, dom, s in tconn.execute(
+            "SELECT day, domain, spent FROM dfs_budget_domain"
+        ).fetchall()
+    )
+    assert rows[("2026-01-01", "incomecanvas.com")] == 40
+    assert rows[("2026-01-02", "incomecanvas.com")] == 10
+    assert rows[("2026-01-01", "smsriver.com")] == 25
+    assert report.get("domain_budget_days_merged", 0) >= 2

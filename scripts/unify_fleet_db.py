@@ -25,6 +25,7 @@ Merge semantics:
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -102,6 +103,26 @@ def merge_state_db(source_path: str, target_path: str) -> dict:
             )
             report[key] += 1
 
+    # wave-64 review R3: per-domain spend ledger merges the same way (rows
+    # are already keyed by domain, so conflicts are true same-domain days).
+    # Legacy source DBs predate the table - skip when absent.
+    has_domain_ledger = src.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' "
+        "AND name='dfs_budget_domain'"
+    ).fetchone()[0]
+    if has_domain_ledger:
+        for day, dom, spent in src.execute(
+            "SELECT day, domain, spent FROM dfs_budget_domain"
+        ).fetchall():
+            dst.execute(
+                "INSERT INTO dfs_budget_domain (day, domain, spent) VALUES (?, ?, ?) "
+                "ON CONFLICT(day, domain) DO UPDATE SET spent = spent + excluded.spent",
+                (day, dom, spent),
+            )
+            report["domain_budget_days_merged"] = (
+                report.get("domain_budget_days_merged", 0) + 1
+            )
+
     for row in src.execute(
         "SELECT site, window_end, fetched_at, rows_json FROM gsc_snapshots"
     ).fetchall():
@@ -133,11 +154,45 @@ def merge_state_db(source_path: str, target_path: str) -> dict:
 
 
 def retire_source(source_path: str) -> str:
-    """Renames a migrated per-domain DB aside (never deletes data)."""
+    """Archives a migrated per-domain DB into ~/.seo_fleet/backups/.
+
+    Review R3: /tmp is wiped by systemd-tmpfiles and reboots - migrated
+    state DBs are the only record of pre-unification adjudications, so the
+    backup lives in a durable home with a timestamped SHA-256 manifest.
+    ``SEO_FLEET_BACKUPS_DIR`` overrides the destination (tests).
+    """
+    import hashlib
+    import os
+    import shutil
+
     src = Path(source_path).expanduser()
-    backup = src.with_name(src.name + ".migrated-bak")
-    src.rename(backup)
+    backups_dir = Path(
+        os.environ.get("SEO_FLEET_BACKUPS_DIR", "~/.seo_fleet/backups")
+    ).expanduser()
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    stamp = _utc_now_stamp()
+    backup = backups_dir / f"{stamp}_{src.name}"
+    shutil.move(str(src), str(backup))
+    digest = hashlib.sha256(backup.read_bytes()).hexdigest()
+    with open(backups_dir / "manifest.jsonl", "a", encoding="utf-8") as fh:
+        fh.write(
+            json.dumps(
+                {
+                    "backup": str(backup),
+                    "original": str(src),
+                    "sha256": digest,
+                    "archived_at": stamp,
+                }
+            )
+            + "\n"
+        )
     return str(backup)
+
+
+def _utc_now_stamp() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def main(argv=None) -> int:

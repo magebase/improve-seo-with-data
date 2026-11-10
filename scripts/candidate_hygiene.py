@@ -34,6 +34,7 @@ shape matches ``collect_features.load_report_files`` output.
 from __future__ import annotations
 
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Iterable
@@ -57,6 +58,28 @@ def url_path(url: str) -> str:
     if "://" in raw:
         return urllib.parse.urlparse(raw).path or "/"
     return raw if raw.startswith("/") else f"/{raw}"
+
+
+_TRACKING_PARAM_RE = re.compile(r"^(utm_|fbclid$|gclid$)", re.IGNORECASE)
+
+
+def strip_tracking_params(url: str) -> str:
+    """Drops campaign/tracking query params so canonical keys never fragment."""
+    raw = (url or "").strip()
+    if "://" not in raw and not raw.startswith("/"):
+        return raw
+    parsed = urllib.parse.urlparse(raw)
+    if not parsed.query:
+        return raw
+    kept = [
+        (k, v)
+        for k, v in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        if not _TRACKING_PARAM_RE.match(k)
+    ]
+    cleaned = urllib.parse.urlunparse(
+        parsed._replace(query=urllib.parse.urlencode(kept))
+    )
+    return cleaned
 
 
 def _brand_stems(domain: str) -> list:
@@ -98,12 +121,22 @@ def canonicalize_and_dedupe_candidates(
 ) -> tuple[list, dict[str, int]]:
     """Resolves 301s, scrubs junk, and collapses duplicate (page, query) rows.
 
-    Aggregation semantics when a legacy URL and its canonical share a query:
-    impressions and clicks SUM (demand signal is never lost), position keeps
-    the MINIMUM (best ranking between legacy and canonical), and every other
-    column keeps its first-seen value. Returns ``(rows, report)`` where the
-    report counts ``canonicalized`` (URLs remapped), ``scrubbed`` (utility /
-    brand-typo rows dropped) and ``deduped_away`` (rows merged into twins).
+    Aggregation semantics when a legacy URL and its canonical share a query
+    (anti-inflation, review hardening R2): impressions are NOT blind-summed.
+    Rows carry an optional ``date``/``day`` field:
+    - dated rows: per (date, page, query) the MAX impression count wins (the
+      same SERP impression is never counted twice), then daily maxima SUM
+      across the window (genuine day-by-day demand accumulates);
+    - dateless rows (aggregated export windows): MAX across the duplicates
+      (an index transition serves one of the two URLs per impression day,
+      so blind SUM inflates volume and deflates true CTR);
+    clicks SUM across all rows (click events are real regardless of which
+    URL variant captured them), position keeps the MINIMUM (best ranking
+    between legacy and canonical), and ``ctr`` is RE-DERIVED from the
+    aggregated clicks / impressions. Every other column keeps its
+    first-seen value. Returns ``(rows, report)`` where the report counts
+    ``canonicalized`` (URLs remapped), ``scrubbed`` (utility / brand-typo
+    rows dropped) and ``deduped_away`` (rows merged into twins).
     """
     # exact map plus a normalized-key index pointing at ORIGINAL values, so
     # path-form values are never mangled before the rebuild step below
@@ -120,7 +153,7 @@ def canonicalize_and_dedupe_candidates(
         return norm_lookup.get(path) or norm_lookup.get(path.rstrip("/").lower())
 
     report = {"canonicalized": 0, "scrubbed": 0, "deduped_away": 0}
-    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in candidates:
         page = str(row.get("page", ""))
         target = _find(page)
@@ -136,40 +169,61 @@ def canonicalize_and_dedupe_candidates(
             else:
                 page = target
             report["canonicalized"] += 1
+        page = strip_tracking_params(page)
         query = str(row.get("query", ""))
         if not is_valid_seo_candidate(domain, page, query):
             report["scrubbed"] += 1
             continue
         key = (_norm_page_key(page), query.lower())
-        bucket = grouped.get(key)
-        if bucket is None:
-            fresh = dict(row)
-            fresh["page"] = page
-            grouped[key] = fresh
-            continue
-        report["deduped_away"] += 1
-        bucket["impressions"] = float(bucket.get("impressions", 0) or 0) + float(
-            row.get("impressions", 0) or 0
-        )
-        bucket["clicks_30d"] = float(bucket.get("clicks_30d", 0) or 0) + float(
-            row.get("clicks_30d", 0) or 0
-        )
-        bucket_pos = float(bucket.get("current_pos", 99) or 99)
-        row_pos = float(row.get("current_pos", 99) or 99)
-        bucket["current_pos"] = min(bucket_pos, row_pos)
-    merged = sorted(
-        grouped.values(),
-        key=lambda r: (-float(r.get("impressions", 0) or 0), str(r.get("query", ""))),
+        stored = dict(row)
+        stored["page"] = page  # canonicalized + tracking-param-stripped
+        grouped.setdefault(key, []).append(stored)
+
+    merged: list[dict[str, Any]] = []
+    for rows in grouped.values():
+        first = dict(rows[0])
+        # anti-inflation (review R2): per-date MAX impressions, summed across
+        # dates; dateless rows (aggregated export windows) MAX across twins
+        per_date: dict[str, float] = {}
+        undated: list[float] = []
+        clicks = 0.0
+        best_pos = 99.0
+        for row in rows:
+            day = str(row.get("date") or row.get("day") or "")
+            impressions = float(row.get("impressions", 0) or 0)
+            if day:
+                per_date[day] = max(per_date.get(day, 0.0), impressions)
+            else:
+                undated.append(impressions)
+            clicks += float(row.get("clicks_30d", 0) or 0)
+            best_pos = min(best_pos, float(row.get("current_pos", 99) or 99))
+        impressions = sum(per_date.values()) + (max(undated) if undated else 0.0)
+        first["impressions"] = impressions
+        first["clicks_30d"] = clicks
+        first["current_pos"] = best_pos
+        if impressions > 0:
+            first["ctr"] = clicks / impressions
+        report["deduped_away"] += len(rows) - 1
+        merged.append(first)
+    merged.sort(
+        key=lambda r: (-float(r.get("impressions", 0) or 0), str(r.get("query", "")))
     )
     return merged, report
 
 
 def resolve_redirects(
     urls: Iterable[str],
-    timeout: int = 8,
+    timeout: float = 2.0,
     max_urls: int = 400,
+    max_hops: int = 3,
 ) -> dict[str, str]:
-    """Resolves candidate URLs against the LIVE site (HTTP, no redirects followed).
+    """Resolves candidate URLs against the LIVE site (redirect-followed).
+
+    Hardened per the wave-64 review: redirects follow at most ``max_hops``
+    hops (a redirect LOOP is left unmapped rather than crash-looping the
+    fleet), the per-request timeout is capped at 2.0s, and tracking params
+    (``utm_*``, ``fbclid``, ``gclid``) are stripped from every final URL so
+    canonical lookup never fragments on campaign suffixes.
 
     Returns ``{original_url: final_url}`` for every URL that responded; a URL
     that maps to itself is INCLUDED (explicit identity), so callers can trust
@@ -187,14 +241,32 @@ def resolve_redirects(
         if not raw or raw in seen or not raw.startswith("http"):
             continue
         seen.add(raw)
-        final = _resolve_one(raw, timeout)
+        final = _resolve_one(raw, min(float(timeout), 2.0), max_hops)
         if final:
             mapping[raw] = final
     return mapping
 
 
-def _resolve_one(url: str, timeout: int) -> str | None:
+class _HopLimitedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Redirect handler that treats hop budget exhaustion as a normal miss."""
+
+    def __init__(self, max_hops: int):
+        super().__init__()
+        self._max_hops = max_hops
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        hops = getattr(req, "_seo_fleet_hops", 0) + 1
+        if hops > self._max_hops:
+            raise urllib.error.URLError(
+                f"redirect hop budget exceeded (>{self._max_hops})"
+            )
+        req._seo_fleet_hops = hops  # type: ignore[attr-defined]
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _resolve_one(url: str, timeout: float, max_hops: int = 3) -> str | None:
     try:
+        opener = urllib.request.build_opener(_HopLimitedRedirectHandler(max_hops))
         req = urllib.request.Request(
             url,
             headers={
@@ -203,12 +275,12 @@ def _resolve_one(url: str, timeout: int) -> str | None:
             },
             method="GET",
         )
-        resp = urllib.request.urlopen(req, timeout=timeout)
+        resp = opener.open(req, timeout=timeout)
         try:
             resp.read(64)  # touch the body so redirects surface; discard
             final = resp.geturl()
         finally:
             resp.close()
-        return final or url
+        return strip_tracking_params(final or url)
     except Exception:  # noqa: BLE001 - one bad URL must never kill the run
         return None

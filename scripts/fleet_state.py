@@ -30,7 +30,7 @@ import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 DEFAULT_DB_DIR = Path.home() / ".seo_fleet"
@@ -82,6 +82,12 @@ CREATE TABLE IF NOT EXISTS dfs_budget (
     day         TEXT NOT NULL,
     spent       INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (day)
+);
+CREATE TABLE IF NOT EXISTS dfs_budget_domain (
+    day         TEXT NOT NULL,
+    domain      TEXT NOT NULL,
+    spent       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, domain)
 );
 CREATE TABLE IF NOT EXISTS url_inspections (
     url             TEXT PRIMARY KEY,
@@ -187,7 +193,7 @@ def extract_route_family(url: str) -> str:
     return parts[0].lower()
 
 
-def _utc_now(now: Optional[datetime]) -> datetime:
+def _utc_now(now: datetime | None) -> datetime:
     return now or datetime.now(timezone.utc)
 
 
@@ -202,8 +208,8 @@ def save_gsc_snapshot(
     conn: sqlite3.Connection,
     site: str,
     rows: list,
-    now: Optional[datetime] = None,
-    window_end: Optional[str] = None,
+    now: datetime | None = None,
+    window_end: str | None = None,
 ) -> None:
     stamp = _utc_now(now)
     conn.execute(
@@ -218,7 +224,7 @@ def gsc_snapshot_fresh(
     conn: sqlite3.Connection,
     site: str,
     max_age_hours: int = GSC_SNAPSHOT_TTL_HOURS,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> bool:
     stamp = _utc_now(now)
     cutoff = stamp - timedelta(hours=max_age_hours)
@@ -242,8 +248,8 @@ def load_gsc_snapshot(
     conn: sqlite3.Connection,
     site: str,
     max_age_hours: int = GSC_SNAPSHOT_TTL_HOURS,
-    now: Optional[datetime] = None,
-) -> Optional[list]:
+    now: datetime | None = None,
+) -> list | None:
     if not gsc_snapshot_fresh(conn, site, max_age_hours=max_age_hours, now=now):
         return None
     row = conn.execute(
@@ -261,7 +267,7 @@ def upsert_serp_cache(
     query: str,
     items: list,
     item_types: list,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> None:
     stamp = _utc_now(now)
     conn.execute(
@@ -304,7 +310,7 @@ def load_cached_serps(
     conn: sqlite3.Connection,
     queries: list,
     max_age_days: int = SERP_CACHE_TTL_DAYS,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> dict:
     stamp = _utc_now(now)
     cutoff = stamp - timedelta(days=max_age_days)
@@ -351,7 +357,7 @@ DEFAULT_TYPE_CAP_FALLBACK = 3
 def enqueue_tasks(
     conn: sqlite3.Connection,
     tasks: list,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> int:
     """Appends tasks as PENDING; dedupes on (page, action_code) while open."""
     stamp = _iso(_utc_now(now))
@@ -410,7 +416,7 @@ DEFAULT_STALE_LEASE_TTL_SECONDS = 3600
 def release_stale_leases(
     conn: sqlite3.Connection,
     ttl_seconds: int = DEFAULT_STALE_LEASE_TTL_SECONDS,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> int:
     """Returns crashed agents' uncommitted leases to the PENDING cursor.
 
@@ -430,12 +436,12 @@ def release_stale_leases(
 
 def lease_tasks(
     conn: sqlite3.Connection,
-    domain: Optional[str] = None,
+    domain: str | None = None,
     limit: int = 35,
-    now: Optional[datetime] = None,
-    family_caps: Optional[dict] = None,
+    now: datetime | None = None,
+    family_caps: dict | None = None,
     default_family_cap: int = 0,
-    type_caps: Optional[dict] = None,
+    type_caps: dict | None = None,
     default_type_cap: int = 0,
 ) -> list:
     """Atomically pops the next PENDING tasks (priority DESC) as LEASED.
@@ -575,8 +581,8 @@ def lease_tasks(
 def mark_shipped(
     conn: sqlite3.Connection,
     task_ids: list,
-    commit_sha: Optional[str] = None,
-    now: Optional[datetime] = None,
+    commit_sha: str | None = None,
+    now: datetime | None = None,
 ) -> int:
     stamp = _iso(_utc_now(now))
     marked = 0
@@ -594,7 +600,7 @@ def mark_shipped(
 def mark_tasks_reverted(
     conn: sqlite3.Connection,
     task_ids: list,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> int:
     """Records terminal reverts (SHIPPED -> REVERTED, LEASED -> REVERTED).
 
@@ -619,7 +625,7 @@ def mark_tasks_reverted(
     return reverted
 
 
-def pending_count(conn: sqlite3.Connection, domain: Optional[str] = None) -> int:
+def pending_count(conn: sqlite3.Connection, domain: str | None = None) -> int:
     if domain:
         row = conn.execute(
             "SELECT COUNT(*) FROM atomic_task_backlog WHERE status = 'PENDING' AND domain = ?",
@@ -647,27 +653,77 @@ class DailyBudgetGate:
     ):
         self._conn = connect_state_db(db_path)
         self.daily_cap = daily_cap
+        # Wave-64 review R3: property-level starvation guard. Every property
+        # holds a guaranteed floor of the daily cap; anything past its floor
+        # draws from the shared pool (cap minus all floors), so one hungry
+        # domain can never drain the whole fleet budget.
+        self.domain_floor = 50
 
-    def _day(self, now: Optional[datetime]) -> str:
+    def _day(self, now: datetime | None) -> str:
         return _utc_now(now).date().isoformat()
 
-    def remaining(self, now: Optional[datetime] = None) -> int:
+    def _total_spent(self, day: str) -> int:
         row = self._conn.execute(
-            "SELECT spent FROM dfs_budget WHERE day = ?", (self._day(now),)
+            "SELECT spent FROM dfs_budget WHERE day = ?", (day,)
         ).fetchone()
-        return max(0, self.daily_cap - int(row[0] if row else 0))
+        return int(row[0]) if row else 0
 
-    def record(self, n: int, now: Optional[datetime] = None) -> int:
+    def _domain_spent(self, day: str, domain: str) -> int:
+        row = self._conn.execute(
+            "SELECT spent FROM dfs_budget_domain WHERE day = ? AND domain = ?",
+            (day, domain),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def remaining(
+        self, now: datetime | None = None, domain: str | None = None
+    ) -> int:
+        day = self._day(now)
+        total_left = max(0, self.daily_cap - self._total_spent(day))
+        if not domain:
+            return total_left
+        # guaranteed floor slice first (bounded by the whole-day cap), then
+        # the shared pool for anything beyond the floor
+        guaranteed_left = max(0, self.domain_floor - self._domain_spent(day, domain))
+        floor_count = self._conn.execute(
+            "SELECT COUNT(DISTINCT domain) FROM dfs_budget_domain WHERE day = ?",
+            (day,),
+        ).fetchone()[0]
+        # a domain not yet in today's ledger still occupies a floor slot
+        active_domains = floor_count + (
+            1 if self._domain_spent(day, domain) == 0 else 0
+        )
+        shared_pool = max(
+            0, self.daily_cap - min(active_domains * self.domain_floor, self.daily_cap)
+        )
+        shared_used = self._conn.execute(
+            "SELECT COALESCE(SUM(MAX(spent - ?, 0)), 0) FROM dfs_budget_domain WHERE day = ?",
+            (self.domain_floor, day),
+        ).fetchone()[0]
+        shared_left = max(0, shared_pool - int(shared_used))
+        return min(max(guaranteed_left, 0) + shared_left, total_left)
+
+    def record(
+        self, n: int, now: datetime | None = None, domain: str | None = None
+    ) -> int:
         """Records n tasks; returns the remaining budget after the spend."""
-        allowed = min(max(0, int(n)), self.remaining(now=now))
+        remaining = self.remaining(now=now, domain=domain)
+        allowed = min(max(0, int(n)), remaining)
         if allowed:
+            day = self._day(now)
             self._conn.execute(
                 "INSERT INTO dfs_budget (day, spent) VALUES (?, ?) "
                 "ON CONFLICT(day) DO UPDATE SET spent = spent + ?",
-                (self._day(now), allowed, allowed),
+                (day, allowed, allowed),
             )
+            if domain:
+                self._conn.execute(
+                    "INSERT INTO dfs_budget_domain (day, domain, spent) VALUES (?, ?, ?) "
+                    "ON CONFLICT(day, domain) DO UPDATE SET spent = spent + ?",
+                    (day, domain, allowed, allowed),
+                )
             self._conn.commit()
-        return self.remaining(now=now)
+        return self.remaining(now=now, domain=domain)
 
 
 # ------------------------------------------------------- URL Inspection state
@@ -680,7 +736,7 @@ def save_url_inspections(
     conn: sqlite3.Connection,
     site: str,
     results: dict,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> None:
     """Persists URL Inspection results keyed by URL (week-long TTL reads)."""
     stamp = _iso(_utc_now(now))
@@ -705,7 +761,7 @@ def load_url_inspections(
     conn: sqlite3.Connection,
     urls: list,
     max_age_hours: int = INSPECTION_TTL_HOURS,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> dict:
     """Returns fresh (within TTL) inspection records for the requested URLs."""
     stamp = _utc_now(now)
@@ -737,7 +793,7 @@ def load_url_inspections(
 def inspection_calls_remaining(
     conn: sqlite3.Connection,
     daily_cap: int = DEFAULT_DAILY_INSPECTION_BUDGET,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> int:
     """Free-tier guard: max 2,000 URL Inspection calls per UTC day."""
     day = _utc_now(now).date().isoformat()
@@ -751,7 +807,7 @@ def record_inspection_calls(
     conn: sqlite3.Connection,
     n: int,
     daily_cap: int = DEFAULT_DAILY_INSPECTION_BUDGET,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> int:
     """Records n inspection calls; returns the remaining budget."""
     day = _utc_now(now).date().isoformat()

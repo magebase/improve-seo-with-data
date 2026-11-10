@@ -344,6 +344,43 @@ Four verification & guard mechanisms (Stage 4, `log_outcomes_and_retrain.py`):
 
 ---
 
+## 9.5 Edge Telemetry, DOM Auditing & High-Frequency Cursor Invariants
+
+Hard-won from the figiva.com run (Nov 2026): a 504-storm root cause, a
+strict-grep false positive, and a stale-keyspace regression. These
+invariants are binding on every invocation. (Correction, Nov 10: the
+"504 storm" later proved to be Cache API miss instrumentation, not
+proxy timeouts — see Invariants B and E; the render-cost lesson stands.)
+
+### Invariant A: Decompressed Canonical DOM Parsing (No Strict-Grep Link Audits)
+- NEVER use raw regex (`grep -E 'href="[^"]*/slug/"'`) or raw byte streams to check whether a route is linked or contains target `<title>`/`<h2>` tokens. On a 275 KB hub (`figiva.com/calculators/`) a strict `href="..."` regex reported ZERO links for URLs that were in fact linked 2-6 times (attribute ordering / relative-href variance) and nearly shipped a fabricated "orphan rescue" wave.
+- Edge fetches MUST explicitly handle `Accept-Encoding: gzip, deflate, br` decompression and parse `<a href>` attributes through `urllib.parse.urljoin(page_url, href)` with a real HTML parser (`selectolax`/`BeautifulSoup`/`lxml`), normalizing to canonical path slugs before matching.
+
+### Invariant B (Updated): True Edge 5xx Gate vs. Cache-API Miss Telemetry
+- When querying Cloudflare GraphQL (`httpRequestsAdaptiveGroups`) for crawl-health gating, ALWAYS filter `requestSource != "edgeWorkerCacheAPI"`. Internal `caches.default.match()` misses emit `edgeResponseStatus = 504` under `edgeWorkerCacheAPI` and are NOT user- or crawler-facing errors.
+- Only gate content waves when **true origin/worker responses** (`requestSource == "eyeball"`) exceed `5xx > 5/hr` OR when cold crawler TTFB exceeds `3,000ms` without an active L2 KV cache.
+- Once L2 KV caching reduces crawler TTFB below `250ms` and true `5xx == 0`, **do NOT hold content waves on a multi-day hostload cooldown** if no historical eyeball `5xx` storm occurred — ship structural content enrichments (`ADD_D1_SPEC_COMPARISON_TABLE`, worked examples) and warm the KV store immediately so Googlebot's first crawl evaluates the enriched DOM.
+
+### Invariant C: Cloudflare Worker Shared-Kernel D1 Watchdog (`django-cf`)
+- `verify_subrequest_timeout_contract()` only LOGS the 5,000ms ceiling; `django-cf` awaits the underlying JS D1 Promise indefinitely. Pair the contract with an ACTIVE timeout (`Promise.race` / `asyncio.wait_for(..., timeout=4.5)`) around D1 binding queries.
+- When a D1 read times out on a bot/anonymous GET, serve a stale cached snapshot or return `HTTP 503` with `Retry-After: 30-60` rather than hanging 100s into a crawl-poisoning `504`. Googlebot treats a fast `503 Retry-After` gracefully; a 100-second `504` triggers multi-day hostload throttling.
+
+### Invariant E (Updated): L1 Colo Cache + L2 Global KV Pattern & Anti-Stale Salting
+- Pyodide Workers (`django-cf`) bypass Cloudflare Smart Tiered Cache when writing directly to `caches.default`. Always pair L1 `caches.default` (colo-local) with L2 Cloudflare KV (`<app>:bothtml:<version>:<canonical_path>`, `expirationTtl: 21600`) for global crawler pre-warming.
+- **Canonical Key Normalization (KV Write-Quota Guard):** The KV key `<canonical_path>` MUST strip all query strings (`?utm_*`, `?ref=*`) and only cache known `200 OK` route patterns so random bot query-string fuzzing cannot exhaust KV write quotas.
+- **Deploy-Safe Cache Busting:** Prefix the KV key with a short template/content version token (or honor a `Cache-Control: no-cache` / `X-SEO-Audit-Bypass` header) so post-deploy TDD live verification never reads pre-deploy HTML from the 6-hour KV cache.
+- **Telemetry-Clean Pre-Warm & Verification Sweeps:** Pre-warm and verification sweeps MUST send `X-SEO-Prewarm: 1` or `X-SEO-Verify: 1`, and the worker MUST suppress crawler-telemetry logging when those headers are present (synthetic rows otherwise poison crawl-velocity reads). Never spoof a `Googlebot` UA in synthetic sweeps without the telemetry-exclusion header.
+- **KV Writes Only On 200 Canonical Routes:** `bot_kv_store` runs strictly behind the 200 + text/html + crawler gate — 404/redirect bot probes (`/wp-admin`, random slugs) must never mint KV writes. An L1 miss -> L2 KV hit re-warms ONLY the local colo Cache API (free) and NEVER re-writes KV.
+- **Post-Enrichment Cache Overwrite (D1 mutation waves):** Any D1 content mutation (`ADD_D1_SPEC_COMPARISON_TABLE`, worked examples) on a pre-warmed URL MUST atomically overwrite that URL's KV + Cache API entries upon task completion — re-warm with `X-SEO-Verify: 1` + `X-SEO-Prewarm: 1` (fresh render, KV/L1 overwritten, telemetry suppressed) — or bump `CACHE_KEY_VERSION` and re-sweep — so Googlebot never crawls stale pre-enrichment HTML.
+- **Execution Order Invariant (L2 + enrichment waves):** when un-gating content waves alongside an L2 cache fix, verify the L2 pipeline on 1-3 canary URLs FIRST, ship the high-priority DOM enrichment wave SECOND, and run the full sitemap pre-warm sweep AFTER the enriched DOM is live (a pre-enrichment sweep locks thin HTML into KV).
+- Never let humans consult a bot-only prefix, and swallow all KV failures (the global layer must never break rendering).
+
+### Invariant D: Daily Cursor & Pre-Lease Hygiene
+- All invocations read/write the local SQLite `atomic_task_backlog` cursor (`PENDING -> LEASED -> SHIPPED`) backed by the pooled-fleet LGBMRanker and the offline DataForSEO surrogate, with the daily DFS budget gate consulted before any network call.
+- Pre-lease checks MUST scrub Boolean/operator noise (`site:`, `OR`, `AND`, `-\w+`), auto-graduate tasks already satisfied on the live page, skip paths whose `file_target` is leased elsewhere, and release stale `LEASED` rows back to `PENDING` on closeout.
+
+---
+
 ## 10. Tool & Script Inventory
 
 | Tool / Script | Authoritative Function |
@@ -401,3 +438,23 @@ When GSC access is 403/DENIED (property not verified in the authenticated accoun
 ### 11.5 Deterministic Title Tie-Breaker (Demand Frontloading Wins the Stem)
 
 On any title-contract conflict, demand frontloading ALWAYS wins the stem: the `<title>` must START with the demand query stem. When appending the brand suffix (`| Income Canvas`, `| SMSRiver`, ...) pushes the rendered title over 65 characters, the template/title helper MUST auto-drop or abbreviate the suffix (e.g. `| IC`) when the base meta_title alone exceeds 50 characters. Never truncate the demand stem to fit the suffix. Legacy hardcoded assertions that pinned suffix-included lengths get updated to this rule, not deleted.
+
+### 11.6 Scoped Formatting Discipline (Hard Rule)
+
+NEVER run a directory-wide formatter (`ruff format scripts/`, `ruff format .`) in a shared checkout: it rewrites files owned by OTHER agents and either pollutes their uncommitted work or gets swept into your commit. Only format files you are about to stage: `git diff --name-only | xargs ruff format` (or pass your own file list explicitly). Before committing, verify you have not touched foreign files: `git status --short` must list ONLY your task's paths (plus pre-existing churn you never staged).
+
+### 11.7 Deploy Pre-Flight Gate (Hard Rule)
+
+A deploy command MUST be gated on the code it actually ships. Before any worker deploy fires, either (a) assert the checkout IS the integration tip: `[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]` after a fresh `git fetch`, or (b) run the deploy from an explicit detached worktree off `origin/main` (`git worktree add --detach /tmp/deploy-$(date +%s) origin/main`) with runtime config provisioned. A deploy from a stale local ref silently ships the PREVIOUS wave's code while reporting success - caught live in wave 64 only because the rendered-title verification failed. Live verification after every deploy is mandatory, not optional.
+
+### 11.8 Property-Level Budget Floors (No Noisy Neighbors)
+
+The unified cursor DB shares ONE daily SERP budget (`DEFAULT_DAILY_SERP_BUDGET = 150`) across all properties. Every domain holds a GUARANTEED floor (`DailyBudgetGate.domain_floor = 50/day`): a property may always spend up to its floor, anything beyond draws from the shared pool (cap minus all active floors), and the total cap always binds. Per-domain spend lives in `dfs_budget_domain (day, domain, spent)`. One hungry domain can never starve a sibling below its floor. Connections already run `PRAGMA journal_mode=WAL` + `PRAGMA busy_timeout=5000`; never remove them.
+
+### 11.9 Durable Migration Backups (Never /tmp)
+
+Migrated per-domain state DBs are the only record of pre-unification adjudications. `unify_fleet_db.retire_source` archives them into `~/.seo_fleet/backups/<UTC-stamp>_<name>` with a SHA-256 row in `~/.seo_fleet/backups/manifest.jsonl`. NEVER park fleet state backups in `/tmp` (systemd-tmpfiles and reboots wipe it).
+
+### 11.10 Anti-Inflation Impression Aggregation
+
+`candidate_hygiene.canonicalize_and_dedupe_candidates` never blind-SUMs impressions across redirect variants: rows with a `date`/`day` field are MAX-aggregated per `(date, page, query)` and summed across days; dateless rows (aggregated export windows) MAX across twins (an index transition serves one URL variant per impression, so blind SUM inflates volume and deflates true CTR). Clicks SUM (real events) and `ctr` re-derives from the aggregate. Live redirect probes run with `max_hops=3`, a 2.0s timeout cap, and tracking params (`utm_*`, `fbclid`, `gclid`) stripped before canonical lookup.

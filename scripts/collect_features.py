@@ -65,6 +65,7 @@ from candidate_hygiene import (
 )
 from dataforseo_client import DataForSEOClient, resolve_credentials
 from fleet_state import (
+    DEFAULT_DAILY_SERP_BUDGET,
     DailyBudgetGate,
     connect_state_db,
     gsc_snapshot_fresh,
@@ -1260,13 +1261,18 @@ def main(argv: list[str] | None = None) -> int:
             missing[: int(args.max_serp_cost / unit_cost)] if unit_cost else missing
         )
         # Daily budget gate: across ALL skill invocations on this machine,
-        # never post more than the per-day Standard-Queue task cap.
+        # never post more than the per-day Standard-Queue task cap (fleet
+        # default 150; cost bounds it when the USD cap is tighter). The
+        # domain activates the property-level starvation floor (review R3).
         if state_conn is not None and affordable:
             gate = DailyBudgetGate(
                 args.state_db,
-                daily_cap=max(1, min(100, int(args.max_serp_cost / unit_cost))),
+                daily_cap=min(
+                    DEFAULT_DAILY_SERP_BUDGET,
+                    max(1, int(args.max_serp_cost / unit_cost)),
+                ),
             )
-            remaining = gate.remaining()
+            remaining = gate.remaining(domain=args.site)
             if remaining <= 0:
                 print(
                     "      Daily DataForSEO budget exhausted (gate) - fetching "
@@ -1279,7 +1285,9 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 client.post_serp_tasks(affordable, depth=10)
                 if state_conn is not None:
-                    spent = DailyBudgetGate(args.state_db).record(len(affordable))
+                    spent = DailyBudgetGate(args.state_db).record(
+                        len(affordable), domain=args.site
+                    )
                     print(
                         f"      Budget gate: {len(affordable)} tasks recorded, {spent} left today."
                     )
