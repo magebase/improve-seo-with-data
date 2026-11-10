@@ -84,16 +84,28 @@ class TestPositionBiasCorrection(unittest.TestCase):
 class TestColdStartProxy(unittest.TestCase):
     def test_exact_linear_weights(self):
         score = cold_start_score(
-            centroid_sim=1.0, forum_ratio=1.0, title_match_rate=0.0,
-            pixel_crowding=0.0, search_volume=9999,
+            centroid_sim=1.0,
+            forum_ratio=1.0,
+            title_match_rate=0.0,
+            pixel_crowding=0.0,
+            search_volume=9999,
         )
-        expected = 0.30 * 1.0 + 0.25 * 1.0 - 0.20 * 0.0 - 0.15 * 0.0 + 0.10 * math.log10(9999 + 1)
+        expected = (
+            0.30 * 1.0
+            + 0.25 * 1.0
+            - 0.20 * 0.0
+            - 0.15 * 0.0
+            + 0.10 * math.log10(9999 + 1)
+        )
         self.assertAlmostEqual(score, expected, places=6)
 
     def test_crowded_entrenched_serp_scores_negative(self):
         score = cold_start_score(
-            centroid_sim=0.0, forum_ratio=0.0, title_match_rate=1.0,
-            pixel_crowding=4.0, search_volume=10,
+            centroid_sim=0.0,
+            forum_ratio=0.0,
+            title_match_rate=1.0,
+            pixel_crowding=4.0,
+            search_volume=10,
         )
         self.assertLess(score, 0.0)
 
@@ -120,8 +132,8 @@ class TestColdStartDepthDecay(unittest.TestCase):
         self.assertEqual(cold_start_depth_multiplier(207.0, 0.8), 1.0)
 
     def test_depth_decayed_queue_demotes_head_term_below_striking_distance(self):
-        raw_head = cold_start_score(1.0, 0.0, 0.0, 0.0, 999)   # huge raw score
-        raw_sd = cold_start_score(0.7, 0.6, 0.3, 2.0, 90)      # modest SD row
+        raw_head = cold_start_score(1.0, 0.0, 0.0, 0.0, 999)  # huge raw score
+        raw_sd = cold_start_score(0.7, 0.6, 0.3, 2.0, 90)  # modest SD row
         head = raw_head * cold_start_depth_multiplier(207.0, 0.0)
         sd = raw_sd * cold_start_depth_multiplier(15.0, 0.6)
         self.assertGreater(sd, head)
@@ -143,11 +155,18 @@ class TestClusterSplitTraining(unittest.TestCase):
         rows, cluster_ids, labels = [], [], []
         for cluster in range(10):
             for _ in range(20):
-                rows.append([
-                    rng.rand(), rng.rand(), rng.rand(), rng.rand(),
-                    float(rng.randint(0, 30)), float(rng.randint(0, 90)),
-                    rng.rand() * 4, rng.rand(),
-                ])
+                rows.append(
+                    [
+                        rng.rand(),
+                        rng.rand(),
+                        rng.rand(),
+                        rng.rand(),
+                        float(rng.randint(0, 30)),
+                        float(rng.randint(0, 90)),
+                        rng.rand() * 4,
+                        rng.rand(),
+                    ]
+                )
                 cluster_ids.append(cluster)
                 labels.append(rng.randint(0, 5))
         return np.array(rows), np.array(labels), np.array(cluster_ids)
@@ -164,7 +183,9 @@ class TestClusterSplitTraining(unittest.TestCase):
         """Validation ROWS must never share a cluster with training rows."""
         X, y, clusters = self._dataset()
         _, meta = train_seo_ranker(X, y, clusters)
-        self.assertFalse(set(meta["train_row_clusters"]) & set(meta["val_row_clusters"]))
+        self.assertFalse(
+            set(meta["train_row_clusters"]) & set(meta["val_row_clusters"])
+        )
         self.assertEqual(
             len(set(meta["train_row_clusters"]) | set(meta["val_row_clusters"])), 10
         )
@@ -226,32 +247,48 @@ class TestPrescription(unittest.TestCase):
     def test_launch_route_for_vulnerable_unindexed(self):
         shap = {f: 0.0 for f in FEATURES}
         action = prescribe_action(
-            current_pos=0, title_match_rate=0.2, hub_links_shap=0.0,
-            centroid_sim=0.8, forum_ratio=0.6, shap=shap,
+            current_pos=0,
+            title_match_rate=0.2,
+            hub_links_shap=0.0,
+            centroid_sim=0.8,
+            forum_ratio=0.6,
+            shap=shap,
         )
         self.assertEqual(action, "LAUNCH_PSEO_ROUTE")
 
     def test_inject_exact_h2_for_position_15_with_weak_match(self):
         shap = {f: 0.0 for f in FEATURES}
         action = prescribe_action(
-            current_pos=12, title_match_rate=0.2, hub_links_shap=0.1,
-            centroid_sim=0.8, forum_ratio=0.6, shap=shap,
+            current_pos=12,
+            title_match_rate=0.2,
+            hub_links_shap=0.1,
+            centroid_sim=0.8,
+            forum_ratio=0.6,
+            shap=shap,
         )
         self.assertEqual(action, "INJECT_EXACT_H2_AND_TITLE")
 
     def test_internal_links_when_hub_shap_negative(self):
         shap = dict(zip(FEATURES, [0, 0, 0, 0, -0.7, 0, 0, 0]))
         action = prescribe_action(
-            current_pos=9, title_match_rate=0.9, hub_links_shap=-0.7,
-            centroid_sim=0.8, forum_ratio=0.6, shap=shap,
+            current_pos=9,
+            title_match_rate=0.9,
+            hub_links_shap=-0.7,
+            centroid_sim=0.8,
+            forum_ratio=0.6,
+            shap=shap,
         )
         self.assertEqual(action, "BOOST_INTERNAL_LINKS")
 
     def test_default_snippet_rewrite(self):
         shap = {f: 0.0 for f in FEATURES}
         action = prescribe_action(
-            current_pos=9, title_match_rate=0.9, hub_links_shap=0.2,
-            centroid_sim=0.8, forum_ratio=0.6, shap=shap,
+            current_pos=9,
+            title_match_rate=0.9,
+            hub_links_shap=0.2,
+            centroid_sim=0.8,
+            forum_ratio=0.6,
+            shap=shap,
         )
         self.assertEqual(action, "REWRITE_SNIPPET_AND_TOP_300PX")
 
@@ -259,7 +296,12 @@ class TestPrescription(unittest.TestCase):
 class TestExplorationSplit(unittest.TestCase):
     def test_queue_is_17_exploit_plus_3_explore(self):
         rows = [
-            {"keyword": f"kw{i}", "rank_score": 100 - i, "cluster_id": i % 7, "is_new_cluster": i % 2 == 0}
+            {
+                "keyword": f"kw{i}",
+                "rank_score": 100 - i,
+                "cluster_id": i % 7,
+                "is_new_cluster": i % 2 == 0,
+            }
             for i in range(60)
         ]
         queue = split_action_queue(rows, n_exploit=17, n_explore=3, seed=11)
@@ -273,7 +315,12 @@ class TestExplorationSplit(unittest.TestCase):
 
     def test_explore_draws_from_middle_percentiles_not_head(self):
         rows = [
-            {"keyword": f"kw{i}", "rank_score": 1000 - i, "cluster_id": i % 5, "is_new_cluster": True}
+            {
+                "keyword": f"kw{i}",
+                "rank_score": 1000 - i,
+                "cluster_id": i % 5,
+                "is_new_cluster": True,
+            }
             for i in range(100)
         ]
         queue = split_action_queue(rows, n_exploit=17, n_explore=3, seed=5)
