@@ -22,23 +22,58 @@ def test_second_domain_keeps_guaranteed_floor_after_neighbor_burns_shared_pool(
     tmp_path,
 ):
     gate = DailyBudgetGate(str(tmp_path / "g.db"), daily_cap=150)
-    gate.record(100, domain="smsriver.com")  # 50 guaranteed + 50 shared
-    # incomecanvas arrives fresh: its 50/day floor is guaranteed even though
-    # only 50 total remain
+    gate.record(100, domain="smsriver.com")  # 30 guaranteed + 70 shared
+    # incomecanvas arrives fresh: its dynamic floor (min(30, 150//2) = 30)
+    # is guaranteed even though only 50 total remain
     assert gate.remaining(domain="incomecanvas.com") == 50
     left = gate.record(80, domain="incomecanvas.com")
-    assert left == 0, "only the guaranteed 50 fit; the shared pool is spent"
+    assert left == 0, "only the guaranteed 30 + 20 shared fit"
     assert gate._domain_spent(gate._day(None), "incomecanvas.com") == 50
 
 
-def test_domain_cannot_exceed_floor_plus_shared_pool(tmp_path):
+def test_big_first_draw_still_leaves_late_domain_its_floor(tmp_path):
+    """The starvation invariant: however much early domains drew, a domain
+    registering late keeps its guaranteed floor (bounded by the cap)."""
     gate = DailyBudgetGate(str(tmp_path / "g.db"), daily_cap=150)
-    first = gate.record(120, domain="smsriver.com")
-    # with a second floor slot reserved (incomecanvas unknown-but-possible),
-    # smsriver's own draw is bounded: 50 guaranteed + shared pool 50 = 100
-    assert first <= 100, "a domain may never drain a sibling's guaranteed floor"
-    total = gate._total_spent(gate._day(None))
-    assert total <= 150
+    gate.record(120, domain="smsriver.com")
+    # incomecanvas arrives late: floor 30, total_left 30 -> exactly its floor
+    assert gate.remaining(domain="incomecanvas.com") == 30
+    left = gate.record(80, domain="incomecanvas.com")
+    assert left == 0
+    assert gate._domain_spent(gate._day(None), "incomecanvas.com") == 30
+
+
+def test_five_domains_each_keep_a_functional_floor(tmp_path):
+    """Review follow-up math trap: a STATIC 50/day floor x 5 domains = 250
+    > 150 cap, so domain #4 starved to 0 (static model: D1-D3 drew 150 and
+    the cap closed). Dynamic floors (min(30, cap//N)) never sum past the
+    cap: five domains x 30 = 150, every domain draws its full floor."""
+    gate = DailyBudgetGate(str(tmp_path / "g.db"), daily_cap=150)
+    domains = [
+        "smsriver.com",
+        "incomecanvas.com",
+        "openfileconverter.com",
+        "figiva.com",
+        "crewelo.com",
+    ]
+    for i, dom in enumerate(domains):
+        left = gate.record(30, domain=dom)
+        assert gate._domain_spent(gate._day(None), dom) == 30, (
+            f"domain {dom} (arriving #{i + 1}) starved below its floor"
+        )
+        if i < 4:
+            assert left > 0, f"cap closed before {dom} drew its floor"
+    assert gate._total_spent(gate._day(None)) == 150
+
+
+def test_dynamic_floor_shrinks_gracefully_at_fleet_scale(tmp_path):
+    gate = DailyBudgetGate(str(tmp_path / "g.db"), daily_cap=150)
+    assert gate._dynamic_floor(1) == 50, "min(max_floor, cap//1)"
+    assert gate._dynamic_floor(2) == 50
+    assert gate._dynamic_floor(5) == 30, "min(50, 150//5)"
+    assert gate._dynamic_floor(13) == 11, "150 // 13 -> 11/day per domain"
+    for n in range(1, 26):
+        assert gate._dynamic_floor(n) * n <= 150, f"floors oversubscribe at N={n}"
 
 
 def test_total_cap_always_binds(tmp_path):

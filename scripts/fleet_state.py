@@ -657,7 +657,19 @@ class DailyBudgetGate:
         # holds a guaranteed floor of the daily cap; anything past its floor
         # draws from the shared pool (cap minus all floors), so one hungry
         # domain can never drain the whole fleet budget.
-        self.domain_floor = 50
+        self.max_domain_floor = 50
+
+    def _dynamic_floor(self, active_domains: int) -> int:
+        """Per-domain guaranteed floor that scales with fleet size.
+
+        Review follow-up: a STATIC 50/day floor breaks at >= 3 domains
+        (3 x 50 = 150 = the whole cap, so the 4th domain of the day starves
+        to 0). The floor is therefore dynamic: ``min(max_domain_floor,
+        daily_cap // active_domains)`` - floors never sum past the cap, so
+        every REGISTERED domain keeps a functional guaranteed slice
+        (30/day up to 5 properties, shrinking gracefully beyond).
+        """
+        return min(self.max_domain_floor, self.daily_cap // max(1, active_domains))
 
     def _day(self, now: datetime | None) -> str:
         return _utc_now(now).date().isoformat()
@@ -675,16 +687,13 @@ class DailyBudgetGate:
         ).fetchone()
         return int(row[0]) if row else 0
 
-    def remaining(
-        self, now: datetime | None = None, domain: str | None = None
-    ) -> int:
+    def remaining(self, now: datetime | None = None, domain: str | None = None) -> int:
         day = self._day(now)
         total_left = max(0, self.daily_cap - self._total_spent(day))
         if not domain:
             return total_left
         # guaranteed floor slice first (bounded by the whole-day cap), then
         # the shared pool for anything beyond the floor
-        guaranteed_left = max(0, self.domain_floor - self._domain_spent(day, domain))
         floor_count = self._conn.execute(
             "SELECT COUNT(DISTINCT domain) FROM dfs_budget_domain WHERE day = ?",
             (day,),
@@ -693,12 +702,14 @@ class DailyBudgetGate:
         active_domains = floor_count + (
             1 if self._domain_spent(day, domain) == 0 else 0
         )
+        floor = self._dynamic_floor(active_domains)
+        guaranteed_left = max(0, floor - self._domain_spent(day, domain))
         shared_pool = max(
-            0, self.daily_cap - min(active_domains * self.domain_floor, self.daily_cap)
+            0, self.daily_cap - min(active_domains * floor, self.daily_cap)
         )
         shared_used = self._conn.execute(
             "SELECT COALESCE(SUM(MAX(spent - ?, 0)), 0) FROM dfs_budget_domain WHERE day = ?",
-            (self.domain_floor, day),
+            (floor, day),
         ).fetchone()[0]
         shared_left = max(0, shared_pool - int(shared_used))
         return min(max(guaranteed_left, 0) + shared_left, total_left)
