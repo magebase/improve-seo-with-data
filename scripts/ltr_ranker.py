@@ -44,6 +44,7 @@ import random
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 import numpy as np
 
@@ -762,6 +763,106 @@ def slice_per_domain(
         seen[domain] = count + 1
         sliced.append(entry)
     return sliced
+
+
+def compile_wave_backlog(
+    rows: list[dict[str, Any]],
+    shipped_ledger: set | None = None,
+    target_wave_size: int = 40,
+    sibling_counts: dict[str, int] | None = None,
+) -> list[dict[str, Any]]:
+    """Compiles a ranked backlog into ATOMIC TDD tasks (35-60 per wave).
+
+    One scored row can carry several independent fixes; each fix becomes its
+    own task with a machine-checkable ``tdd_assertion`` and a concrete
+    ``file_target`` so a coding agent can implement and verify it without
+    re-deriving intent. Cooldown-masked (page, action) pairs from the shipped
+    ledger are skipped, duplicates are impossible, and programmatic-route
+    tasks propagate their template change across every catalog sibling.
+    """
+    shipped_keys = {
+        (str(page).rstrip("/"), str(code)) for page, code in (shipped_ledger or set())
+    }
+    sibling_counts = sibling_counts or {}
+    rules: list[tuple[str, Any]] = [
+        (
+            "BOOST_CLUSTER_CROSS_LINKS",
+            lambda r: (
+                float((r.get("shap") or {}).get("parent_hub_internal_links", 0.0)) < 0.0
+            ),
+        ),
+        (
+            "OVERHAUL_CTR_HOOK_AND_WEBAPP_SCHEMA",
+            lambda r: (
+                float(r.get("impressions", 0.0) or 0.0) >= 30.0
+                and float(r.get("clicks_30d", 0.0) or 0.0) == 0.0
+            ),
+        ),
+        (
+            "INJECT_EXACT_TITLE_AND_H2",
+            lambda r: (
+                float((r.get("features") or {}).get("title_exact_match_rate", 1.0))
+                < 0.5
+            ),
+        ),
+        (
+            "STRENGTHEN_HUB_INTERNAL_LINKS",
+            lambda r: (
+                float((r.get("features") or {}).get("parent_hub_internal_links", 99.0))
+                < 3.0
+            ),
+        ),
+        (
+            "CREATE_PROGRAMMATIC_ROUTE",
+            lambda r: float(r.get("current_pos", 0.0) or 0.0) >= 90.0,
+        ),
+    ]
+    assertions: dict[str, str] = {
+        "BOOST_CLUSTER_CROSS_LINKS": "assert >=3 in-body contextual links from sibling cluster pages to {page}",
+        "OVERHAUL_CTR_HOOK_AND_WEBAPP_SCHEMA": "assert <title> differs from the SERP winner title for '{query}' and WebApplication JSON-LD is present",
+        "INJECT_EXACT_TITLE_AND_H2": "assert the page <h2> contains the exact token set of '{query}'",
+        "STRENGTHEN_HUB_INTERNAL_LINKS": "assert the parent hub page contains a link to {page}",
+        "CREATE_PROGRAMMATIC_ROUTE": "assert a new route for '{query}' resolves 200 with a unique <title>",
+    }
+    tasks: list[dict[str, Any]] = []
+    emitted: set = set()
+    for row in sorted(rows, key=lambda r: r.get("rank_score", 0.0), reverse=True):
+        page = str(row.get("page", ""))
+        page_key = page.rstrip("/")
+        query = str(row.get("query", ""))
+        path = urlparse(page).path if page.startswith("http") else "/" + page.strip("/")
+        propagation = None
+        for prefix, count in sorted(sibling_counts.items(), key=lambda kv: -len(kv[0])):
+            if path.startswith(prefix):
+                propagation = {"prefix": prefix, "siblings": int(count)}
+                break
+        for code, predicate in rules:
+            if not predicate(row):
+                continue
+            key = (page_key, code)
+            if key in emitted or key in shipped_keys:
+                continue
+            emitted.add(key)
+            file_target = (
+                f"templates{path.rstrip('/')}.html"
+                if path.strip("/")
+                else "templates/index.html"
+            )
+            task: dict[str, Any] = {
+                "action_code": code,
+                "query": query,
+                "page": page,
+                "file_target": file_target,
+                "tdd_assertion": assertions[code].format(page=page, query=query),
+                "rank_score": float(row.get("rank_score", 0.0) or 0.0),
+                "source": row.get("source", "gsc"),
+            }
+            if propagation is not None:
+                task["catalog_propagation"] = dict(propagation)
+            tasks.append(task)
+            if len(tasks) >= target_wave_size:
+                return tasks
+    return tasks
 
 
 def cold_start_depth_multiplier(current_pos: float, serp_forum_ratio: float) -> float:

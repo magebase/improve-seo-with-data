@@ -36,11 +36,13 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from bootstrap_labels import generate_bootstrap_grades
+from fleet_state import enqueue_tasks, lease_tasks, pending_count
 from ltr_ranker import (
     EXPLOIT_SLOTS,
     EXPLORE_SLOTS,
     FEATURES,
     MIN_TRAINABLE_ROWS,
+    compile_wave_backlog,
     detect_cannibalization,
     filter_cooldown,
     heuristic_base_score,
@@ -184,6 +186,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="append the emitted queue to the cooldown ledger",
     )
+    parser.add_argument(
+        "--compile-wave",
+        type=int,
+        default=0,
+        metavar="N",
+        help="additionally compile an atomic TDD wave of N tasks (compile_wave_backlog) into the output",
+    )
+    parser.add_argument(
+        "--state-db",
+        default="",
+        help="SQLite fleet state DB; when set, emitted tasks are enqueued and leased (PENDING -> LEASED)",
+    )
     args = parser.parse_args(argv)
 
     if not os.path.exists(args.features):
@@ -259,6 +273,25 @@ def main(argv: list[str] | None = None) -> int:
         written = record_shipped(queue, args.ledger)
         print(f"Recorded {written} task(s) -> {args.ledger} (cooldown ledger).")
 
+    # Atomic TDD wave compiler: decompose the scored backlog into 35-60
+    # file-targeted tasks (multi-action per row, cooldown-masked, deduped).
+    wave_tasks: list[dict[str, Any]] = []
+    if args.compile_wave > 0:
+        cooled_keys = (
+            load_cooldown_keys(args.ledger, within_days=args.cooldown_days)
+            if args.cooldown_days > 0
+            else set()
+        )
+        wave_tasks = compile_wave_backlog(
+            scored,
+            shipped_ledger=cooled_keys,
+            target_wave_size=args.compile_wave,
+        )
+        print(
+            f"Compiled {len(wave_tasks)} atomic wave task(s) "
+            f"(--compile-wave {args.compile_wave})."
+        )
+
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as fh:
         json.dump(
@@ -267,10 +300,31 @@ def main(argv: list[str] | None = None) -> int:
                 "scoring_mode": result["mode"],
                 "queue": queue,
                 "consolidation": consolidation_tasks,
+                "wave_tasks": wave_tasks,
             },
             fh,
             indent=2,
         )
+
+    # Fleet state machine: enqueue emitted tasks, then lease the actionable
+    # slice so a concurrent coding agent picks work up without double-shipping.
+    if args.state_db:
+        from fleet_state import connect_state_db
+
+        conn = connect_state_db(args.state_db)
+        pending = wave_tasks + queue
+        added = enqueue_tasks(conn, pending)
+        leased = lease_tasks(conn, limit=len(pending))
+        print(
+            f"State DB {args.state_db}: enqueued {added} new, leased {len(leased)} "
+            f"(PENDING -> LEASED), {pending_count(conn)} still pending."
+        )
+        for task in leased[:5]:
+            print(
+                f"  LEASED {task['action_code']} -> {task['page']}"
+                + (f" ({task['file_target']})" if task.get("file_target") else "")
+            )
+        conn.close()
     if consolidation_tasks:
         print(
             f"\nCannibalization: {len(consolidation_tasks)} CONSOLIDATE_CANNIBALIZED_URLS task(s):"

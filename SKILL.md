@@ -135,6 +135,22 @@ To guarantee safe, high-integrity autonomous code modifications:
 5. **Strict Guardrail 4 — Closed-Loop Testing Invariant:**
    Every code change must be accompanied by unit tests (`pytest`), behavioral acceptance specs (`pytest-bdd`), and post-deployment edge verification (`curl -sI HTTP 200`).
 
+### The Mandatory Wave Generation Contract
+
+Every wave-producing invocation MUST satisfy ALL of the following. Skipping any step is a contract violation, not a preference:
+
+1. **Minimum Candidate Depth (150 rows):** Never rank a backlog smaller than 150 scoreable candidates. `collect_features.py::ensure_candidate_depth` fills the pool through a strict 4-tier waterfall and records `tiers_used` in its report:
+   - **Tier 1 — GSC rows** (real demand signals, minus recently shipped pairs).
+   - **Tier 2 — sitemap orphans** (zero-impression deployed routes; zero cost).
+   - **Tier 3 — catalog pairwise matrix** (`pairwise_matrix_from_sitemap`: entity vocabulary from existing family routes $\times$ unbuilt pairs; zero cost, demand verified later).
+   - **Tier 4 — DataForSEO suggestions** (the only costly tier; gated, last resort).
+2. **Fleet State Machine (`--state-db`):** All runs operating on an enrolled property MUST pass the SQLite state DB: a **24h GSC snapshot** fast path, a **30-day shared SERP cache** layer, and a **daily DataForSEO budget gate** consulted BEFORE any network call. Atomic tasks live in a strict cursor: `PENDING -> LEASED -> SHIPPED` (with commit SHA); a `(page, action_code)` pair that is already open is never re-enqueued.
+3. **Atomic TDD Wave Compilation (`--compile-wave N`, target 35-60):** `compile_wave_backlog` decomposes each scored row into INDEPENDENT atomic tasks — one (page, action) each, cooldown-masked against the shipped ledger, deduplicated, each carrying a concrete `file_target` and a machine-checkable `tdd_assertion` a coding agent can run verbatim. Canonical action codes: `BOOST_CLUSTER_CROSS_LINKS`, `OVERHAUL_CTR_HOOK_AND_WEBAPP_SCHEMA`, `INJECT_EXACT_TITLE_AND_H2`, `STRENGTHEN_HUB_INTERNAL_LINKS`, `CREATE_PROGRAMMATIC_ROUTE`.
+4. **Catalog-Wide Propagation:** A fix prescribed on one programmatic route MUST propagate across every sibling sharing its template family (`catalog_propagation` hint with sibling counts): change the template once, not N times.
+5. **CTR-Oriented Schema Preference:** For tool/interactive routes prefer `WebApplication` (and `Dataset` where a proprietary aggregation exists) over `FAQPage` markup; FAQPage does not earn CTR-eligible rich results for tools.
+6. **Offline Surrogate Before Paid Calls:** `scripts/dfs_surrogate.py` predicts the four DataForSEO columns (volume log, forum ratio, title-match rate, pixel crowding) from the fleet's cached SERP history — LightGBM-only, no sklearn. Use it to pre-screen matrix/suggestion candidates offline; refit only after the cache grows past its 20-row floor (it refuses below the floor rather than guessing).
+7. **DOM Gap Flags as Task Selectors:** `dom_gap_flags` (missing exact H2, missing data table, missing PAA coverage, weak inlinks, missing WebApplication schema) turn structural deficits into atomic tasks — they ride outside the feature vector and never silently deprioritize a ranked row.
+
 ---
 
 ## 6. Operating Invariants

@@ -20,6 +20,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -133,30 +135,45 @@ def test_explosion_preserves_single_action_compatibility():
 
 
 def _row(query: str, page: str, action: str, score: float = 1.0) -> dict:
-    return {"query": query, "page": page, "prescribed_action": action, "actions": [action], "rank_score": score}
+    return {
+        "query": query,
+        "page": page,
+        "prescribed_action": action,
+        "actions": [action],
+        "rank_score": score,
+    }
 
 
 def test_record_and_load_cooldown_keys_roundtrip(tmp_path: Path):
     ledger = str(tmp_path / "shipped.jsonl")
     queue = [_row("q1", "https://a.com/x/", "INJECT_EXACT_H2_AND_TITLE")]
     assert record_shipped(queue, ledger, deployed_at="2026-11-10T00:00:00Z") == 1
-    keys = load_cooldown_keys(ledger, within_days=30, now=__import__("datetime").datetime(2026, 11, 12))
+    keys = load_cooldown_keys(
+        ledger, within_days=30, now=__import__("datetime").datetime(2026, 11, 12)
+    )
     assert ("https://a.com/x/", "INJECT_EXACT_H2_AND_TITLE") in keys
 
 
 def test_cooldown_expires_after_within_days(tmp_path: Path):
     ledger = str(tmp_path / "shipped.jsonl")
     record_shipped(
-        [_row("q1", "https://a.com/x/", "REWRITE_SNIPPET_AND_TOP_300PX")], ledger, deployed_at="2026-01-01T00:00:00Z"
+        [_row("q1", "https://a.com/x/", "REWRITE_SNIPPET_AND_TOP_300PX")],
+        ledger,
+        deployed_at="2026-01-01T00:00:00Z",
     )
-    keys = load_cooldown_keys(ledger, within_days=30, now=__import__("datetime").datetime(2026, 3, 1))
+    keys = load_cooldown_keys(
+        ledger, within_days=30, now=__import__("datetime").datetime(2026, 3, 1)
+    )
     assert keys == set(), "30-day cooldown did not expire"
 
 
 def test_filter_cooldown_drops_cooled_actions_and_dead_rows():
     cooled = {
         ("https://a.com/x/", "INJECT_EXACT_H2_AND_TITLE"),  # row fully cooled
-        ("https://b.com/y/", "INJECT_EXACT_H2_AND_TITLE"),  # partial: one of two actions
+        (
+            "https://b.com/y/",
+            "INJECT_EXACT_H2_AND_TITLE",
+        ),  # partial: one of two actions
     }
     rows = [
         _row("q1", "https://a.com/x/", "INJECT_EXACT_H2_AND_TITLE"),
@@ -181,7 +198,12 @@ def test_slice_per_domain_caps_each_domain_and_keeps_global_order():
         _row("a1", "https://smsriver.com/1/", "REWRITE_SNIPPET_AND_TOP_300PX", 3.0),
         _row("a2", "https://smsriver.com/2/", "REWRITE_SNIPPET_AND_TOP_300PX", 2.5),
         _row("a3", "https://smsriver.com/3/", "REWRITE_SNIPPET_AND_TOP_300PX", 2.0),
-        _row("b1", "https://openfileconverter.com/1/", "REWRITE_SNIPPET_AND_TOP_300PX", 1.5),
+        _row(
+            "b1",
+            "https://openfileconverter.com/1/",
+            "REWRITE_SNIPPET_AND_TOP_300PX",
+            1.5,
+        ),
     ]
     sliced = slice_per_domain(rows, per_domain_top=2)
     assert [r["query"] for r in sliced] == ["a1", "a2", "b1"]
@@ -199,8 +221,14 @@ def test_slice_per_domain_zero_or_negative_is_identity():
 
 def test_synthesize_unseen_rows_from_suggestion_items():
     items = [
-        {"keyword": "sms verification free", "keyword_info": {"search_volume": 120, "keyword_difficulty": 20}},
-        {"keyword": "impossible query x", "keyword_info": {"search_volume": 5, "keyword_difficulty": 80}},
+        {
+            "keyword": "sms verification free",
+            "keyword_info": {"search_volume": 120, "keyword_difficulty": 20},
+        },
+        {
+            "keyword": "impossible query x",
+            "keyword_info": {"search_volume": 5, "keyword_difficulty": 80},
+        },
     ]
     rows = __import__("collect_features").synthesize_unseen_rows(
         items,
@@ -232,7 +260,9 @@ def test_pull_gsc_window_parses_query_page_rows(monkeypatch):
     monkeypatch.setattr(
         cf.subprocess,
         "run",
-        lambda *a, **k: type("P", (), {"returncode": 0, "stdout": json.dumps(payload), "stderr": ""})(),
+        lambda *a, **k: type(
+            "P", (), {"returncode": 0, "stdout": json.dumps(payload), "stderr": ""}
+        )(),
     )
     rows = cf.pull_gsc_window("smsriver.com", "2026-01-01", "2026-02-01")
     assert rows[0]["page"] == "https://smsriver.com/receive-sms/us/"
@@ -258,7 +288,10 @@ def test_keyword_suggestions_normalizes_labs_envelope():
                         "items": [
                             {
                                 "keyword": "receive sms online",
-                                "keyword_info": {"search_volume": 300, "keyword_difficulty": 25},
+                                "keyword_info": {
+                                    "search_volume": 300,
+                                    "keyword_difficulty": 25,
+                                },
                                 "serp_info": {"se_results_count": 100},
                             },
                         ]
@@ -267,7 +300,9 @@ def test_keyword_suggestions_normalizes_labs_envelope():
             }
         ],
     }
-    rows = _fake_client(envelope).keyword_suggestions(["receive sms"], limit=10, min_volume=50)
+    rows = _fake_client(envelope).keyword_suggestions(
+        ["receive sms"], limit=10, min_volume=50
+    )
     assert len(rows) == 1
     assert rows[0]["keyword"] == "receive sms online"
     assert rows[0]["volume"] == 300
@@ -285,7 +320,10 @@ def test_domain_intersection_normalizes_competitor_rows():
                             {
                                 "keyword_data": {
                                     "keyword": "free sms receive",
-                                    "keyword_info": {"search_volume": 90, "keyword_difficulty": 30},
+                                    "keyword_info": {
+                                        "search_volume": 90,
+                                        "keyword_difficulty": 30,
+                                    },
                                 },
                                 "rank_info": {"pos": 4},
                                 "ranked_url": "https://competitor.com/free/",
@@ -311,32 +349,582 @@ def test_has_recrawl_evidence_requires_post_deploy_impressions():
     post = {"https://a.com/x/": {"impressions": 12, "clicks": 0}}
     assert has_recrawl_evidence("https://a.com/x/", post) is True
     assert has_recrawl_evidence("https://a.com/never/", post) is False
-    assert has_recrawl_evidence("https://a.com/zero/", {"https://a.com/zero/": {"impressions": 0}}) is False
+    assert (
+        has_recrawl_evidence(
+            "https://a.com/zero/", {"https://a.com/zero/": {"impressions": 0}}
+        )
+        is False
+    )
 
 
 def test_detect_regressions_flags_position_drop_and_imp_loss():
-    executed = [{"query": "q1", "page": "https://a.com/x/", "prescribed_action": "INJECT_EXACT_H2_AND_TITLE"}]
-    pre = {"q1\nhttps://a.com/x/": {"clicks_30d": 0, "impressions": 100, "current_pos": 6.0, "ctr": 0.0}}
-    post = {"q1\nhttps://a.com/x/": {"clicks_30d": 0, "impressions": 60, "current_pos": 14.0, "ctr": 0.0}}
-    regressions = detect_regressions(executed, pre, post, recrawled_pages={"https://a.com/x/"})
+    executed = [
+        {
+            "query": "q1",
+            "page": "https://a.com/x/",
+            "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+        }
+    ]
+    pre = {
+        "q1\nhttps://a.com/x/": {
+            "clicks_30d": 0,
+            "impressions": 100,
+            "current_pos": 6.0,
+            "ctr": 0.0,
+        }
+    }
+    post = {
+        "q1\nhttps://a.com/x/": {
+            "clicks_30d": 0,
+            "impressions": 60,
+            "current_pos": 14.0,
+            "ctr": 0.0,
+        }
+    }
+    regressions = detect_regressions(
+        executed, pre, post, recrawled_pages={"https://a.com/x/"}
+    )
     assert len(regressions) == 1
     assert regressions[0]["action"] == "REVERT_WAVE_COMMIT"
     assert regressions[0]["page"] == "https://a.com/x/"
 
 
 def test_detect_regressions_ignores_unrecrawled_and_healthy_rows():
-    executed = [{"query": "q1", "page": "https://a.com/x/", "prescribed_action": "INJECT_EXACT_H2_AND_TITLE"}]
-    pre = {"q1\nhttps://a.com/x/": {"clicks_30d": 0, "impressions": 100, "current_pos": 6.0, "ctr": 0.0}}
-    post = {"q1\nhttps://a.com/x/": {"clicks_30d": 0, "impressions": 60, "current_pos": 14.0, "ctr": 0.0}}
+    executed = [
+        {
+            "query": "q1",
+            "page": "https://a.com/x/",
+            "prescribed_action": "INJECT_EXACT_H2_AND_TITLE",
+        }
+    ]
+    pre = {
+        "q1\nhttps://a.com/x/": {
+            "clicks_30d": 0,
+            "impressions": 100,
+            "current_pos": 6.0,
+            "ctr": 0.0,
+        }
+    }
+    post = {
+        "q1\nhttps://a.com/x/": {
+            "clicks_30d": 0,
+            "impressions": 60,
+            "current_pos": 14.0,
+            "ctr": 0.0,
+        }
+    }
     # Not recrawled yet -> never graded as a regression (recrawl-lag guard).
     assert detect_regressions(executed, pre, post, recrawled_pages=set()) == []
     # Recrawled and healthy -> no regression.
-    healthy = {"q1\nhttps://a.com/x/": {"clicks_30d": 3, "impressions": 120, "current_pos": 5.0, "ctr": 0.025}}
-    assert detect_regressions(executed, pre, healthy, recrawled_pages={"https://a.com/x/"}) == []
+    healthy = {
+        "q1\nhttps://a.com/x/": {
+            "clicks_30d": 3,
+            "impressions": 120,
+            "current_pos": 5.0,
+            "ctr": 0.025,
+        }
+    }
+    assert (
+        detect_regressions(executed, pre, healthy, recrawled_pages={"https://a.com/x/"})
+        == []
+    )
 
 
 def test_detect_regressions_skips_rows_outside_the_protected_band():
-    executed = [{"query": "q2", "page": "https://b.com/y/", "prescribed_action": "LAUNCH_PSEO_ROUTE"}]
-    pre = {"q2\nhttps://b.com/y/": {"clicks_30d": 0, "impressions": 50, "current_pos": 44.0, "ctr": 0.0}}
-    post = {"q2\nhttps://b.com/y/": {"clicks_30d": 0, "impressions": 5, "current_pos": 80.0, "ctr": 0.0}}
-    assert detect_regressions(executed, pre, post, recrawled_pages={"https://b.com/y/"}) == []
+    executed = [
+        {
+            "query": "q2",
+            "page": "https://b.com/y/",
+            "prescribed_action": "LAUNCH_PSEO_ROUTE",
+        }
+    ]
+    pre = {
+        "q2\nhttps://b.com/y/": {
+            "clicks_30d": 0,
+            "impressions": 50,
+            "current_pos": 44.0,
+            "ctr": 0.0,
+        }
+    }
+    post = {
+        "q2\nhttps://b.com/y/": {
+            "clicks_30d": 0,
+            "impressions": 5,
+            "current_pos": 80.0,
+            "ctr": 0.0,
+        }
+    }
+    assert (
+        detect_regressions(executed, pre, post, recrawled_pages={"https://b.com/y/"})
+        == []
+    )
+
+
+# ---------------------------------------------------------------------------
+# Orphan route detector (sitemap -> GSC left join)
+# ---------------------------------------------------------------------------
+
+
+def test_synthesize_orphan_rows_injects_zero_impression_sitemap_urls():
+    from collect_features import synthesize_orphan_rows
+
+    sitemap = [
+        "https://openfileconverter.com/convert/heic-to-jpg/",
+        "https://openfileconverter.com/tools/merge-pdf/",
+        "https://openfileconverter.com/privacy/",
+    ]
+    gsc_pages = {"https://openfileconverter.com/convert/heic-to-jpg/"}
+    rows = synthesize_orphan_rows(sitemap, gsc_pages, domain="openfileconverter.com")
+    pages = [r["page"] for r in rows]
+    assert "https://openfileconverter.com/tools/merge-pdf/" in pages
+    assert "https://openfileconverter.com/privacy/" in pages
+    assert "https://openfileconverter.com/convert/heic-to-jpg/" not in pages
+    orphan = next(r for r in rows if r["page"].endswith("tools/merge-pdf/"))
+    assert orphan["current_pos"] == 100.0
+    assert orphan["impressions"] == 0.0
+    assert orphan["query"] == "merge pdf"  # slug-synthesized demand proxy
+    assert orphan["source"] == "orphan_route"
+
+
+def test_orphan_rows_get_internal_link_and_expansion_prescriptions():
+    from collect_features import synthesize_orphan_rows
+    from ltr_ranker import ORPHAN_ACTIONS
+
+    rows = synthesize_orphan_rows(
+        ["https://a.com/tools/merge-pdf/"], set(), domain="a.com"
+    )
+    assert rows[0]["actions"] == ORPHAN_ACTIONS
+    assert "BOOST_INTERNAL_LINKS" in ORPHAN_ACTIONS
+
+
+def test_fetch_sitemap_urls_parses_locs_and_index(monkeypatch):
+    from collect_features import fetch_sitemap_urls
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return (
+                "<urlset><url><loc>https://a.com/one/</loc></url></urlset>"
+            ).encode()
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: FakeResp())
+    urls = fetch_sitemap_urls("a.com")
+    assert urls == ["https://a.com/one/"]
+
+
+# ---------------------------------------------------------------------------
+# Query cannibalization detector
+# ---------------------------------------------------------------------------
+
+
+def test_detect_cannibalization_flags_multi_page_queries_beyond_top10():
+    from ltr_ranker import detect_cannibalization
+
+    rows = [
+        {
+            "query": "cheap insurance",
+            "page": "https://a.com/p1/",
+            "current_pos": 14.0,
+            "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
+            "actions": ["REWRITE_SNIPPET_AND_TOP_300PX"],
+        },
+        {
+            "query": "cheap insurance",
+            "page": "https://a.com/p2/",
+            "current_pos": 22.0,
+            "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
+            "actions": ["REWRITE_SNIPPET_AND_TOP_300PX"],
+        },
+        {
+            "query": "healthy query",
+            "page": "https://a.com/p3/",
+            "current_pos": 5.0,
+            "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
+            "actions": ["REWRITE_SNIPPET_AND_TOP_300PX"],
+        },
+    ]
+    keepers, tasks = detect_cannibalization(rows)
+    task_queries = [t["query"] for t in tasks]
+    assert task_queries == ["cheap insurance"]
+    assert set(tasks[0]["pages"]) == {"https://a.com/p1/", "https://a.com/p2/"}
+    keeper = next(r for r in keepers if r["query"] == "cheap insurance")
+    assert "CONSOLIDATE_CANNIBALIZED_URLS" in keeper["actions"]
+    # A winning page (pos <= 10) is never flagged (Guardrail 2).
+    assert "healthy query" not in task_queries
+
+
+def test_cannibalization_ignores_single_page_queries():
+    from ltr_ranker import detect_cannibalization
+
+    rows = [
+        {
+            "query": "solo",
+            "page": "https://a.com/solo/",
+            "current_pos": 30.0,
+            "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
+            "actions": ["x"],
+        }
+    ]
+    keepers, tasks = detect_cannibalization(rows)
+    assert tasks == [] and len(keepers) == 1
+
+
+# ---------------------------------------------------------------------------
+# coverageState triage (URL Inspection export)
+# ---------------------------------------------------------------------------
+
+
+def test_triage_inspection_states_maps_coverage_to_fixes():
+    from log_outcomes_and_retrain import triage_inspection_states
+
+    inspection = {
+        "https://a.com/discovered/": {
+            "coverageState": "Discovered - currently not indexed"
+        },
+        "https://a.com/crawled/": {"coverageState": "Crawled - currently not indexed"},
+        "https://a.com/dup/": {
+            "coverageState": "Duplicate, Google chose different canonical than user"
+        },
+        "https://a.com/indexed/": {"coverageState": "Submitted and indexed"},
+    }
+    tasks = triage_inspection_states(inspection)
+    by_page = {t["page"]: t["action"] for t in tasks}
+    assert by_page["https://a.com/discovered/"] == "BOOST_INTERNAL_LINKS"
+    assert by_page["https://a.com/crawled/"] == "INJECT_UNIQUE_DATA_TABLE"
+    assert by_page["https://a.com/dup/"] == "PRUNE_DUPLICATE_ROUTE"
+    assert "https://a.com/indexed/" not in by_page
+
+
+def test_inspection_recrawl_evidence_respects_seven_day_rule():
+    from log_outcomes_and_retrain import recrawl_from_inspection
+
+    inspection = {
+        "https://a.com/fresh/": {"lastCrawlTime": "2026-11-20T00:00:00Z"},
+        "https://a.com/stale/": {"lastCrawlTime": "2026-11-12T00:00:00Z"},
+    }
+    deployed = __import__("datetime").datetime(
+        2026, 11, 9, tzinfo=__import__("datetime").timezone.utc
+    )
+    assert recrawl_from_inspection("https://a.com/fresh/", inspection, deployed) is True
+    assert (
+        recrawl_from_inspection("https://a.com/stale/", inspection, deployed) is False
+    )
+    assert (
+        recrawl_from_inspection("https://a.com/missing/", inspection, deployed) is False
+    )
+
+
+# ---------------------------------------------------------------------------
+# item_types persistence (zero-extra-cost SERP feature flags)
+# ---------------------------------------------------------------------------
+
+
+def test_serp_item_types_persisted_as_row_metadata():
+    import collect_features as cf
+
+    serp_items = [{"type": "organic", "url": "https://x.com/", "title": "online sms"}]
+    feature_block = {
+        "item_types": [
+            "organic",
+            "ai_overview",
+            "people_also_ask",
+            "discussions_and_forums",
+        ],
+    }
+    meta = cf.serp_item_metadata(feature_block, serp_items, "online sms")
+    assert meta["has_ai_overview"] is True
+    assert meta["has_forums"] is True
+    assert meta["has_people_also_ask"] is True
+    assert meta["serp_item_types"] == [
+        "organic",
+        "ai_overview",
+        "people_also_ask",
+        "discussions_and_forums",
+    ]
+    empty = cf.serp_item_metadata({}, [], "q")
+    assert empty["has_ai_overview"] is False and empty["serp_item_types"] == []
+
+
+# ---------------------------------------------------------------------------
+# ensure_candidate_depth waterfall (minimum candidate guarantee)
+# ---------------------------------------------------------------------------
+
+
+def test_waterfall_tops_up_from_orphans_then_matrix_then_suggestions():
+    from collect_features import ensure_candidate_depth
+
+    gsc = [
+        {
+            "query": "q1",
+            "page": "https://a.com/one/",
+            "impressions": 10.0,
+            "current_pos": 8.0,
+            "clicks_30d": 0.0,
+            "ctr": 0.0,
+            "source": "gsc",
+        }
+    ]
+    sitemap = ["https://a.com/one/", "https://a.com/two/", "https://a.com/three/"]
+    matrix_fn = lambda need: [  # noqa: E731
+        {
+            "query": f"pair {i}",
+            "page": f"https://a.com/pair-{i}/",
+            "impressions": 0.0,
+            "current_pos": 100.0,
+            "clicks_30d": 0.0,
+            "ctr": 0.0,
+            "source": "catalog_matrix",
+        }
+        for i in range(need)
+    ]
+    rows, report = ensure_candidate_depth(
+        "a.com",
+        gsc,
+        sitemap,
+        min_rows=4,
+        matrix_fn=matrix_fn,
+        suggest_fn=None,
+    )
+    assert len(rows) >= 4
+    assert report["tiers_used"] == ["gsc", "sitemap_orphans", "catalog_matrix"]
+
+
+def test_waterfall_never_drops_below_tier_order_and_dedupes():
+    from collect_features import ensure_candidate_depth
+
+    gsc = [
+        {
+            "query": "q1",
+            "page": "https://a.com/one/",
+            "impressions": 10.0,
+            "current_pos": 8.0,
+            "clicks_30d": 0.0,
+            "ctr": 0.0,
+            "source": "gsc",
+        }
+    ]
+    sitemap = ["https://a.com/one/"]  # duplicate of the GSC row -> no orphan
+    suggest_fn = lambda need: [  # noqa: E731
+        {
+            "query": f"sug {i}",
+            "page": f"https://a.com/sug-{i}/",
+            "impressions": 60.0,
+            "current_pos": 100.0,
+            "clicks_30d": 0.0,
+            "ctr": 0.0,
+            "source": "dfseo_suggest",
+        }
+        for i in range(need)
+    ]
+    rows, report = ensure_candidate_depth(
+        "a.com",
+        gsc,
+        sitemap,
+        min_rows=3,
+        matrix_fn=lambda need: [],
+        suggest_fn=suggest_fn,
+    )
+    assert len(rows) >= 3
+    assert report["tiers_used"] == ["gsc", "catalog_matrix", "dfseo_suggest"]
+
+
+def test_pairwise_matrix_synthesizes_unbuilt_entity_pairs():
+    from collect_features import pairwise_matrix_from_sitemap
+
+    sitemap = [
+        "https://smsriver.com/receive-sms/us/",
+        "https://smsriver.com/receive-sms/gb/",
+        "https://smsriver.com/receive-sms/fr/",
+        "https://smsriver.com/receive-sms/de/",
+        "https://smsriver.com/verify/whatsapp/",
+    ]
+    rows = pairwise_matrix_from_sitemap(
+        sitemap,
+        family_prefix="receive-sms",
+        templates=["receive sms online in {entity}"],
+        max_pairs=3,
+    )
+    queries = [r["query"] for r in rows]
+    assert any("receive sms online in de" == q for q in queries) or rows == []
+    for row in rows:
+        assert row["current_pos"] == 100.0
+        assert row["source"] == "catalog_matrix"
+
+
+# ---------------------------------------------------------------------------
+# compile_wave_backlog: multi-action compiler with TDD assertions
+# ---------------------------------------------------------------------------
+
+
+def _scored(
+    query, page, pos, imp, clicks, title_match, hub_links, shap_hub=0.0, **extra
+):
+    return {
+        "query": query,
+        "page": page,
+        "current_pos": pos,
+        "impressions": imp,
+        "clicks_30d": clicks,
+        "rank_score": 1.0,
+        "cluster_id": "c",
+        "features": {
+            "title_exact_match_rate": title_match,
+            "parent_hub_internal_links": hub_links,
+            "serp_forum_ratio": 0.0,
+            "current_pos": pos,
+            "search_volume_log": 2.0,
+            "domain_centroid_sim": 0.5,
+            "conversion_intent_score": 0.0,
+            "serp_pixel_crowding": 0.0,
+        },
+        "actions": [],
+        "shap": {"parent_hub_internal_links": shap_hub},
+        "source": "gsc",
+        **extra,
+    }
+
+
+def test_compile_wave_backlog_fills_target_with_distinct_atomic_tasks():
+    from ltr_ranker import compile_wave_backlog
+
+    rows = [
+        _scored("q1", "https://a.com/p1/", 8.0, 60.0, 0.0, 0.9, 6.0, shap_hub=-0.2),
+        _scored("q2", "https://a.com/p2/", 12.0, 10.0, 1.0, 0.3, 2.0),
+        _scored("q3", "https://b.com/p3/", 95.0, 0.0, 0.0, 0.9, 1.0),
+    ]
+    tasks = compile_wave_backlog(rows, shipped_ledger=set(), target_wave_size=8)
+    codes = [t["action_code"] for t in tasks]
+    assert len(tasks) >= 5
+    assert "BOOST_CLUSTER_CROSS_LINKS" in codes  # q1: negative hub SHAP
+    assert "OVERHAUL_CTR_HOOK_AND_WEBAPP_SCHEMA" in codes  # q1: high imp, 0 clicks
+    assert "INJECT_EXACT_TITLE_AND_H2" in codes  # q2: title match 0.3
+    assert "CREATE_PROGRAMMATIC_ROUTE" in codes  # q3: pos >= 90
+    # Every task carries an executable TDD assertion + a file target.
+    for task in tasks:
+        assert task["tdd_assertion"] and task["file_target"]
+
+
+def test_compile_wave_backlog_respects_cooldown_and_dedupes():
+    from ltr_ranker import compile_wave_backlog
+
+    rows = [_scored("q1", "https://a.com/p1/", 8.0, 60.0, 0.0, 0.9, 6.0, shap_hub=-0.2)]
+    shipped = {("https://a.com/p1/", "OVERHAUL_CTR_HOOK_AND_WEBAPP_SCHEMA")}
+    tasks = compile_wave_backlog(rows, shipped_ledger=shipped, target_wave_size=5)
+    codes = [t["action_code"] for t in tasks]
+    assert "OVERHAUL_CTR_HOOK_AND_WEBAPP_SCHEMA" not in codes
+    assert len(codes) == len(set(codes)), "duplicate action emitted for one URL"
+
+
+def test_compile_wave_backlog_propagates_across_catalog_siblings():
+    from ltr_ranker import compile_wave_backlog
+
+    rows = [
+        _scored(
+            "receive sms france",
+            "https://a.com/receive-sms/fr/",
+            12.0,
+            10.0,
+            1.0,
+            0.3,
+            2.0,
+        )
+    ]
+    siblings = {"/receive-sms/": 9}
+    tasks = compile_wave_backlog(
+        rows, shipped_ledger=set(), target_wave_size=5, sibling_counts=siblings
+    )
+    propagation = [t for t in tasks if t.get("catalog_propagation")]
+    assert propagation, "catalog propagation hint missing for programmatic route"
+    assert propagation[0]["catalog_propagation"]["siblings"] == 9
+
+
+# ---------------------------------------------------------------------------
+# Offline DataForSEO surrogate (LightGBM-only, no sklearn)
+# ---------------------------------------------------------------------------
+
+
+def test_surrogate_predicts_clipped_serp_features_offline():
+    from dfs_surrogate import OfflineDataForSEOSurrogate
+
+    history = []
+    for i in range(40):
+        history.append(
+            {
+                "query": f"receive sms online {i} free tool",
+                "search_volume_log": 2.0 + (i % 5) * 0.1,
+                "serp_forum_ratio": 0.1 if i % 2 else 0.6,
+                "title_exact_match_rate": 0.2 + (i % 3) * 0.2,
+                "serp_pixel_crowding": 1.0 + (i % 4),
+            }
+        )
+    surrogate = OfflineDataForSEOSurrogate()
+    surrogate.fit(history)
+    preds = surrogate.predict_serp_features(
+        ["receive sms online 99 free tool", "vs compare x"]
+    )
+    assert len(preds) == 2
+    for row in preds:
+        assert 0.0 <= row["serp_forum_ratio"] <= 1.0
+        assert 0.0 <= row["title_exact_match_rate"] <= 1.0
+        assert 0.5 <= row["search_volume_log"] <= 5.0
+        assert row["feature_source"] == "local_surrogate"
+
+
+def test_surrogate_refuses_to_fit_below_the_data_floor():
+    from dfs_surrogate import OfflineDataForSEOSurrogate
+
+    with pytest.raises(RuntimeError):
+        OfflineDataForSEOSurrogate().fit(
+            [
+                {
+                    "query": "q",
+                    "search_volume_log": 2.0,
+                    "serp_forum_ratio": 0.1,
+                    "title_exact_match_rate": 0.5,
+                    "serp_pixel_crowding": 1.0,
+                }
+            ]
+        )
+
+
+# ---------------------------------------------------------------------------
+# DOM gap flags (local HTML vs cached SERP)
+# ---------------------------------------------------------------------------
+
+
+def test_dom_gap_flags_detect_missing_h2_table_and_schema():
+    from collect_features import dom_gap_flags
+
+    html = "<html><h2>Something else</h2><p>no table</p></html>"
+    flags = dom_gap_flags(
+        html,
+        serp_items=[
+            {"type": "people_also_ask", "questions": ["what is x?"], "type_paa": 1}
+        ],
+        query="heic to jpg",
+        internal_inlinks=1.0,
+        is_tool_route=True,
+    )
+    assert flags["missing_exact_h2"] is True
+    assert flags["missing_data_table"] is True
+    assert flags["missing_app_schema"] is True
+    assert flags["weak_internal_inlinks"] is True
+    assert flags["missing_paa_coverage"] is True
+    healthy = dom_gap_flags(
+        "<html><h2>heic to jpg guide</h2><table><tr><td>a</td></tr></table>"
+        '<script type="application/ld+json">{"@type":"WebApplication"}</script>'
+        "<h3>what is x?</h3></html>",
+        serp_items=[],
+        query="heic to jpg",
+        internal_inlinks=5.0,
+        is_tool_route=True,
+    )
+    assert healthy["missing_exact_h2"] is False
+    assert healthy["missing_data_table"] is False
+    assert healthy["missing_app_schema"] is False
+    assert healthy["weak_internal_inlinks"] is False

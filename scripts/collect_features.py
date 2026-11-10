@@ -49,6 +49,7 @@ import csv
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import time
@@ -59,6 +60,15 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dataforseo_client import DataForSEOClient, resolve_credentials
+from fleet_state import (
+    DailyBudgetGate,
+    connect_state_db,
+    gsc_snapshot_fresh,
+    load_cached_serps,
+    load_gsc_snapshot,
+    save_gsc_snapshot,
+    upsert_serp_cache,
+)
 from gsc_analyzer import find_seo_binary, run_seo_report
 from ltr_ranker import ORPHAN_ACTIONS
 
@@ -161,6 +171,164 @@ def synthesize_unseen_rows(
 
 
 SITEMAP_URL_TIMEOUT = 30.0
+
+
+def pairwise_matrix_from_sitemap(
+    sitemap_urls: list[str],
+    family_prefix: str,
+    templates: list[str],
+    max_pairs: int = 50,
+) -> list[dict[str, Any]]:
+    """Tier-3 combinatorial expansion: unbuilt entity pairs from a live family.
+
+    Reads the entity vocabulary from EXISTING sitemap routes under one family
+    prefix (e.g. /receive-sms/{cc}/, /convert/{a}-to-{b}/), then proposes the
+    pairwise combinations NOT yet built through the caller's modifier
+    templates. Zero network cost; demand signals arrive later via the
+    surrogate or a SERP pull on the few pairs the ranker promotes.
+    """
+    domain_match = re.match(
+        r"https?://([^/]+)/", (sitemap_urls[0] if sitemap_urls else "")
+    )
+    domain = (domain_match.group(1) if domain_match else "").lower()
+    prefix = family_prefix.strip("/")
+    vocab: list[str] = []
+    pair_pattern = re.compile(
+        rf"/{re.escape(prefix)}/([a-z0-9-]+)-to-([a-z0-9-]+)/", re.IGNORECASE
+    )
+    single_pattern = re.compile(rf"/{re.escape(prefix)}/([a-z0-9-]+)/", re.IGNORECASE)
+    existing_pairs: set = set()
+    for url in sitemap_urls:
+        pair = pair_pattern.search(url)
+        if pair:
+            existing_pairs.add((pair.group(1).lower(), pair.group(2).lower()))
+            for entity in (pair.group(1), pair.group(2)):
+                if entity.lower() not in vocab:
+                    vocab.append(entity.lower())
+            continue
+        single = single_pattern.search(url)
+        if single:
+            entity = single.group(1).lower()
+            if entity not in vocab:
+                vocab.append(entity)
+    vocab.sort()  # deterministic alphabetical ordering across runs
+    rows: list[dict[str, Any]] = []
+    for template in templates:
+        if "{a}" in template and "{b}" in template:
+            combos = [
+                (a, b)
+                for a in vocab
+                for b in vocab
+                if a != b and (a, b) not in existing_pairs
+            ]
+            rendered = [template.format(a=a, b=b) for a, b in combos]
+        else:
+            rendered = [template.format(entity=e) for e in vocab]
+        for rendered_query in rendered[:max_pairs]:
+            slug = "-".join(tokenize(rendered_query)) or "pair"
+            rows.append(
+                {
+                    "query": rendered_query,
+                    "page": f"https://{domain}/{prefix}/{slug}/",
+                    "clicks_30d": 0.0,
+                    "impressions": 0.0,
+                    "current_pos": 100.0,
+                    "ctr": 0.0,
+                    "window_days": 0,
+                    "source": "catalog_matrix",
+                }
+            )
+    return rows[:max_pairs]
+
+
+def ensure_candidate_depth(
+    domain: str,
+    candidates: list[dict[str, Any]],
+    sitemap_urls: list[str],
+    min_rows: int = 150,
+    matrix_fn: Any = None,
+    suggest_fn: Any = None,
+    shipped_pairs: set | None = None,
+) -> tuple:
+    """4-tier waterfall guaranteeing >= min_rows scoreable candidates.
+
+    Tier 1: GSC candidates (minus recently shipped (page, query) pairs).
+    Tier 2: zero-impression sitemap orphans (already collected upstream).
+    Tier 3: combinatorial entity matrix via ``matrix_fn(need)``.
+    Tier 4: DataForSEO suggestions via ``suggest_fn(need)`` (the only
+    potentially-costly tier; callers pass None to stay offline).
+    Returns (rows, tier_report) — the report names every tier actually used.
+    """
+    shipped_pairs = shipped_pairs or set()
+    active = [
+        c
+        for c in candidates
+        if (str(c["page"]).rstrip("/"), str(c["query"]).strip().lower())
+        not in shipped_pairs
+    ]
+    tiers_used = ["gsc"] if active else []
+
+    def _need() -> int:
+        return max(0, min_rows - len(active))
+
+    if _need() and sitemap_urls:
+        gsc_pages = {str(c["page"]).rstrip("/") + "/" for c in candidates}
+        orphans = synthesize_orphan_rows(sitemap_urls, gsc_pages, domain=domain)
+        if orphans:
+            active.extend(orphans[: _need()])
+            tiers_used.append("sitemap_orphans")
+
+    if _need() and matrix_fn is not None:
+        active.extend(matrix_fn(_need())[: _need()])
+        tiers_used.append("catalog_matrix")
+
+    if _need() and suggest_fn is not None:
+        active.extend(suggest_fn(_need())[: _need()])
+        tiers_used.append("dfseo_suggest")
+
+    return active, {"tiers_used": tiers_used, "rows": len(active), "min_rows": min_rows}
+
+
+def dom_gap_flags(
+    our_html: str,
+    serp_items: list[dict[str, Any]],
+    query: str,
+    internal_inlinks: float | None = None,
+    is_tool_route: bool = False,
+) -> dict[str, Any]:
+    """Six structural gap flags: our HTML vs the cached SERP winners.
+
+    Zero-cost when fed from an already-fetched page (e.g. the top-N candidates
+    the caller chose to crawl). Flags ride OUTSIDE the 8-feature vector as
+    row metadata; compile_wave_backlog turns them into atomic TDD tasks.
+    """
+    html = (our_html or "").lower()
+    query_tokens = set(tokenize(query))
+    headings = re.findall(
+        r"<h[23][^>]*>(.*?)</h[23]>", html, flags=re.DOTALL | re.IGNORECASE
+    )
+    heading_text = re.sub(r"<[^>]+>", " ", " ".join(headings)).lower()
+
+    paa_questions: list[str] = []
+    for item in serp_items or []:
+        if (item.get("type") or "") == "people_also_ask" or item.get("questions"):
+            for q in item.get("questions") or []:
+                paa_questions.append(
+                    q if isinstance(q, str) else str(q.get("question", ""))
+                )
+
+    return {
+        "missing_exact_h2": bool(query_tokens)
+        and not query_tokens.issubset(set(heading_text.split())),
+        "missing_data_table": "<table" not in html,
+        "missing_paa_coverage": bool(paa_questions)
+        and len([q for q in paa_questions if q.lower() in html]) < 2,
+        "weak_internal_inlinks": internal_inlinks is not None
+        and internal_inlinks < 3.0,
+        "missing_app_schema": is_tool_route
+        and "webapplication" not in html
+        and "softwareapplication" not in html,
+    }
 
 
 def fetch_sitemap_urls(site: str, timeout: float = SITEMAP_URL_TIMEOUT) -> list[str]:
@@ -581,12 +749,31 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="skip the zero-cost sitemap orphan-route detector",
     )
+    parser.add_argument(
+        "--state-db",
+        default="",
+        help="SQLite fleet state DB: 24h GSC snapshot fast path, 30d SERP "
+        "cache layer, and the daily DataForSEO budget gate",
+    )
     args = parser.parse_args(argv)
+
+    state_conn = connect_state_db(args.state_db) if args.state_db else None
 
     if args.gsc_json:
         print(f"[1/3] Ingesting {len(args.gsc_json)} GSC report export(s) ...")
         candidates = load_report_files(list(args.gsc_json))
+        pulled_live = False
+    elif state_conn is not None and gsc_snapshot_fresh(
+        state_conn, args.site, max_age_hours=24
+    ):
+        candidates = load_gsc_snapshot(state_conn, args.site, max_age_hours=24)
+        pulled_live = False
+        print(
+            f"[1/3] State DB: fresh (<24h) GSC snapshot for {args.site} "
+            f"({len(candidates)} rows) - network pull skipped."
+        )
     else:
+        pulled_live = True
         if not find_seo_binary():
             print(
                 "ERROR: seo binary not found; GSC data is unavailable.", file=sys.stderr
@@ -643,6 +830,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # Candidate-pipeline expansion: net-new rows from DataForSEO Labs so thin
     # and 0-row properties surface dozens of LAUNCH_PSEO_ROUTE tasks per run.
+    if pulled_live and state_conn is not None and candidates:
+        save_gsc_snapshot(state_conn, args.site, candidates)
+        print(f"      State DB: GSC snapshot saved ({len(candidates)} rows, 24h TTL).")
     candidates.extend(expand_candidates(candidates, args))
 
     # Deduplicate on (query, page), keep max impressions.
@@ -704,6 +894,17 @@ def main(argv: list[str] | None = None) -> int:
         for keyword, value in list(cache.items()):
             if isinstance(value, list):
                 cache[keyword] = {"items": value, "item_types": []}
+        # Fleet-shared SERP cache layer (30d TTL): entries other skill
+        # invocations already paid for fill in before any new task is posted.
+        if state_conn is not None:
+            db_entries = load_cached_serps(state_conn, [c["query"] for c in candidates])
+            merged = 0
+            for keyword, entry in db_entries.items():
+                if keyword not in cache:
+                    cache[keyword] = entry
+                    merged += 1
+            if merged:
+                print(f"      State DB: {merged} cached SERP entries reused (30d TTL).")
         missing = [c["query"] for c in candidates if c["query"] not in cache]
         print(
             f"[2/3] DataForSEO: {len(cache)} cached, {len(missing)} to fetch (budget cap ${args.max_serp_cost:.2f}) ..."
@@ -712,9 +913,30 @@ def main(argv: list[str] | None = None) -> int:
         affordable = (
             missing[: int(args.max_serp_cost / unit_cost)] if unit_cost else missing
         )
+        # Daily budget gate: across ALL skill invocations on this machine,
+        # never post more than the per-day Standard-Queue task cap.
+        if state_conn is not None and affordable:
+            gate = DailyBudgetGate(
+                args.state_db,
+                daily_cap=max(1, min(100, int(args.max_serp_cost / unit_cost))),
+            )
+            remaining = gate.remaining()
+            if remaining <= 0:
+                print(
+                    "      Daily DataForSEO budget exhausted (gate) - fetching "
+                    "from cache only until tomorrow (UTC)."
+                )
+                affordable = []
+            else:
+                affordable = affordable[:remaining]
         if affordable:
             try:
                 client.post_serp_tasks(affordable, depth=10)
+                if state_conn is not None:
+                    spent = DailyBudgetGate(args.state_db).record(len(affordable))
+                    print(
+                        f"      Budget gate: {len(affordable)} tasks recorded, {spent} left today."
+                    )
             except Exception as exc:  # noqa: BLE001 - degrade to cache-only
                 print(f"      task_post failed ({exc}).")
         poll_deadline = time.time() + args.queue_wait_mins * 60
@@ -741,6 +963,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"      {got}/{len(affordable)} fetched ...")
         with open(serp_cache_path, "w", encoding="utf-8") as fh:
             json.dump(cache, fh)
+        if state_conn is not None:
+            fresh_entries = {
+                keyword: value
+                for keyword, value in cache.items()
+                if isinstance(value, dict) and value.get("items")
+            }
+            for keyword, entry in fresh_entries.items():
+                upsert_serp_cache(
+                    state_conn, keyword, entry["items"], entry.get("item_types") or []
+                )
         serp_by_query = {
             c["query"]: (cache[c["query"]].get("items") or cache[c["query"]])
             for c in candidates
