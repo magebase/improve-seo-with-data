@@ -314,3 +314,57 @@ all "Status 503", all inside the known Nov 9 outage window (09:08, 09:39,
 11:09 UTC; 8-10 min each, auto-resolved), ZERO incidents since - the PR #7
 hardened build has held through Nov 10. The monitor correctly catches the
 hard-500/503 failure mode it was built for.
+
+## Clarity + PostHog cross-platform insights (2026-11-10)
+
+First successful Clarity Data Export API pull (GET
+`www.clarity.ms/export-data/api/v1/project-live-insights?numOfDays=3&dimension1=URL`,
+Bearer per-project JWTs from `.env.credentials`; quota 10 req/project/day) +
+PostHog HogQL/event pull (project 659774 "Submitly", shared across the fleet).
+
+### Traffic reality: analytics emptiness is real emptiness, not a bug
+
+- Clarity last-3-days sessions: smsriver 2 (1 user, PC, /public-sms-inbox/),
+  figiva 0, skrino 0, incomecanvas 0, OFC 0. PostHog 30d pageviews: smsriver
+  2,357, figiva 67, OFC 10, incomecanvas 18, skrino 4.
+- Cross-check vs GSC: the non-smsriver properties get ~1-2 organic clicks/day,
+  which matches the near-zero analytics counts. Snippets ARE live (probe
+  verified) and capture IS working - the fleet's human traffic outside smsriver
+  is ~zero. Traffic acquisition, not UX, is the binding constraint on 4 of 5
+  properties. No analytics repair work warranted until traffic exists to record.
+
+### smsriver: the only property with a usable UX signal (and it has one clear defect)
+
+- Product funnel (30d PostHog): 53 search_landing -> 145 search_inbox_opened ->
+  54 search_phone_copied -> 1 search_otp_copied -> 10 search_sms_received;
+  13 search_bounce; 3 user_logged_in. The 54 -> 1 collapse at phone-copy ->
+  OTP-copy is the single biggest conversion leak in the fleet: users copy a
+  number but almost never return to copy the OTP. Either the SMS-arrival
+  handoff is not pulling users back to the inbox, or the OTP copy affordance
+  is missed after arrival.
+- Inbox refresh loop: search_inbox_refreshed fired 5,448x in 4 days vs 53
+  landings (~100 refreshes per landing user). Combined with 70 rageclicks/30d
+  concentrated on /inbox/<number>/ pages (+1 on /receive-sms/bd/), the inbox
+  waiting experience is the dominant frustration: users hammer refresh while
+  waiting for SMS that mostly never arrive (10 received vs 53 landings).
+- Clarity 3d confirms on /public-sms-inbox/: rage + dead + quickback clicks,
+  scroll depth 18% (users see only the top fifth of the page), engagement
+  321s total but 3s active.
+- Web vitals (PostHog, 30d, n=188-217): INP p50 48ms / p75 120ms / p90 176ms
+  (all good); CLS p50-90 = 0; LCP p50 1.55s / p75 2.45s / p90 4.3s. LCP p90
+  is the only metric drifting toward the 4s warning band - matches the known
+  3.2s TBT main-thread stall from inbox polling; fix together with the
+  refresh-loop throttle.
+- Data hygiene: smsriver `search_*` product events carry no `$host` (custom
+  capture), so per-host dashboards undercount smsriver ~65k events/mo into
+  "no host". Tag the events with `$host` at capture time.
+
+### Fleet actions ranked
+
+1. smsriver: fix the phone-copy -> OTP-return handoff (biggest measurable
+   conversion leak; also throttles the 5.4k refresh storm and the LCP p90).
+2. smsriver: add `$host` to `search_*` captures.
+3. figiva/OFC/incomecanvas/skrino: no analytics action - get traffic first
+   (Stage-4 windows Nov 23..Dec 7); revisit Clarity/PostHog after traffic.
+4. Keep the 10-req/day Clarity quota in mind: 2 calls/project/3-days is the
+   working recipe (URL + Device/Country breakdowns).
