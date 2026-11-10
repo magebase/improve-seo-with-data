@@ -27,6 +27,7 @@ import json
 import os
 import re
 import sqlite3
+from urllib.parse import urlparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Sequence
@@ -214,6 +215,16 @@ def preflight_hygiene(
 
     for task_id, page, query, action_code, file_target in rows:
         if not is_clean_english_query(query or ""):
+            _cas_status(conn, task_id, "REJECTED", shipped=False, stamp=stamp)
+            report["rejected"] += 1
+            continue
+        page_path = urlparse(page).path if "://" in (page or "") else (page or "")
+        if page_path in ("", "/") and (action_code or "") in (
+            "WIRE_HUB_AND_FOOTER_INLINKS",
+            "STRENGTHEN_HUB_INTERNAL_LINKS",
+            "RESCUE_ORPHAN_ROUTE_INLINKS",
+            "BOOST_CLUSTER_CROSS_LINKS",
+        ):
             _cas_status(conn, task_id, "REJECTED", shipped=False, stamp=stamp)
             report["rejected"] += 1
             continue

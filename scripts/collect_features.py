@@ -283,8 +283,13 @@ def inspect_coverage_states(
             return results
 
         def runner(site: str, url: str) -> dict[str, Any]:
+            site_param = (
+                site
+                if site.startswith("http") or site.startswith("sc-domain:")
+                else f"sc-domain:{site}"
+            )
             proc = subprocess.run(
-                [seo_bin, "url-inspect", "--site", site, "--url", url, "--json"],
+                [seo_bin, "url-inspect", "--site", site_param, "--url", url, "--json"],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -585,7 +590,31 @@ def synthesize_orphan_rows(
         seen.add(url)
         path = url.split("://", 1)[-1].split("?", 1)[0].rstrip("/")
         slug = path.rsplit("/", 1)[-1] if "/" in path else path
-        query = " ".join(tokenize(slug)) or slug
+        rel_path = ("/" + path.split("/", 1)[1]) if "/" in path else "/"
+        # Skip top-level category/hub/index routes (e.g. /compare/, /calculators/, /tools/, /articles/)
+        hub_paths = {
+            "",
+            "/",
+            "/compare",
+            "/calculators",
+            "/articles",
+            "/tools",
+            "/niche",
+            "/convert",
+            "/studio",
+            "/guides",
+        }
+        if rel_path.rstrip("/") in hub_paths:
+            continue
+        slug_tokens = tokenize(slug)
+        # Never synthesize 1-word queries from hub/category slugs (e.g., /compare/ or /niche/insurance/)
+        first_segment = rel_path.strip("/").split("/")[0] if rel_path.strip("/") else ""
+        if (
+            first_segment in {"compare", "calculators", "articles", "tools", "niche", "convert", "studio", "guides"}
+            and len(slug_tokens) < 2
+        ):
+            continue
+        query = " ".join(slug_tokens) or slug
         rows.append(
             {
                 "query": query,
@@ -886,7 +915,7 @@ def expand_candidates(
     if args.gsc_only or not (args.suggest_seeds or args.seed_from_competitors):
         return expansion
     try:
-        login, password = resolve_credentials(env=dict(os.environ))
+        login, password = resolve_credentials()
     except RuntimeError as exc:
         print(f"      DataForSEO unavailable ({exc}); candidate expansion skipped.")
         return expansion
@@ -1219,7 +1248,7 @@ def main(argv: list[str] | None = None) -> int:
     login, password = (None, None)
     if not args.gsc_only:
         try:
-            login, password = resolve_credentials(env=dict(os.environ))
+            login, password = resolve_credentials()
         except RuntimeError as exc:
             print(
                 f"[2/3] DataForSEO unavailable ({exc}) -> GSC-only mode "

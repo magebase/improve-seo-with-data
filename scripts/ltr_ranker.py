@@ -912,8 +912,22 @@ def compile_wave_backlog(
             if path.startswith(prefix):
                 propagation = {"prefix": prefix, "siblings": int(count)}
                 break
+        is_unbuilt = (
+            float(row.get("current_pos", 0.0) or 0.0) >= 90.0
+            and str(row.get("coverage_state", "")) != "Discovered - currently not indexed"
+        )
         for code, predicate in rules:
+            if is_unbuilt and code != "CREATE_PROGRAMMATIC_ROUTE":
+                continue
             if not predicate(row):
+                continue
+            # Rule: Never emit inlink tasks for root homepage '/' (every page already links to / via brand header/footer)
+            if path in ("", "/") and code in (
+                "WIRE_HUB_AND_FOOTER_INLINKS",
+                "STRENGTHEN_HUB_INTERNAL_LINKS",
+                "RESCUE_ORPHAN_ROUTE_INLINKS",
+                "BOOST_CLUSTER_CROSS_LINKS",
+            ):
                 continue
             key = (page_key, code)
             if key in emitted or key in shipped_keys:

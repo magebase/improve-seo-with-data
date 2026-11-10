@@ -89,6 +89,35 @@ def estimate_serp_cost(num_keywords: int, mode: str = "queue") -> float:
     raise ValueError(f"unknown SERP mode: {mode!r} (expected 'queue' or 'live')")
 
 
+def load_env_credentials_file() -> dict[str, str]:
+    """Reads credentials from .env.credentials in cwd, ancestor directories, or home."""
+    creds: dict[str, str] = {}
+    candidates = [
+        os.path.expanduser("~/.env.credentials"),
+        os.path.join(os.getcwd(), ".env.credentials"),
+    ]
+    cur = os.path.abspath(os.getcwd())
+    while cur and cur != "/":
+        p = os.path.join(cur, ".env.credentials")
+        if p not in candidates:
+            candidates.append(p)
+        cur = os.path.dirname(cur)
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            creds[k.strip()] = v.strip().strip("'\"")
+            except Exception:
+                pass
+            if creds:
+                break
+    return creds
+
+
 def resolve_credentials(
     login: str | None = None,
     password: str | None = None,
@@ -97,21 +126,34 @@ def resolve_credentials(
     """Resolves DataForSEO Basic-auth credentials with documented precedence.
 
     Precedence: explicit args > DATAFORSEO_LOGIN/PASSWORD > DFS_LOGIN/PASSWORD >
-    DATAFORSEO_API_KEY (combined "login:password"). Raises RuntimeError with the
-    fix in the message instead of failing silently at request time.
+    DATAFORSEO_API_KEY (combined "login:password") > .env.credentials file.
+    Raises RuntimeError with the fix in the message instead of failing silently
+    at request time.
     """
-    env = env if env is not None else dict(os.environ)
     if login and password:
         return login, password
-    env_login = env.get("DATAFORSEO_LOGIN") or env.get("DFS_LOGIN")
-    env_password = env.get("DATAFORSEO_PASSWORD") or env.get("DFS_PASSWORD")
+    explicit_env = env is not None
+    active_env = env if explicit_env else dict(os.environ)
+    env_login = active_env.get("DATAFORSEO_LOGIN") or active_env.get("DFS_LOGIN")
+    env_password = active_env.get("DATAFORSEO_PASSWORD") or active_env.get("DFS_PASSWORD")
     if env_login and env_password:
         return env_login, env_password
-    combined = env.get("DATAFORSEO_API_KEY")
+    combined = active_env.get("DATAFORSEO_API_KEY")
     if combined and ":" in combined:
         combined_login, _, combined_password = combined.partition(":")
         if combined_login and combined_password:
             return combined_login, combined_password
+    if not explicit_env:
+        file_creds = load_env_credentials_file()
+        f_login = file_creds.get("DATAFORSEO_LOGIN") or file_creds.get("DFS_LOGIN")
+        f_password = file_creds.get("DATAFORSEO_PASSWORD") or file_creds.get("DFS_PASSWORD")
+        if f_login and f_password:
+            return f_login, f_password
+        f_combined = file_creds.get("DATAFORSEO_API_KEY")
+        if f_combined and ":" in f_combined:
+            f_log, _, f_pass = f_combined.partition(":")
+            if f_log and f_pass:
+                return f_log, f_pass
     raise RuntimeError(
         "DataForSEO credentials not found. Set DATAFORSEO_LOGIN/DATAFORSEO_PASSWORD "
         "(or DFS_LOGIN/DFS_PASSWORD) in .env.credentials, or DATAFORSEO_API_KEY as "

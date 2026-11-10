@@ -211,6 +211,13 @@ def estimate_title_display_width(title: str) -> Dict[str, Any]:
     Estimates Google SERP display width in pixels based on character metrics.
     Google desktop cutoff: ~580px
     Google mobile cutoff: ~480px
+
+    Metrics (Arial / Roboto SERP typography):
+    - Narrow chars (i, j, l, |, etc.): 4.5px
+    - Em-dash (— / U+2014): 12.5px
+    - Wide chars (m, w, M, W, @, #, %, &): 11.5px
+    - Uppercase chars: 9.5px
+    - Standard lowercase / digits: 7.5px
     """
     narrow_chars = set("ijl|!:,;. ")
     wide_chars = set("mwMW@#%&")
@@ -219,6 +226,8 @@ def estimate_title_display_width(title: str) -> Dict[str, Any]:
     for char in title:
         if char in narrow_chars:
             width_px += 4.5
+        elif char in ("—", "\u2014"):
+            width_px += 12.5
         elif char in wide_chars:
             width_px += 11.5
         elif char.isupper():

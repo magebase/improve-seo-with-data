@@ -336,7 +336,7 @@ if __name__ == "__main__":  # pragma: no cover - thin CLI wrapper
             parser.error("--backfill-volumes requires --fit-from-state-db")
         from dataforseo_client import DataForSEOClient, resolve_credentials
 
-        login, password = resolve_credentials(env=dict(os.environ))
+        login, password = resolve_credentials()
         client = DataForSEOClient(login, password)
         summary = backfill_volumes_from_keywords_data(
             args.fit_from_state_db,
