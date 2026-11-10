@@ -334,3 +334,42 @@ def test_serp_volume_column_migration_and_backfill_roundtrip(tmp_path):
         "SELECT search_volume FROM dfs_serp_cache WHERE query = 'q one'"
     ).fetchone()
     assert row[0] == 5400.0
+
+
+def test_mark_tasks_reverted_accepts_leased_tasks(conn):
+    """Executor adjudication: an unfit LEASED task must reach terminal REVERTED."""
+    from fleet_state import enqueue_tasks, lease_tasks, mark_tasks_reverted
+
+    tasks = [
+        {
+            "page": "https://smsriver.com/x/",
+            "query": "typo recive",
+            "action_code": "INJECT_EXACT_TITLE_AND_H2",
+            "file_target": "templates/x.html",
+        },
+        {
+            "page": "https://smsriver.com/y/",
+            "query": "clean query",
+            "action_code": "BOOST_CLUSTER_CROSS_LINKS",
+            "file_target": "templates/y.html",
+        },
+    ]
+    enqueue_tasks(conn, tasks)
+    conn.commit()
+    leased = lease_tasks(
+        conn, domain="smsriver.com", limit=2, now=datetime.now(timezone.utc)
+    )
+    assert len(leased) == 2
+    first_id = leased[0]["id"]
+    first_page = leased[0]["page"]
+    assert mark_tasks_reverted(conn, [first_id]) == 1
+    conn.commit()
+    status = conn.execute(
+        "SELECT status FROM atomic_task_backlog WHERE id=?", (first_id,)
+    ).fetchone()[0]
+    assert status == "REVERTED"
+    # REVERTED is terminal: a fresh lease never re-picks it
+    again = lease_tasks(
+        conn, domain="smsriver.com", limit=5, now=datetime.now(timezone.utc)
+    )
+    assert all(t["page"] != first_page for t in again)

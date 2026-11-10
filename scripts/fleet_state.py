@@ -148,6 +148,27 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
                 (extract_route_family(page), task_id),
             )
         conn.commit()
+    # One-time backfill: legacy rows predate the domain column. Domain-scoped
+    # leases and per-domain quotas depend on it; derive it from the page URL.
+    stale_domains = conn.execute(
+        "SELECT COUNT(*) FROM atomic_task_backlog "
+        "WHERE (domain IS NULL OR domain = '') AND page LIKE 'http%'"
+    ).fetchone()[0]
+    if stale_domains:
+        from urllib.parse import urlparse
+
+        for task_id, page in conn.execute(
+            "SELECT id, page FROM atomic_task_backlog "
+            "WHERE (domain IS NULL OR domain = '') AND page LIKE 'http%'"
+        ):
+            host = (urlparse(str(page)).hostname or "").lower()
+            parts = host.split(".")
+            domain = ".".join(parts[-2:]) if len(parts) > 2 else host
+            conn.execute(
+                "UPDATE atomic_task_backlog SET domain = ? WHERE id = ?",
+                (domain, task_id),
+            )
+        conn.commit()
 
 
 def extract_route_family(url: str) -> str:
@@ -320,6 +341,13 @@ def enqueue_tasks(
     added = 0
     for task in tasks:
         page = str(task.get("page") or task.get("url") or "")
+        domain = str(task.get("domain") or "")
+        if not domain and page:
+            from urllib.parse import urlparse
+
+            host = (urlparse(page).hostname or "").lower()
+            parts = host.split(".")
+            domain = ".".join(parts[-2:]) if len(parts) > 2 else host
         try:
             conn.execute(
                 "INSERT INTO atomic_task_backlog "
@@ -327,7 +355,7 @@ def enqueue_tasks(
                 " tdd_assertion, lgbm_score, priority_score, route_family, status, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)",
                 (
-                    str(task.get("domain") or ""),
+                    domain,
                     page,
                     str(task.get("query") or ""),
                     str(task.get("action_code") or task.get("prescribed_action") or ""),
@@ -433,7 +461,12 @@ def lease_tasks(
         "RETURNING id, domain, page, query, action_code, target_component, "
         "file_target, tdd_assertion, lgbm_score, priority_score, route_family"
     )
-    cursor = conn.execute(sql, (*family_params, limit, stamp))
+    cursor = conn.execute(
+        sql,
+        # Placeholder order: domain filter (ranked_pending) -> family-cap
+        # filters (diversified_wave) -> LIMIT -> lease stamp.
+        (*([domain] if domain else []), *family_params, limit, stamp),
+    )
     leased = [
         {
             "id": row[0],
@@ -480,20 +513,22 @@ def mark_tasks_reverted(
     task_ids: list,
     now: Optional[datetime] = None,
 ) -> int:
-    """Records the auto-rollback detector's reverts (SHIPPED -> REVERTED).
+    """Records terminal reverts (SHIPPED -> REVERTED, LEASED -> REVERTED).
 
     REVERTED is terminal: the wave's change was rolled back (Stage 4
-    negative-delta detector), so the task must NOT re-enter the lease cursor
-    and thrash the same page. The commit_sha audit trail is preserved; the
-    JSONL cooldown ledger governs whether the (page, action) can be
-    re-prescribed later through a fresh scoring run.
+    negative-delta detector) OR the executing agent adjudicated the leased
+    task unfit before implementing it (parameterized pseudo-pages, typo
+    queries, intent-registry violations) — either way the task must NOT
+    re-enter the lease cursor and thrash the same page. The commit_sha
+    audit trail is preserved; the JSONL cooldown ledger governs whether the
+    (page, action) can be re-prescribed later through a fresh scoring run.
     """
     stamp = _iso(_utc_now(now))
     reverted = 0
     for task_id in task_ids:
         cur = conn.execute(
             "UPDATE atomic_task_backlog SET status = 'REVERTED', shipped_at = ? "
-            "WHERE id = ? AND status = 'SHIPPED'",
+            "WHERE id = ? AND status IN ('SHIPPED', 'LEASED')",
             (stamp, task_id),
         )
         reverted += cur.rowcount
