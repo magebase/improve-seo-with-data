@@ -946,6 +946,10 @@ def compile_wave_backlog(
             tasks.append(task)
             if len(tasks) >= target_wave_size:
                 return tasks
+            if code == "CREATE_PROGRAMMATIC_ROUTE":
+                # A brand-new programmatic route bundles exact title, H2, and inlinks
+                # upon creation; skip emitting secondary atomic tweaks for the same row.
+                break
         if len(tasks) > tasks_before_row:
             family_counts[route_family] += 1  # cap DISTINCT pages per family
     return tasks
