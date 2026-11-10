@@ -437,3 +437,42 @@ Live-browser proof (headless Chromium on figiva.com, consent accepted):
   public inbox page, 2 sessions with rage+dead+quickback clicks, 18% scroll
   depth - consistent with the PostHog rageclick finding; smsriver has a
   Chinese-language user segment worth a locale-specific look.
+
+## FIX ALL round 2: CSP fix + TECP restore + fleet un-gating (2026-11-10, DEPLOY-WAR WARNING)
+
+saas-factory commits, all fast-forwarded to local main:
+- `d02e989f` CSP: permit `https://scripts.clarity.ms` + `https://www.googletagmanager.com`
+  in script-src (and GTM/google-analytics in connect-src) in both
+  `config/settings.py` SECURE_CSP and `cloudflare/worker/index.js` SECURITY_HEADERS.
+- `4f5cab6f` Restore `tecp_complete_view` (dropped by the 0153f395 checkpoint
+  while urls_figiva.py still imported it -> figiva.com hard-500ed on deploy,
+  urlconf import failure) + restore smsriver security middleware (CSP, XFO,
+  PermissionsPolicy) that the settings_smspool MIDDLEWARE override had dropped.
+- `c35f9337` Remove GZipMiddleware from smsriver: Workers strips
+  Content-Encoding while the body stays compressed -> every non-HTML response
+  (llms.txt, sitemaps, agent-skills json) served as undecodable bytes. Edge
+  cache purge (zone a438a15b) cleared the poisoned objects.
+- `db067e14` Real fleet Clarity IDs in observability_registry.yaml (z77fung67y/
+  z77gamiskh/z77gyk5y1e/z77hu8v6ne/z77i5mktag/z77ij1741j) + new
+  `is_observability_consent_gated()` + `OBSERVABILITY_CONSENT_GATED = False`
+  on the four public-utility settings modules -> telemetry runs UNGATED on
+  public sites (PostHog counts all visitors, not just consent-accepters).
+
+Verified live after my deploys: GA4 transmitting first-ever beacons on
+figiva (g/collect 204s), CSP correct on all 5, smsriver 11/11 smoke, clarity
+ids rendered.
+
+### DEPLOY-WAR WARNING (operator action needed)
+Concurrent agent windows `/tmp/sf-agent-smsriver-status`
+(`agent/smsriver-status-title`, base 4167a9ef) and `/tmp/sf-agent-wave61`
+(`agent/smsriver-wave61-route-int`) deployed the fleet at 03:59-04:02Z from
+branches cut BEFORE the above fixes, regressing: CSP scripts.clarity.ms
+allowance gone -> Clarity CSP-blocked again; telemetry consent-gated again.
+Their branches carry their own z77 registry entries, so IDs render but the
+loader is blocked. MY COMMITS ARE ALL IN MAIN (c35f9337). Those windows must
+rebase onto main and redeploy; I did not deploy-war. Until then: Clarity and
+GA4 remain dark fleet-wide and PostHog counts only consent-accepters.
+
+Test evidence at commit time: clarity-fleet conformance 6/6 (RED->GREEN),
+posthog/security/adsense suites 31/31, posthog_fleet 6/6 params (were failing
+on main), smsriver smoke 11/11 manual post-purge.
