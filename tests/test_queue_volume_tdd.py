@@ -1324,3 +1324,56 @@ def test_compiler_coverage_state_triggers():
     assert (
         "RESCUE_ORPHAN_ROUTE_INLINKS" in codes
     )  # discovered-not-indexed: discovery gate
+
+
+# ---------------------------------------------------------------------------
+# Round 5b: report -> gsc-query window fallback (binary report shape drift)
+# ---------------------------------------------------------------------------
+
+
+def test_gsc_candidates_with_fallback_prefers_report_then_window():
+    from collect_features import gsc_candidates_with_fallback
+
+    report_rows = [{"query": "q1", "page": "https://a.com/", "clicks": 1,
+                    "impressions": 10, "position": 5.0, "ctr": 0.1}]
+    window_calls = []
+
+    def run_report(report_id, site):
+        return {"presentation": {"tables": []}}  # shape drift: no performance rows
+
+    def pull_window(site, start, end):
+        window_calls.append((site, start, end))
+        return [{"query": "w1", "page": "https://a.com/x/", "clicks_30d": 2.0,
+                 "impressions": 30.0, "current_pos": 7.0, "ctr": 0.06,
+                 "window_days": 0, "source": "gsc_window"}]
+
+    # Degraded report -> window fallback supplies the candidates.
+    candidates, mode = gsc_candidates_with_fallback(
+        "sc-domain:a.com", run_report_fn=run_report, pull_window_fn=pull_window,
+        window_days=28,
+    )
+    assert mode == "gsc_window"
+    assert candidates and candidates[0]["source"] == "gsc_window"
+    assert len(window_calls) == 1
+
+    # Healthy report -> no window call at all.
+    def healthy_report(report_id, site):
+        return {"rows": report_rows}
+
+    candidates, mode = gsc_candidates_with_fallback(
+        "sc-domain:a.com", run_report_fn=healthy_report, pull_window_fn=pull_window,
+    )
+    assert mode == "report"
+    assert candidates[0]["query"] == "q1"
+    assert len(window_calls) == 1  # unchanged
+
+
+def test_gsc_candidates_with_fallback_raises_when_both_sources_empty():
+    from collect_features import gsc_candidates_with_fallback
+
+    with pytest.raises(RuntimeError):
+        gsc_candidates_with_fallback(
+            "sc-domain:a.com",
+            run_report_fn=lambda rid, site: {},
+            pull_window_fn=lambda site, start, end: [],
+        )

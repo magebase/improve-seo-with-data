@@ -619,6 +619,46 @@ def serp_item_metadata(
     }
 
 
+def gsc_candidates_with_fallback(
+    site: str,
+    run_report_fn: Any = None,
+    pull_window_fn: Any = None,
+    window_days: int = 28,
+    report_id: str = "search-performance-overview",
+) -> tuple:
+    """Collects GSC candidates from the composite report, with a window fallback.
+
+    The `seo` binary's report payloads have drifted before (a report that
+    carries recommendations but no embedded performance rows). When
+    ``find_performance_rows`` finds nothing, this falls back to a raw
+    ``gsc-query`` (query, page) window over the last ``window_days`` days —
+    the same primitive the backfill and recrawl-verification paths use.
+    Returns (candidates, mode) where mode is "report" or "gsc_window".
+    """
+    report = (run_report_fn or run_seo_report)(report_id, site)
+    if not report.get("ok", True) and "error" in report:
+        print(f"      report failed ({str(report['error'])[:120]}); trying gsc-query window.")
+        report = {}
+    rows = find_performance_rows(report)
+    if rows:
+        return rows, "report"
+    print(
+        f"      report carried no performance rows; falling back to a raw "
+        f"gsc-query window ({window_days}d)."
+    )
+    end = datetime.now().date()
+    start = end - timedelta(days=window_days)
+    window_rows = (pull_window_fn or pull_gsc_window)(
+        site, start.isoformat(), end.isoformat()
+    )
+    if not window_rows:
+        raise RuntimeError(
+            "no GSC candidates from either the report or the gsc-query window"
+        )
+    print(f"      gsc-query window: {len(window_rows)} (query, page) rows.")
+    return window_rows, "gsc_window"
+
+
 def pull_gsc_window(site: str, start: str, end: str) -> list[dict[str, Any]]:
     """Pulls a (query, page) GSC window via `seo gsc-query` subprocess.
 
@@ -983,16 +1023,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         print(f"[1/3] Pulling GSC performance for {args.site} via seo binary ...")
-        report = run_seo_report(args.report, args.site)
-        if not report.get("ok", True) and "error" in report:
-            print(f"ERROR: seo report failed: {report['error']}", file=sys.stderr)
-            return 1
-        rows = find_performance_rows(report)
-        if not rows:
-            print(
-                "ERROR: report contained no query/page performance rows.",
-                file=sys.stderr,
+        try:
+            rows, source_mode = gsc_candidates_with_fallback(
+                args.site, report_id=args.report
             )
+        except RuntimeError as exc:
+            print(f"ERROR: GSC collection failed: {exc}", file=sys.stderr)
             return 1
 
         candidates = []
@@ -1005,15 +1041,18 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "query": str(query),
                     "page": str(page),
-                    "clicks_30d": float(row.get("clicks", 0) or 0),
+                    "clicks_30d": float(row.get("clicks", row.get("clicks_30d", 0)) or 0),
                     "impressions": float(row.get("impressions", 0) or 0),
                     "current_pos": float(
-                        row.get("position", row.get("avg_position", 99)) or 99
+                        row.get("position", row.get("current_pos", row.get("avg_position", 99)))
+                        or 99
                     ),
                     "ctr": float(row.get("ctr", 0) or 0),
-                    "window_days": 28,
+                    "window_days": row.get("window_days", 28),
+                    "source": row.get("source", "gsc"),
                 }
             )
+        print(f"      GSC source mode: {source_mode} ({len(candidates)} raw rows).")
         if args.backfill_days > 0:
             end = datetime.now().date()
             start = end - timedelta(days=args.backfill_days)

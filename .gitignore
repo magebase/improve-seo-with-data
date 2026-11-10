@@ -33,3 +33,5 @@ tmp/
 dist/
 reports/
 *.tmp
+models/dfs_surrogate_*.txt
+models/dfs_surrogate.meta.json
