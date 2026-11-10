@@ -196,17 +196,21 @@ class OfflineDataForSEOSurrogate:
         return out
 
 
-def rows_from_serp_cache(cache: Dict[str, Any]) -> List[Dict[str, Any]]:
+def rows_from_serp_cache(
+    cache: Dict[str, Any], volumes: Optional[Dict[str, float]] = None
+) -> List[Dict[str, Any]]:
     """Extracts surrogate training rows from a .serp_cache.json-shaped payload.
 
     Uses the REAL extractor outputs: ``forum_ugc_ratio`` (extract_serp_features)
     becomes serp_forum_ratio; ``title_exact_match_rate`` and the crowding-block
-    count come from serp_vulnerability_score's components. Volume is only
-    present in keyword-info blocks (suggestions), so SERP-only entries train
-    the three SERP targets; fit() trains each target on the rows that carry it.
+    count come from serp_vulnerability_score's components. Volume comes from
+    the Keywords-Data backfill (``volumes`` mapping over the cache) when
+    present, else from keyword-info blocks — SERP-only entries train the
+    three SERP targets; fit() trains each target on the rows that carry it.
     """
     from dataforseo_client import extract_serp_features, serp_vulnerability_score
 
+    volumes = volumes or {}
     rows: List[Dict[str, Any]] = []
     for query, payload in cache.items():
         items = payload.get("items") if isinstance(payload, dict) else payload
@@ -215,13 +219,15 @@ def rows_from_serp_cache(cache: Dict[str, Any]) -> List[Dict[str, Any]]:
         feats = extract_serp_features(items)
         vuln = serp_vulnerability_score(items, query)
         components = vuln.get("components") or {}
-        volume = None
-        for item in items:
-            if item.get("type") == "keyword_info" or "keyword_volume" in item:
-                volume = (
-                    float(item.get("keyword_volume") or item.get("vol") or 0) or None
-                )
-                break
+        volume = volumes.get(query) or volumes.get(str(query).strip().lower())
+        if volume is None:
+            for item in items:
+                if item.get("type") == "keyword_info" or "keyword_volume" in item:
+                    volume = (
+                        float(item.get("keyword_volume") or item.get("vol") or 0)
+                        or None
+                    )
+                    break
         rows.append(
             {
                 "query": query,
@@ -252,12 +258,17 @@ def refit_from_state_db(
     from fleet_state import connect_state_db
 
     cache: Dict[str, Any] = {}
+    volumes: Dict[str, float] = {}
     conn = connect_state_db(db_path)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
-    for query, items_json in conn.execute(
-        "SELECT query, items_json FROM dfs_serp_cache WHERE fetched_at >= ?", (cutoff,)
+    for query, items_json, stored_volume in conn.execute(
+        "SELECT query, items_json, search_volume FROM dfs_serp_cache "
+        "WHERE fetched_at >= ?",
+        (cutoff,),
     ):
         cache[str(query)] = json.loads(items_json)
+        if stored_volume is not None:
+            volumes[str(query)] = float(stored_volume)
     conn.close()
 
     if serp_cache_path and os.path.exists(serp_cache_path):
@@ -267,11 +278,38 @@ def refit_from_state_db(
             if query not in cache:
                 cache[str(query)] = value
 
-    rows = rows_from_serp_cache(cache)
+    rows = rows_from_serp_cache(cache, volumes=volumes)
     surrogate = OfflineDataForSEOSurrogate()
     meta = surrogate.fit(rows, models_dir=models_dir)
     meta["cache_entries"] = len(cache)
+    meta["volume_backed_rows"] = len(volumes)
     return meta
+
+
+def backfill_volumes_from_keywords_data(
+    db_path: str,
+    volume_fn: Any,
+    batch_size: int = 1000,
+) -> Dict[str, Any]:
+    """One batch Keywords-Data call fills dfs_serp_cache.search_volume.
+
+    ``volume_fn(keywords) -> {keyword: monthly_volume}`` is injected so tests
+    and alternate providers can substitute the transport; the CLI wires the
+    real DataForSEO google_ads/search_volume/live endpoint (~$0.05-0.07 per
+    1,000 keywords). This is what permanently unlocks the surrogate's
+    search_volume_log head on SERP-only caches.
+    """
+    from fleet_state import connect_state_db, queries_missing_volume, save_serp_volumes
+
+    conn = connect_state_db(db_path)
+    missing = queries_missing_volume(conn, limit=batch_size)
+    filled = 0
+    if missing:
+        volumes = volume_fn(missing) or {}
+        filled = save_serp_volumes(conn, volumes)
+    remaining = len(queries_missing_volume(conn, limit=batch_size))
+    conn.close()
+    return {"requested": len(missing), "filled": filled, "still_missing": remaining}
 
 
 if __name__ == "__main__":  # pragma: no cover - thin CLI wrapper
@@ -285,7 +323,31 @@ if __name__ == "__main__":  # pragma: no cover - thin CLI wrapper
         "--serp-cache", default=".serp_cache.json", help="file SERP cache to merge"
     )
     parser.add_argument("--models-dir", default="models/")
+    parser.add_argument(
+        "--backfill-volumes",
+        action="store_true",
+        help="fill dfs_serp_cache.search_volume via one Keywords Data "
+        "search_volume/live batch (~$0.05-0.07 per 1,000 keywords), then exit",
+    )
     args = parser.parse_args()
+
+    if args.backfill_volumes:
+        if not args.fit_from_state_db:
+            parser.error("--backfill-volumes requires --fit-from-state-db")
+        from dataforseo_client import DataForSEOClient, resolve_credentials
+
+        login, password = resolve_credentials(env=dict(os.environ))
+        client = DataForSEOClient(login, password)
+        summary = backfill_volumes_from_keywords_data(
+            args.fit_from_state_db,
+            volume_fn=client.keyword_search_volume_live,
+        )
+        print(
+            f"Volume backfill: requested {summary['requested']}, "
+            f"filled {summary['filled']}, still missing {summary['still_missing']}."
+        )
+        raise SystemExit(0)
+
     if not args.fit_from_state_db:
         parser.error("--fit-from-state-db is required")
     summary = refit_from_state_db(
@@ -295,5 +357,6 @@ if __name__ == "__main__":  # pragma: no cover - thin CLI wrapper
     )
     print(
         f"Surrogate refit: {summary['rows']} training rows from "
-        f"{summary['cache_entries']} cache entries -> {args.models_dir}"
+        f"{summary['cache_entries']} cache entries "
+        f"({summary.get('volume_backed_rows', 0)} volume-backed) -> {args.models_dir}"
     )

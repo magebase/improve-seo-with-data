@@ -1478,3 +1478,44 @@ def test_orphan_detector_never_emits_sitemap_index_files():
     pages = [r["page"] for r in rows]
     assert all(not p.endswith(".xml") for p in pages)
     assert any("bulk-validator" in p for p in pages)
+
+
+def test_volume_backfill_unlocks_the_surrogate_volume_head():
+    from dfs_surrogate import backfill_volumes_from_keywords_data, refit_from_state_db
+    from fleet_state import connect_state_db, upsert_serp_cache
+    import tempfile
+
+    db_path = tempfile.mktemp(suffix=".db")
+    conn = connect_state_db(db_path)
+    for i in range(25):
+        items = [
+            {
+                "type": "organic",
+                "domain": "competitor-x.com",
+                "title": f"widget guide {i} free",
+            },
+            {"type": "organic", "domain": "competitor-y.com", "title": f"widget {i}"},
+            {
+                "type": "discussions_and_forums",
+                "domain": "community.org",
+                "title": f"t {i}",
+            },
+        ]
+        upsert_serp_cache(conn, f"widget question {i}", items, ["organic"])
+    conn.close()
+
+    summary = backfill_volumes_from_keywords_data(
+        db_path, volume_fn=lambda keywords: {k: 100.0 + len(k) for k in keywords}
+    )
+    assert summary["filled"] == 25 and summary["still_missing"] == 0
+
+    meta = refit_from_state_db(db_path, models_dir=tempfile.mkdtemp())
+    assert meta["volume_backed_rows"] == 25
+    assert meta["search_volume_log"], "volume head must train once volumes are backed"
+
+    from dfs_surrogate import OfflineDataForSEOSurrogate
+
+    surrogate = OfflineDataForSEOSurrogate()
+    assert surrogate.load(models_dir=meta["search_volume_log"].rsplit("/", 1)[0])
+    pred = surrogate.predict_serp_features(["widget question 999"])[0]
+    assert 0.5 <= pred["search_volume_log"] <= 5.0

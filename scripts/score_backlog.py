@@ -205,14 +205,22 @@ def main(argv: list[str] | None = None) -> int:
         default=35,
         help="tasks leased per invocation from the state-DB cursor (the "
         "backlog is replenished at FULL depth regardless; 0 leases everything "
-        "enqueued this run). When the cursor already holds >= lease-size "
-        "PENDING tasks, this invocation takes the fast path: lease only, no "
-        "collection/scoring.",
+        "enqueued this run). When the cursor already holds >= "
+        "--replenish-below PENDING tasks, this invocation takes the fast "
+        "path: lease only, no collection/scoring.",
+    )
+    parser.add_argument(
+        "--replenish-below",
+        type=int,
+        default=70,
+        help="replenish (full-depth compile + enqueue) whenever the pending "
+        "backlog holds fewer than this many tasks; at or above it the "
+        "invocation is a pure <1s cursor lease (2 waves of buffer)",
     )
     args = parser.parse_args(argv)
 
-    # Fast path (the 50x/day cursor): when the backlog already holds a full
-    # wave of PENDING tasks, lease and return in well under a second — no
+    # Fast path (the 50x/day cursor): when the backlog holds at least two
+    # waves of PENDING tasks, lease and return in well under a second — no
     # feature file, no model, no network.
     if args.state_db and args.lease_size > 0:
         from fleet_state import (
@@ -222,8 +230,13 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         fast_conn = _connect(args.state_db)
-        if _pending(fast_conn) >= args.lease_size:
-            leased = _lease(fast_conn, limit=args.lease_size)
+        if _pending(fast_conn) >= max(args.replenish_below, args.lease_size):
+            leased = _lease(
+                fast_conn,
+                limit=args.lease_size,
+                family_caps={"number": 3},
+                default_family_cap=10,
+            )
             os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
             with open(args.output, "w", encoding="utf-8") as fh:
                 json.dump({"fast_path": True, "leased": leased}, fh, indent=2)
@@ -366,7 +379,15 @@ def main(argv: list[str] | None = None) -> int:
         pending = full_backlog + queue if args.compile_wave > 0 else queue
         added = enqueue_tasks(conn, pending)
         lease_n = args.lease_size if args.lease_size > 0 else len(pending)
-        leased = lease_tasks(conn, limit=lease_n)
+        # Stratified lease: /number/* (or any single template family) can
+        # never take more than 3 slots of a 35-task wave; other families cap
+        # at 10 so no one family monopolizes the wave either.
+        leased = lease_tasks(
+            conn,
+            limit=lease_n,
+            family_caps={"number": 3},
+            default_family_cap=10,
+        )
         still_pending = pending_count(conn)
         print(
             f"State DB {args.state_db}: enqueued {added} new, leased {len(leased)} "

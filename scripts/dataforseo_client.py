@@ -242,9 +242,7 @@ def _default_transport(
 class DataForSEOClient:
     """Cost-routed DataForSEO v3 client (stdlib-only, injectable transport)."""
 
-    def __init__(
-        self, login: str, password: str, transport: Transport | None = None
-    ):
+    def __init__(self, login: str, password: str, transport: Transport | None = None):
         self._auth_pair = (login, password)
         self._auth_header = (
             "Basic " + base64.b64encode(f"{login}:{password}".encode()).decode()
@@ -296,6 +294,92 @@ class DataForSEOClient:
         return data
 
     # ------------------------------------------------------------ labs (live)
+
+    def keyword_search_volume_live(
+        self,
+        keywords: list[str],
+        *,
+        location_code: int = 2840,
+        language_name: str = "english",
+    ) -> dict[str, float]:
+        """Keywords Data google_ads/search_volume/live: monthly volumes, one batch.
+
+        SERP task_get responses carry NO search volume (only the Labs and
+        Keywords Data endpoints do), so the surrogate's volume head starves
+        even when the SERP cache is deep. One batch call prices up to 1,000
+        keywords (~$0.05-$0.09) and returns {keyword: monthly_volume} for
+        writing back into dfs_serp_cache — permanently unlocking the
+        search_volume_log target. Unresolved keywords are simply absent from
+        the returned mapping.
+
+        Sanitation: cached "queries" may include Boolean search-operator
+        strings from weak-spot scans (negated site: filters) or over-long
+        tokens; Keywords Data rejects the ENTIRE batch on one bad keyword
+        (status 40501), so invalid entries are dropped up front and an empty
+        full-batch result triggers a chunked retry instead of a total loss.
+        """
+        clean: list[str] = []
+        for keyword in keywords:
+            text = (keyword or "").strip()
+            if not text or len(text) > 80:
+                continue
+            if text.startswith("-") or "site:" in text or '"' in text:
+                continue  # Boolean operator strings, not real search queries
+            clean.append(text)
+        if not clean:
+            return {}
+        payload_keywords = clean[:1000]
+
+        def _volumes_from(data: dict[str, Any]) -> dict[str, float]:
+            chunk_volumes: dict[str, float] = {}
+            for task in data.get("tasks") or []:
+                if task.get("status_code") not in (20000, 20100):
+                    continue
+                for result in task.get("result") or []:
+                    keyword = str(result.get("keyword") or "").strip().lower()
+                    volume = result.get("search_volume")
+                    if keyword and volume is not None:
+                        try:
+                            chunk_volumes[keyword] = float(volume)
+                        except (TypeError, ValueError):
+                            continue
+            return chunk_volumes
+
+        data = self._post(
+            "/keywords_data/google_ads/search_volume/live",
+            [
+                {
+                    "keywords": payload_keywords,
+                    "location_code": location_code,
+                    "language_name": language_name,
+                    "search_partners": False,
+                    "include_adult_keywords": False,
+                }
+            ],
+        )
+        volumes = _volumes_from(data)
+        if not volumes and len(payload_keywords) > 100:
+            # One unsanitized keyword can still fail a whole batch; retry in
+            # small chunks so a single bad entry costs one chunk, not all.
+            for start in range(0, len(payload_keywords), 100):
+                chunk = payload_keywords[start : start + 100]
+                try:
+                    chunk_data = self._post(
+                        "/keywords_data/google_ads/search_volume/live",
+                        [
+                            {
+                                "keywords": chunk,
+                                "location_code": location_code,
+                                "language_name": language_name,
+                                "search_partners": False,
+                                "include_adult_keywords": False,
+                            }
+                        ],
+                    )
+                except RuntimeError:
+                    continue
+                volumes.update(_volumes_from(chunk_data))
+        return volumes
 
     def keyword_suggestions(
         self,

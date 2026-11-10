@@ -31,6 +31,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 DEFAULT_DB_DIR = Path.home() / ".seo_fleet"
 DEFAULT_DB_PATH = str(DEFAULT_DB_DIR / "fleet_state.db")
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS atomic_task_backlog (
     tdd_assertion   TEXT,
     lgbm_score      REAL NOT NULL DEFAULT 0.0,
     priority_score  REAL NOT NULL DEFAULT 0.0,
+    route_family    TEXT NOT NULL DEFAULT 'root',
     status          TEXT NOT NULL DEFAULT 'PENDING',
     created_at      TEXT NOT NULL,
     leased_at       TEXT,
@@ -108,7 +110,58 @@ def connect_state_db(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=5000")
     conn.executescript(_SCHEMA)
     conn.commit()
+    _migrate_schema(conn)
     return conn
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    """Safe additive migrations for state DBs created by older skill versions."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(atomic_task_backlog)")}
+    if "route_family" not in columns:
+        try:
+            conn.execute(
+                "ALTER TABLE atomic_task_backlog "
+                "ADD COLUMN route_family TEXT NOT NULL DEFAULT 'root'"
+            )
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # concurrent migration already applied it
+    serp_columns = {row[1] for row in conn.execute("PRAGMA table_info(dfs_serp_cache)")}
+    if "search_volume" not in serp_columns:
+        try:
+            conn.execute("ALTER TABLE dfs_serp_cache ADD COLUMN search_volume REAL")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # concurrent migration already applied it
+    # One-time backfill: legacy rows predate route tagging. Converges to a
+    # no-op after the first successful pass (everything gets tagged).
+    stale = conn.execute(
+        "SELECT COUNT(*) FROM atomic_task_backlog WHERE route_family = 'root' "
+        "AND page LIKE '%/%'"
+    ).fetchone()[0]
+    if stale:
+        for task_id, page in conn.execute(
+            "SELECT id, page FROM atomic_task_backlog WHERE route_family = 'root'"
+        ):
+            conn.execute(
+                "UPDATE atomic_task_backlog SET route_family = ? WHERE id = ?",
+                (extract_route_family(page), task_id),
+            )
+        conn.commit()
+
+
+def extract_route_family(url: str) -> str:
+    """Normalizes '/number/12025550199/' -> 'number', '/guides/foo/' -> 'guides'.
+
+    Root-level and query-param URLs fall back to the URL itself so each is
+    its own family (never capped as a flood).
+    """
+    raw = str(url)
+    path = urlparse(raw).path if "://" in raw else "/" + raw.strip("/")
+    parts = [p for p in path.strip("/").split("/") if p]
+    if not parts:
+        return raw.rstrip("/") or "root"
+    return parts[0].lower()
 
 
 def _utc_now(now: Optional[datetime]) -> datetime:
@@ -196,6 +249,34 @@ def upsert_serp_cache(
     conn.commit()
 
 
+def queries_missing_volume(conn: sqlite3.Connection, limit: int = 1000) -> list:
+    """Cache queries still without a Keywords-Data volume (surrogate starvation)."""
+    rows = conn.execute(
+        "SELECT query FROM dfs_serp_cache WHERE search_volume IS NULL "
+        "AND items_json != '[]' LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [row[0] for row in rows]
+
+
+def save_serp_volumes(conn: sqlite3.Connection, volumes: dict) -> int:
+    """Writes Keywords-Data volumes back into dfs_serp_cache (surrogate head)."""
+    updated = 0
+    for keyword, volume in (volumes or {}).items():
+        if volume is None:
+            continue
+        for candidate in (str(keyword), str(keyword).strip().lower()):
+            cur = conn.execute(
+                "UPDATE dfs_serp_cache SET search_volume = ? WHERE query = ?",
+                (float(volume), candidate),
+            )
+            updated += cur.rowcount
+            if cur.rowcount:
+                break
+    conn.commit()
+    return updated
+
+
 def load_cached_serps(
     conn: sqlite3.Connection,
     queries: list,
@@ -238,15 +319,16 @@ def enqueue_tasks(
     stamp = _iso(_utc_now(now))
     added = 0
     for task in tasks:
+        page = str(task.get("page") or task.get("url") or "")
         try:
             conn.execute(
                 "INSERT INTO atomic_task_backlog "
                 "(domain, page, query, action_code, target_component, file_target, "
-                " tdd_assertion, lgbm_score, priority_score, status, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)",
+                " tdd_assertion, lgbm_score, priority_score, route_family, status, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)",
                 (
                     str(task.get("domain") or ""),
-                    str(task.get("page") or task.get("url") or ""),
+                    page,
                     str(task.get("query") or ""),
                     str(task.get("action_code") or task.get("prescribed_action") or ""),
                     task.get("target_component"),
@@ -254,6 +336,7 @@ def enqueue_tasks(
                     task.get("tdd_assertion"),
                     float(task.get("lgbm_score") or 0.0),
                     float(task.get("priority_score") or task.get("rank_score") or 0.0),
+                    extract_route_family(page),
                     stamp,
                 ),
             )
@@ -293,29 +376,64 @@ def lease_tasks(
     domain: Optional[str] = None,
     limit: int = 35,
     now: Optional[datetime] = None,
+    family_caps: Optional[dict] = None,
+    default_family_cap: int = 0,
 ) -> list:
     """Atomically pops the next PENDING tasks (priority DESC) as LEASED.
 
     Runs `release_stale_leases` first, then performs the cursor flip in ONE
     UPDATE ... RETURNING statement, so two concurrent invocations can never
-    lease the same task (SQLite serializes the write; the subquery's LIMIT
-    hands out each row exactly once). REVERTED tasks never re-enter.
+    lease the same task. REVERTED tasks never re-enter.
+
+    Diversity controls for high-frequency fleets:
+    - ``family_caps`` / ``default_family_cap``: per-wave caps on tasks from
+      one route family (ROW_NUMBER partition), so a deep /number/* backlog
+      cannot make every wave identical.
+    - file-target locks: a wave never leases a PENDING task whose
+      ``file_target`` is already held by an ACTIVE lease in another agent
+      worktree (NULL/empty file targets are exempt - legacy tasks and
+      page-level fixes don't collide). This prevents same-file merge
+      collisions across parallel waves.
     """
     release_stale_leases(conn, now=now)
     stamp = _iso(_utc_now(now))
     domain_filter = "AND domain = ?" if domain else ""
-    params = ([domain] if domain else []) + [limit]
-    cursor = conn.execute(
-        f"UPDATE atomic_task_backlog SET status = 'LEASED', leased_at = ? "
-        f"WHERE id IN ("
-        f"  SELECT id FROM atomic_task_backlog "
-        f"  WHERE status = 'PENDING' {domain_filter} "
-        f"  ORDER BY priority_score DESC LIMIT ?"
-        f") "
-        f"RETURNING id, domain, page, query, action_code, target_component, "
-        f"file_target, tdd_assertion, lgbm_score, priority_score",
-        (stamp, *params),
+    family_filters = []
+    family_params: list = []
+    caps = dict(family_caps or {})
+    if caps or default_family_cap > 0:
+        for family in sorted(caps):
+            family_filters.append("(route_family = ? AND family_rank <= ?)")
+            family_params.extend([family, caps[family]])
+        family_filters.append(
+            f"(route_family NOT IN ({', '.join('?' * len(caps)) or "''"}) "
+            f"AND family_rank <= ?)"
+        )
+        family_params.extend([*caps.keys(), default_family_cap])
+    where_clauses = " OR ".join(family_filters) if family_filters else "1 = 1"
+    sql = (
+        "WITH ranked_pending AS ("
+        "  SELECT id, route_family, priority_score,"
+        "         ROW_NUMBER() OVER ("
+        "             PARTITION BY route_family ORDER BY priority_score DESC"
+        "         ) AS family_rank"
+        "  FROM atomic_task_backlog"
+        f"  WHERE status = 'PENDING' {domain_filter}"
+        "), diversified_wave AS ("
+        "  SELECT id FROM ranked_pending"
+        f"  WHERE {where_clauses}"
+        "    AND (file_target IS NULL OR file_target = '' OR file_target NOT IN ("
+        "        SELECT DISTINCT file_target FROM atomic_task_backlog"
+        "        WHERE status = 'LEASED' AND file_target IS NOT NULL AND file_target != ''"
+        "    ))"
+        "  ORDER BY priority_score DESC LIMIT ?"
+        ")"
+        "UPDATE atomic_task_backlog SET status = 'LEASED', leased_at = ? "
+        "WHERE id IN (SELECT id FROM diversified_wave) "
+        "RETURNING id, domain, page, query, action_code, target_component, "
+        "file_target, tdd_assertion, lgbm_score, priority_score, route_family"
     )
+    cursor = conn.execute(sql, (*family_params, limit, stamp))
     leased = [
         {
             "id": row[0],
@@ -328,6 +446,7 @@ def lease_tasks(
             "tdd_assertion": row[7],
             "lgbm_score": row[8],
             "priority_score": row[9],
+            "route_family": row[10],
             "status": "LEASED",
         }
         for row in cursor.fetchall()

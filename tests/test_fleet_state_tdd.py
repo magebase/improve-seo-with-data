@@ -27,8 +27,11 @@ from fleet_state import (
     mark_shipped,
     mark_tasks_reverted,
     pending_count,
+    queries_missing_volume,
     release_stale_leases,
     save_gsc_snapshot,
+    save_serp_volumes,
+    save_url_inspections,
     upsert_serp_cache,
 )
 
@@ -196,3 +199,138 @@ def test_mark_tasks_reverted_is_terminal_and_unleasable():
         "SELECT COUNT(*) FROM atomic_task_backlog WHERE status='REVERTED' AND commit_sha='abc1234'"
     ).fetchone()[0]
     assert remaining == 2  # audit trail preserved
+
+
+# ---------------------------------------------------------------------------
+# Round 7: route_family stratification, file-target locks, migration
+# ---------------------------------------------------------------------------
+
+
+def test_enqueue_tags_route_family_and_column_migrates(tmp_path):
+    conn = connect_state_db(str(tmp_path / "migrate.db"))
+    # Legacy row (pre-route_family era) simulated by direct insert:
+    conn.execute(
+        "INSERT INTO atomic_task_backlog (domain, page, query, action_code, status, created_at) "
+        "VALUES ('a.com', 'https://a.com/number/123/', 'q', 'ACT', 'PENDING', '2026-01-01')"
+    )
+    conn.commit()
+    conn.close()
+    # Reconnecting must migrate the column AND backfill route_family.
+    conn2 = connect_state_db(str(tmp_path / "migrate.db"))
+    fam = conn2.execute(
+        "SELECT route_family FROM atomic_task_backlog WHERE page='https://a.com/number/123/'"
+    ).fetchone()[0]
+    assert fam == "number"
+
+    enqueue_tasks(
+        conn2,
+        [
+            {
+                "domain": "a.com",
+                "page": "https://a.com/guides/x/",
+                "query": "q2",
+                "action_code": "ACT2",
+                "priority_score": 1.0,
+            }
+        ],
+    )
+    fam2 = conn2.execute(
+        "SELECT route_family FROM atomic_task_backlog WHERE page='https://a.com/guides/x/'"
+    ).fetchone()[0]
+    assert fam2 == "guides"
+
+
+def test_lease_tasks_stratifies_families_per_wave():
+    conn = connect_state_db(":memory:")
+    number_tasks = [
+        {
+            "domain": "a.com",
+            "page": f"https://a.com/number/{i}/",
+            "query": f"n{i}",
+            "action_code": "ACT",
+            "priority_score": 10.0 - i,
+        }
+        for i in range(10)
+    ]
+    guide_tasks = [
+        {
+            "domain": "a.com",
+            "page": f"https://a.com/guides/g{i}/",
+            "query": f"g{i}",
+            "action_code": "ACT",
+            "priority_score": 5.0 - i,
+        }
+        for i in range(10)
+    ]
+    enqueue_tasks(conn, number_tasks + guide_tasks)
+    wave = lease_tasks(
+        conn,
+        limit=6,
+        family_caps={"number": 2},
+        default_family_cap=2,
+    )
+    from collections import Counter
+
+    fams = Counter(t["route_family"] for t in wave)
+    assert fams["number"] <= 2 and fams["guides"] <= 2
+    assert len(wave) == 4  # caps bind before the limit fills
+
+
+def test_lease_tasks_never_hands_out_locked_file_targets():
+    conn = connect_state_db(":memory:")
+    # Simulate another worktree having leased file_target 'templates/home.html'
+    enqueue_tasks(
+        conn,
+        [
+            {
+                "domain": "a.com",
+                "page": "https://a.com/one/",
+                "query": "q1",
+                "action_code": "ACT",
+                "priority_score": 10.0,
+                "file_target": "templates/home.html",
+            },
+        ],
+    )
+    locked = lease_tasks(conn, limit=1)
+    assert locked and locked[0]["file_target"] == "templates/home.html"
+
+    enqueue_tasks(
+        conn,
+        [
+            {
+                "domain": "a.com",
+                "page": "https://a.com/two/",
+                "query": "q2",
+                "action_code": "ACT",
+                "priority_score": 9.0,
+                "file_target": "templates/home.html",
+            },  # collides with the active lease
+            {
+                "domain": "a.com",
+                "page": "https://a.com/three/",
+                "query": "q3",
+                "action_code": "ACT",
+                "priority_score": 8.0,
+                "file_target": "templates/status.html",
+            },
+        ],
+    )
+    wave = lease_tasks(conn, limit=2)
+    pages = [t["page"] for t in wave]
+    assert "https://a.com/two/" not in pages, "locked file_target must not double-lease"
+    assert "https://a.com/three/" in pages
+
+
+def test_serp_volume_column_migration_and_backfill_roundtrip(tmp_path):
+    conn = connect_state_db(str(tmp_path / "vol.db"))
+    upsert_serp_cache(conn, "q one", [{"type": "organic"}], [])
+    upsert_serp_cache(conn, "q two", [{"type": "organic"}], [])
+    missing = queries_missing_volume(conn)
+    assert set(missing) == {"q one", "q two"}
+    save_serp_volumes(conn, {"q one": 5400.0})
+    assert queries_missing_volume(conn) == ["q two"]
+    row = conn.execute(
+        "SELECT search_volume FROM dfs_serp_cache WHERE query = 'q one'"
+    ).fetchone()
+    assert row[0] == 5400.0
