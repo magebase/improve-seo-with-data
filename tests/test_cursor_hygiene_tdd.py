@@ -23,7 +23,6 @@ Rule 42: Strict Red -> Green -> Red TDD cycle.
 
 import json
 import os
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -103,9 +102,7 @@ def test_scrubber_bounds():
 def _enqueue(conn, rows):
     enqueue_tasks(conn, rows)
     conn.commit()
-    return [
-        r[0] for r in conn.execute("SELECT id FROM atomic_task_backlog ORDER BY id")
-    ]
+    return [r[0] for r in conn.execute("SELECT id FROM atomic_task_backlog ORDER BY id")]
 
 
 def test_preflight_rejects_junk_and_graduates_covered_tasks(conn):
@@ -134,13 +131,9 @@ def test_preflight_rejects_junk_and_graduates_covered_tasks(conn):
     )
     report = preflight_hygiene(
         conn,
-        route_intent_map={
-            "https://smsriver.com/verify/paypal/": "PayPal SMS Integration: codes on public lines"
-        },
+        route_intent_map={"https://smsriver.com/verify/paypal/": "PayPal SMS Integration: codes on public lines"},
     )
-    statuses = {
-        r[0]: r[1] for r in conn.execute("SELECT id, status FROM atomic_task_backlog")
-    }
+    statuses = {r[0]: r[1] for r in conn.execute("SELECT id, status FROM atomic_task_backlog")}
     assert report["rejected"] == 1
     assert statuses[ids[0]] == "REJECTED"
     assert report["graduated"] == 1
@@ -187,7 +180,7 @@ def test_preflight_respects_locked_prefixes_and_intent_cap(conn):
             {
                 "page": "https://smsriver.com/y/",
                 "query": "intent two",
-                "action_code": "INJECT_EXACT_H2_AND_TITLE",
+                "action_code": "INJECT_FAQ_SCHEMA",
                 "file_target": "t/y2.html",
             },
             {
@@ -207,13 +200,9 @@ def test_preflight_respects_locked_prefixes_and_intent_cap(conn):
         ),
         max_intent_tasks_per_page=2,
     )
-    statuses = {
-        r[0]: r[1] for r in conn.execute("SELECT id, status FROM atomic_task_backlog")
-    }
+    statuses = {r[0]: r[1] for r in conn.execute("SELECT id, status FROM atomic_task_backlog")}
     assert report["locked"] == 1
-    assert (
-        statuses[ids[0]] == "PENDING"
-    )  # locked tasks stay PENDING (agent-owned), not leased
+    assert statuses[ids[0]] == "PENDING"  # locked tasks stay PENDING (agent-owned), not leased
     assert report["intent_capped"] == 1
     assert statuses[ids[3]] == "PENDING"
     assert statuses[ids[1]] == "PENDING" and statuses[ids[2]] == "PENDING"
@@ -232,12 +221,7 @@ def test_rejected_tasks_never_reenqueue(conn):
         ],
     )
     preflight_hygiene(conn, route_intent_map={})
-    assert (
-        conn.execute(
-            "SELECT status FROM atomic_task_backlog WHERE id=?", (ids[0],)
-        ).fetchone()[0]
-        == "REJECTED"
-    )
+    assert conn.execute("SELECT status FROM atomic_task_backlog WHERE id=?", (ids[0],)).fetchone()[0] == "REJECTED"
     added = enqueue_tasks(
         conn,
         [
@@ -309,24 +293,16 @@ def test_lease_type_caps_force_task_diversity(conn):
         "ADD_D1_SPEC_COMPARISON_TABLE": 2,
         "BOOST_CLUSTER_CROSS_LINKS": 2,
     }, "quota tier 0 must lead the wave with the capped split"
-    assert sum(counts.values()) == 18, (
-        "empty quota tiers backfill the wave to its limit"
-    )
+    assert sum(counts.values()) == 18, "empty quota tiers backfill the wave to its limit"
 
 
 def test_default_type_caps_reflect_the_wave62_split():
     assert DEFAULT_TYPE_CAPS["ADD_D1_SPEC_COMPARISON_TABLE"] == 8
     assert DEFAULT_TYPE_CAPS["OVERHAUL_CTR_HOOK_AND_WEBAPP_SCHEMA"] == 6
     # the inlink family shares the 8-slot slice across its two codes
-    assert (
-        DEFAULT_TYPE_CAPS["BOOST_CLUSTER_CROSS_LINKS"]
-        + DEFAULT_TYPE_CAPS["STRENGTHEN_HUB_INTERNAL_LINKS"]
-    ) == 8
+    assert (DEFAULT_TYPE_CAPS["BOOST_CLUSTER_CROSS_LINKS"] + DEFAULT_TYPE_CAPS["STRENGTHEN_HUB_INTERNAL_LINKS"]) == 8
     # the title/H2 family shares the 5-slot slice
-    assert (
-        DEFAULT_TYPE_CAPS["INJECT_EXACT_TITLE_AND_H2"]
-        + DEFAULT_TYPE_CAPS["INJECT_EXACT_H2_AND_TITLE"]
-    ) == 5
+    assert (DEFAULT_TYPE_CAPS["INJECT_EXACT_TITLE_AND_H2"] + DEFAULT_TYPE_CAPS["INJECT_EXACT_H2_AND_TITLE"]) == 5
     assert DEFAULT_TYPE_CAPS["CREATE_PROGRAMMATIC_ROUTE"] == 3
 
 
@@ -370,20 +346,14 @@ def test_worktree_lock_registry_lifecycle(tmp_path: Path):
     assert "templates/smspool/country_codes_hub.html" in prefixes
 
     # a DEAD pid must expire immediately
-    register_worktree_locks(
-        ["/articles/"], agent_id="dead-agent", registry_path=registry, pid=999999999
-    )
+    register_worktree_locks(["/articles/"], agent_id="dead-agent", registry_path=registry, pid=999999999)
     assert "/articles/" not in active_locked_prefixes(registry_path=registry)
 
     # heartbeat TTL expiry
-    register_worktree_locks(
-        ["/stale/"], agent_id="old-agent", registry_path=registry, pid=pid
-    )
+    register_worktree_locks(["/stale/"], agent_id="old-agent", registry_path=registry, pid=pid)
     data = json.loads(registry.read_text())
     stale_entry = next(e for e in data["locks"] if e["agent_id"] == "old-agent")
-    stale_entry["heartbeat"] = (
-        datetime.now(timezone.utc) - timedelta(hours=3)
-    ).isoformat()
+    stale_entry["heartbeat"] = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
     registry.write_text(json.dumps(data))
     assert "/stale/" not in active_locked_prefixes(registry_path=registry)
 
@@ -407,9 +377,7 @@ def test_release_deferred_leases_on_closeout(conn):
     leased = lease_tasks(conn, limit=5, now=datetime.now(timezone.utc))
     assert leased
     release_deferred_leases_on_closeout(conn, [leased[0]["id"]])
-    status = conn.execute(
-        "SELECT status FROM atomic_task_backlog WHERE id=?", (leased[0]["id"],)
-    ).fetchone()[0]
+    status = conn.execute("SELECT status FROM atomic_task_backlog WHERE id=?", (leased[0]["id"],)).fetchone()[0]
     assert status == "PENDING"
     assert pending_count(conn) == 1
 

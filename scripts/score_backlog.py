@@ -250,6 +250,11 @@ def main(argv: list[str] | None = None) -> int:
         "(empty string disables graduation)",
     )
     parser.add_argument(
+        "--domain",
+        default="",
+        help="scope lease and pending count checks to a specific domain (e.g. figiva.com)",
+    )
+    parser.add_argument(
         "--no-lock-registry",
         action="store_true",
         help="skip the multi-worktree lock registry (~/.seo_fleet/"
@@ -279,8 +284,9 @@ def main(argv: list[str] | None = None) -> int:
             pending_count as _pending,
         )
 
+        domain = args.domain or None
         fast_conn = _connect(args.state_db)
-        if _pending(fast_conn) >= max(args.replenish_below, args.lease_size):
+        if _pending(fast_conn, domain=domain) >= max(args.replenish_below, args.lease_size):
             # Pre-lease hygiene: junk queries -> REJECTED (terminal), intent
             # tasks already covered by the route/country maps -> SHIPPED,
             # other worktrees' locked prefixes -> skipped this invocation.
@@ -294,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             leased = _lease(
                 fast_conn,
+                domain=domain,
                 limit=args.lease_size,
                 family_caps={"number": 3},
                 default_family_cap=10,
@@ -309,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             print(
                 f"Fast path: leased {len(leased)} tasks from the backlog cursor "
-                f"(no collection/scoring; {_pending(fast_conn)} still pending)."
+                f"(no collection/scoring; {_pending(fast_conn, domain=domain)} still pending)."
             )
             if any(
                 hygiene[k] for k in ("rejected", "graduated", "locked", "intent_capped")
@@ -473,13 +480,14 @@ def main(argv: list[str] | None = None) -> int:
         # route builds (8/8/6/5/3 split) instead of 30 heading checks.
         leased = lease_tasks(
             conn,
+            domain=args.domain or None,
             limit=lease_n,
             family_caps={"number": 3},
             default_family_cap=10,
             type_caps=DEFAULT_TYPE_CAPS,
             default_type_cap=DEFAULT_TYPE_CAP_FALLBACK,
         )
-        still_pending = pending_count(conn)
+        still_pending = pending_count(conn, domain=args.domain or None)
         print(
             f"State DB {args.state_db}: enqueued {added} new, leased {len(leased)} "
             f"(PENDING -> LEASED), {still_pending} still pending."

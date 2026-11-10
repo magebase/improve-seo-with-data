@@ -33,6 +33,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from candidate_hygiene import CANONICAL_ACTION_CODE_MAP, canonicalize_action_code
+
 DEFAULT_DB_DIR = Path.home() / ".seo_fleet"
 DEFAULT_DB_PATH = str(DEFAULT_DB_DIR / "fleet_state.db")
 
@@ -127,10 +129,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(atomic_task_backlog)")}
     if "route_family" not in columns:
         try:
-            conn.execute(
-                "ALTER TABLE atomic_task_backlog "
-                "ADD COLUMN route_family TEXT NOT NULL DEFAULT 'root'"
-            )
+            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN route_family TEXT NOT NULL DEFAULT 'root'")
             conn.commit()
         except sqlite3.OperationalError:
             pass  # concurrent migration already applied it
@@ -144,13 +143,10 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     # One-time backfill: legacy rows predate route tagging. Converges to a
     # no-op after the first successful pass (everything gets tagged).
     stale = conn.execute(
-        "SELECT COUNT(*) FROM atomic_task_backlog WHERE route_family = 'root' "
-        "AND page LIKE '%/%'"
+        "SELECT COUNT(*) FROM atomic_task_backlog WHERE route_family = 'root' AND page LIKE '%/%'"
     ).fetchone()[0]
     if stale:
-        for task_id, page in conn.execute(
-            "SELECT id, page FROM atomic_task_backlog WHERE route_family = 'root'"
-        ):
+        for task_id, page in conn.execute("SELECT id, page FROM atomic_task_backlog WHERE route_family = 'root'"):
             conn.execute(
                 "UPDATE atomic_task_backlog SET route_family = ? WHERE id = ?",
                 (extract_route_family(page), task_id),
@@ -159,15 +155,13 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     # One-time backfill: legacy rows predate the domain column. Domain-scoped
     # leases and per-domain quotas depend on it; derive it from the page URL.
     stale_domains = conn.execute(
-        "SELECT COUNT(*) FROM atomic_task_backlog "
-        "WHERE (domain IS NULL OR domain = '') AND page LIKE 'http%'"
+        "SELECT COUNT(*) FROM atomic_task_backlog WHERE (domain IS NULL OR domain = '') AND page LIKE 'http%'"
     ).fetchone()[0]
     if stale_domains:
         from urllib.parse import urlparse
 
         for task_id, page in conn.execute(
-            "SELECT id, page FROM atomic_task_backlog "
-            "WHERE (domain IS NULL OR domain = '') AND page LIKE 'http%'"
+            "SELECT id, page FROM atomic_task_backlog WHERE (domain IS NULL OR domain = '') AND page LIKE 'http%'"
         ):
             host = (urlparse(str(page)).hostname or "").lower()
             parts = host.split(".")
@@ -213,8 +207,7 @@ def save_gsc_snapshot(
 ) -> None:
     stamp = _utc_now(now)
     conn.execute(
-        "INSERT OR REPLACE INTO gsc_snapshots (site, window_end, fetched_at, rows_json) "
-        "VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO gsc_snapshots (site, window_end, fetched_at, rows_json) VALUES (?, ?, ?, ?)",
         (site, window_end or stamp.date().isoformat(), _iso(stamp), json.dumps(rows)),
     )
     conn.commit()
@@ -229,8 +222,7 @@ def gsc_snapshot_fresh(
     stamp = _utc_now(now)
     cutoff = stamp - timedelta(hours=max_age_hours)
     row = conn.execute(
-        "SELECT fetched_at FROM gsc_snapshots WHERE site = ? "
-        "ORDER BY fetched_at DESC LIMIT 1",
+        "SELECT fetched_at FROM gsc_snapshots WHERE site = ? ORDER BY fetched_at DESC LIMIT 1",
         (site,),
     ).fetchone()
     if not row:
@@ -271,8 +263,7 @@ def upsert_serp_cache(
 ) -> None:
     stamp = _utc_now(now)
     conn.execute(
-        "INSERT OR REPLACE INTO dfs_serp_cache (query, fetched_at, items_json, item_types) "
-        "VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO dfs_serp_cache (query, fetched_at, items_json, item_types) VALUES (?, ?, ?, ?)",
         (query, _iso(stamp), json.dumps(items), json.dumps(item_types)),
     )
     conn.commit()
@@ -281,8 +272,7 @@ def upsert_serp_cache(
 def queries_missing_volume(conn: sqlite3.Connection, limit: int = 1000) -> list:
     """Cache queries still without a Keywords-Data volume (surrogate starvation)."""
     rows = conn.execute(
-        "SELECT query FROM dfs_serp_cache WHERE search_volume IS NULL "
-        "AND items_json != '[]' LIMIT ?",
+        "SELECT query FROM dfs_serp_cache WHERE search_volume IS NULL AND items_json != '[]' LIMIT ?",
         (limit,),
     ).fetchall()
     return [row[0] for row in rows]
@@ -338,20 +328,72 @@ def load_cached_serps(
 
 # ------------------------------------------------------------- task backlog
 
-# Wave-62 task-type quota split (per 30-task wave): every wave must carry a
-# MIX of work products, not 30 identical heading checks. The inlink family
-# shares the 8-slot slice across its two codes; the title/H2 intent family
-# shares the 5-slot slice. Uncapped codes fall back to ``default_type_cap``.
+# Wave-62 / Wave-65 task-type quota split: every wave must carry a MIX of
+# work products, not 30 identical heading checks. Canonical action taxonomy
+# prevents synonym codes from leaking across PARTITION BY action_code windows.
 DEFAULT_TYPE_CAPS = {
     "ADD_D1_SPEC_COMPARISON_TABLE": 8,
-    "BOOST_CLUSTER_CROSS_LINKS": 4,
-    "STRENGTHEN_HUB_INTERNAL_LINKS": 4,
+    "WIRE_HUB_AND_FOOTER_INLINKS": 8,
     "OVERHAUL_CTR_HOOK_AND_WEBAPP_SCHEMA": 6,
     "INJECT_EXACT_TITLE_AND_H2": 3,
     "INJECT_EXACT_H2_AND_TITLE": 2,
     "CREATE_PROGRAMMATIC_ROUTE": 3,
+    # Backward compatibility aliases:
+    "BOOST_CLUSTER_CROSS_LINKS": 4,
+    "STRENGTHEN_HUB_INTERNAL_LINKS": 4,
 }
 DEFAULT_TYPE_CAP_FALLBACK = 3
+
+
+def canonicalize_backlog_action_codes(conn: sqlite3.Connection) -> int:
+    """Normalizes legacy action codes in atomic_task_backlog to canonical names.
+
+    Merges duplicate open tasks for the same page that arose from legacy synonym codes:
+    - INJECT_EXACT_H2_AND_TITLE -> INJECT_EXACT_TITLE_AND_H2
+    - LAUNCH_PSEO_ROUTE -> CREATE_PROGRAMMATIC_ROUTE
+    - STRENGTHEN_HUB_INTERNAL_LINKS / BOOST_INTERNAL_LINKS / RESCUE_ORPHAN_ROUTE_INLINKS / BOOST_CLUSTER_CROSS_LINKS -> WIRE_HUB_AND_FOOTER_INLINKS
+    """
+    cur = conn.cursor()
+    rows = cur.execute("SELECT id, page, action_code, status, priority_score FROM atomic_task_backlog").fetchall()
+
+    modified = 0
+    for task_id, page, action_code, status, score in rows:
+        target_code = CANONICAL_ACTION_CODE_MAP.get(action_code)
+        if not target_code:
+            continue
+
+        if status in ("PENDING", "LEASED"):
+            existing = cur.execute(
+                "SELECT id, status, priority_score FROM atomic_task_backlog "
+                "WHERE page = ? AND action_code = ? AND status IN ('PENDING', 'LEASED') AND id != ?",
+                (page, target_code, task_id),
+            ).fetchone()
+
+            if existing:
+                exist_id, exist_status, exist_score = existing
+                if (exist_status == "LEASED" and status == "PENDING") or (
+                    exist_status == status and exist_score >= score
+                ):
+                    cur.execute("DELETE FROM atomic_task_backlog WHERE id = ?", (task_id,))
+                    modified += 1
+                    continue
+                else:
+                    cur.execute("DELETE FROM atomic_task_backlog WHERE id = ?", (exist_id,))
+                    cur.execute(
+                        "UPDATE atomic_task_backlog SET action_code = ? WHERE id = ?",
+                        (target_code, task_id),
+                    )
+                    modified += 1
+                    continue
+
+        cur.execute(
+            "UPDATE atomic_task_backlog SET action_code = ? WHERE id = ?",
+            (target_code, task_id),
+        )
+        modified += 1
+
+    conn.commit()
+    return modified
 
 
 def enqueue_tasks(
@@ -372,14 +414,12 @@ def enqueue_tasks(
             parts = host.split(".")
             domain = ".".join(parts[-2:]) if len(parts) > 2 else host
         try:
-            action_code = str(
-                task.get("action_code") or task.get("prescribed_action") or ""
-            )
+            raw_action = str(task.get("action_code") or task.get("prescribed_action") or "")
+            action_code = canonicalize_action_code(raw_action)
             # REJECTED is terminal (cursor hygiene): junk queries purged by
             # preflight_hygiene must never re-enter via the next compile wave.
             already_rejected = conn.execute(
-                "SELECT 1 FROM atomic_task_backlog "
-                "WHERE page = ? AND action_code = ? AND status = 'REJECTED'",
+                "SELECT 1 FROM atomic_task_backlog WHERE page = ? AND action_code = ? AND status = 'REJECTED'",
                 (page, action_code),
             ).fetchone()
             if already_rejected:
@@ -474,6 +514,7 @@ def lease_tasks(
       collisions across parallel waves.
     """
     release_stale_leases(conn, now=now)
+    canonicalize_backlog_action_codes(conn)
     stamp = _iso(_utc_now(now))
     domain_filter = "AND domain = ?" if domain else ""
     family_filters = []
@@ -483,10 +524,7 @@ def lease_tasks(
         for family in sorted(caps):
             family_filters.append("(route_family = ? AND family_rank <= ?)")
             family_params.extend([family, caps[family]])
-        family_filters.append(
-            f"(route_family NOT IN ({', '.join('?' * len(caps)) or "''"}) "
-            f"AND family_rank <= ?)"
-        )
+        family_filters.append(f"(route_family NOT IN ({', '.join('?' * len(caps)) or "''"}) AND family_rank <= ?)")
         family_params.extend([*caps.keys(), default_family_cap])
     # Wave-64 two-tier quotas: rows within their type cap rank quota_pass 0
     # (preferred); rows beyond it rank quota_pass 1 (backfill). Both tiers
@@ -499,10 +537,7 @@ def lease_tasks(
             case_parts.append("(action_code = ? AND type_rank <= ?)")
             quota_params.extend([code, tcaps[code]])
         if default_type_cap > 0:
-            case_parts.append(
-                f"(action_code NOT IN ({', '.join('?' * len(tcaps)) or "''"}) "
-                f"AND type_rank <= ?)"
-            )
+            case_parts.append(f"(action_code NOT IN ({', '.join('?' * len(tcaps)) or "''"}) AND type_rank <= ?)")
             quota_params.extend([*tcaps.keys(), default_type_cap])
         quota_case = "CASE WHEN " + " OR ".join(case_parts) + " THEN 0 ELSE 1 END"
     else:
@@ -632,9 +667,7 @@ def pending_count(conn: sqlite3.Connection, domain: str | None = None) -> int:
             (domain,),
         ).fetchone()
     else:
-        row = conn.execute(
-            "SELECT COUNT(*) FROM atomic_task_backlog WHERE status = 'PENDING'"
-        ).fetchone()
+        row = conn.execute("SELECT COUNT(*) FROM atomic_task_backlog WHERE status = 'PENDING'").fetchone()
     return int(row[0])
 
 
@@ -648,9 +681,7 @@ class DailyBudgetGate:
     SERP tasks per UTC day ($0.0006 each -> a 100 cap is $0.06/day max).
     """
 
-    def __init__(
-        self, db_path: str = DEFAULT_DB_PATH, daily_cap: int = DEFAULT_DAILY_SERP_BUDGET
-    ):
+    def __init__(self, db_path: str = DEFAULT_DB_PATH, daily_cap: int = DEFAULT_DAILY_SERP_BUDGET):
         self._conn = connect_state_db(db_path)
         self.daily_cap = daily_cap
         # Wave-64 review R3: property-level starvation guard. Every property
@@ -675,9 +706,7 @@ class DailyBudgetGate:
         return _utc_now(now).date().isoformat()
 
     def _total_spent(self, day: str) -> int:
-        row = self._conn.execute(
-            "SELECT spent FROM dfs_budget WHERE day = ?", (day,)
-        ).fetchone()
+        row = self._conn.execute("SELECT spent FROM dfs_budget WHERE day = ?", (day,)).fetchone()
         return int(row[0]) if row else 0
 
     def _domain_spent(self, day: str, domain: str) -> int:
@@ -699,14 +728,10 @@ class DailyBudgetGate:
             (day,),
         ).fetchone()[0]
         # a domain not yet in today's ledger still occupies a floor slot
-        active_domains = floor_count + (
-            1 if self._domain_spent(day, domain) == 0 else 0
-        )
+        active_domains = floor_count + (1 if self._domain_spent(day, domain) == 0 else 0)
         floor = self._dynamic_floor(active_domains)
         guaranteed_left = max(0, floor - self._domain_spent(day, domain))
-        shared_pool = max(
-            0, self.daily_cap - min(active_domains * floor, self.daily_cap)
-        )
+        shared_pool = max(0, self.daily_cap - min(active_domains * floor, self.daily_cap))
         shared_used = self._conn.execute(
             "SELECT COALESCE(SUM(MAX(spent - ?, 0)), 0) FROM dfs_budget_domain WHERE day = ?",
             (floor, day),
@@ -714,17 +739,14 @@ class DailyBudgetGate:
         shared_left = max(0, shared_pool - int(shared_used))
         return min(max(guaranteed_left, 0) + shared_left, total_left)
 
-    def record(
-        self, n: int, now: datetime | None = None, domain: str | None = None
-    ) -> int:
+    def record(self, n: int, now: datetime | None = None, domain: str | None = None) -> int:
         """Records n tasks; returns the remaining budget after the spend."""
         remaining = self.remaining(now=now, domain=domain)
         allowed = min(max(0, int(n)), remaining)
         if allowed:
             day = self._day(now)
             self._conn.execute(
-                "INSERT INTO dfs_budget (day, spent) VALUES (?, ?) "
-                "ON CONFLICT(day) DO UPDATE SET spent = spent + ?",
+                "INSERT INTO dfs_budget (day, spent) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET spent = spent + ?",
                 (day, allowed, allowed),
             )
             if domain:
@@ -780,8 +802,7 @@ def load_url_inspections(
     fresh: dict[str, dict[str, Any]] = {}
     for url in urls:
         row = conn.execute(
-            "SELECT coverage_state, indexing_state, last_crawl_time, inspected_at "
-            "FROM url_inspections WHERE url = ?",
+            "SELECT coverage_state, indexing_state, last_crawl_time, inspected_at FROM url_inspections WHERE url = ?",
             (str(url),),
         ).fetchone()
         if not row:
@@ -808,9 +829,7 @@ def inspection_calls_remaining(
 ) -> int:
     """Free-tier guard: max 2,000 URL Inspection calls per UTC day."""
     day = _utc_now(now).date().isoformat()
-    row = conn.execute(
-        "SELECT spent FROM url_inspection_budget WHERE day = ?", (day,)
-    ).fetchone()
+    row = conn.execute("SELECT spent FROM url_inspection_budget WHERE day = ?", (day,)).fetchone()
     return max(0, daily_cap - int(row[0] if row else 0))
 
 

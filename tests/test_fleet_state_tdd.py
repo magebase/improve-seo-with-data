@@ -63,22 +63,15 @@ def test_gsc_snapshot_roundtrip_and_24h_ttl(conn):
     rows = load_gsc_snapshot(conn, "smsriver.com", max_age_hours=24, now=NOW)
     assert rows and rows[0]["query"] == "q"
     stale_at = NOW + timedelta(hours=25)
-    assert (
-        gsc_snapshot_fresh(conn, "smsriver.com", max_age_hours=24, now=stale_at)
-        is False
-    )
-    assert (
-        load_gsc_snapshot(conn, "smsriver.com", max_age_hours=24, now=stale_at) is None
-    )
+    assert gsc_snapshot_fresh(conn, "smsriver.com", max_age_hours=24, now=stale_at) is False
+    assert load_gsc_snapshot(conn, "smsriver.com", max_age_hours=24, now=stale_at) is None
 
 
 def test_serp_cache_ttl_respected(conn):
     upsert_serp_cache(conn, "online sms", [{"type": "organic"}], ["organic"], now=NOW)
     fresh = load_cached_serps(conn, ["online sms"], max_age_days=30, now=NOW)
     assert "online sms" in fresh
-    stale = load_cached_serps(
-        conn, ["online sms"], max_age_days=30, now=NOW + timedelta(days=31)
-    )
+    stale = load_cached_serps(conn, ["online sms"], max_age_days=30, now=NOW + timedelta(days=31))
     assert stale == {}
 
 
@@ -111,15 +104,13 @@ def test_task_backlog_cursor_persists_and_dedupes(conn):
 
     leased = lease_tasks(conn, limit=1, now=NOW)
     assert len(leased) == 1
-    assert (
-        leased[0]["action_code"] == "INJECT_EXACT_H2_AND_TITLE"
-    )  # highest priority first
+    assert leased[0]["action_code"] == "INJECT_EXACT_TITLE_AND_H2"  # canonicalized from INJECT_EXACT_H2_AND_TITLE
     assert leased[0]["status"] == "LEASED"
     assert pending_count(conn) == 1
 
     mark_shipped(conn, [leased[0]["id"]], commit_sha="abc1234", now=NOW)
     again = lease_tasks(conn, limit=5, now=NOW)
-    assert [t["action_code"] for t in again] == ["BOOST_INTERNAL_LINKS"]
+    assert [t["action_code"] for t in again] == ["WIRE_HUB_AND_FOOTER_INLINKS"]
 
 
 def test_budget_gate_caps_daily_spend_and_resets_next_day(tmp_path: Path):
@@ -190,9 +181,7 @@ def test_mark_tasks_reverted_is_terminal_and_unleasable():
     mark_shipped(conn, [t["id"] for t in leased], commit_sha="abc1234")
     mark_tasks_reverted(conn, [t["id"] for t in leased])
 
-    statuses = dict(
-        conn.execute("SELECT id, status FROM atomic_task_backlog").fetchall()
-    )
+    statuses = dict(conn.execute("SELECT id, status FROM atomic_task_backlog").fetchall())
     assert set(statuses.values()) == {"REVERTED"}
     assert lease_tasks(conn, limit=5) == []  # REVERTED never re-enters the cursor
     remaining = conn.execute(
@@ -452,9 +441,7 @@ def test_serp_volume_column_migration_and_backfill_roundtrip(tmp_path):
     assert set(missing) == {"q one", "q two"}
     save_serp_volumes(conn, {"q one": 5400.0})
     assert queries_missing_volume(conn) == ["q two"]
-    row = conn.execute(
-        "SELECT search_volume FROM dfs_serp_cache WHERE query = 'q one'"
-    ).fetchone()
+    row = conn.execute("SELECT search_volume FROM dfs_serp_cache WHERE query = 'q one'").fetchone()
     assert row[0] == 5400.0
 
 
@@ -478,20 +465,14 @@ def test_mark_tasks_reverted_accepts_leased_tasks(conn):
     ]
     enqueue_tasks(conn, tasks)
     conn.commit()
-    leased = lease_tasks(
-        conn, domain="smsriver.com", limit=2, now=datetime.now(timezone.utc)
-    )
+    leased = lease_tasks(conn, domain="smsriver.com", limit=2, now=datetime.now(timezone.utc))
     assert len(leased) == 2
     first_id = leased[0]["id"]
     first_page = leased[0]["page"]
     assert mark_tasks_reverted(conn, [first_id]) == 1
     conn.commit()
-    status = conn.execute(
-        "SELECT status FROM atomic_task_backlog WHERE id=?", (first_id,)
-    ).fetchone()[0]
+    status = conn.execute("SELECT status FROM atomic_task_backlog WHERE id=?", (first_id,)).fetchone()[0]
     assert status == "REVERTED"
     # REVERTED is terminal: a fresh lease never re-picks it
-    again = lease_tasks(
-        conn, domain="smsriver.com", limit=5, now=datetime.now(timezone.utc)
-    )
+    again = lease_tasks(conn, domain="smsriver.com", limit=5, now=datetime.now(timezone.utc))
     assert all(t["page"] != first_page for t in again)

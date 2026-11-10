@@ -51,6 +51,23 @@ NON_SEO_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Canonical action taxonomy (Wave-65 quota integrity upgrade):
+# Synonym action codes bypass PARTITION BY action_code quota splits and cause
+# 2x-3x oversubscription of link/route tasks while starving data-table tasks.
+# All synonym strings collapse to their single authoritative canonical counterpart.
+CANONICAL_ACTION_CODE_MAP: dict[str, str] = {
+    "INJECT_EXACT_H2_AND_TITLE": "INJECT_EXACT_TITLE_AND_H2",
+    "LAUNCH_PSEO_ROUTE": "CREATE_PROGRAMMATIC_ROUTE",
+    "STRENGTHEN_HUB_INTERNAL_LINKS": "WIRE_HUB_AND_FOOTER_INLINKS",
+    "BOOST_INTERNAL_LINKS": "WIRE_HUB_AND_FOOTER_INLINKS",
+    "RESCUE_ORPHAN_ROUTE_INLINKS": "WIRE_HUB_AND_FOOTER_INLINKS",
+}
+
+
+def canonicalize_action_code(code: str) -> str:
+    """Normalizes synonym action codes to their single canonical counterpart."""
+    return CANONICAL_ACTION_CODE_MAP.get(code, code)
+
 
 def url_path(url: str) -> str:
     """Extracts the path component from a full URL (or passes paths through)."""
@@ -76,9 +93,7 @@ def strip_tracking_params(url: str) -> str:
         for k, v in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
         if not _TRACKING_PARAM_RE.match(k)
     ]
-    cleaned = urllib.parse.urlunparse(
-        parsed._replace(query=urllib.parse.urlencode(kept))
-    )
+    cleaned = urllib.parse.urlunparse(parsed._replace(query=urllib.parse.urlencode(kept)))
     return cleaned
 
 
@@ -104,9 +119,7 @@ def is_valid_seo_candidate(domain: str, url_path_or_url: str, query: str) -> boo
     base_stem = stems[0]
     # brand + short nav suffix ('brandlogin', 'brandterms', 'brand42') is
     # navigational, not informational demand
-    return not (
-        collapsed_q.startswith(base_stem) and len(collapsed_q) <= len(base_stem) + 5
-    )
+    return not (collapsed_q.startswith(base_stem) and len(collapsed_q) <= len(base_stem) + 5)
 
 
 def _norm_page_key(page: str) -> str:
@@ -163,9 +176,7 @@ def canonicalize_and_dedupe_candidates(
             elif "://" in page:
                 parsed = urllib.parse.urlparse(page)
                 target_path = target if target.startswith("/") else url_path(target)
-                page = urllib.parse.urlunparse(
-                    (parsed.scheme, parsed.netloc, target_path, "", "", "")
-                )
+                page = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, target_path, "", "", ""))
             else:
                 page = target
             report["canonicalized"] += 1
@@ -205,9 +216,7 @@ def canonicalize_and_dedupe_candidates(
             first["ctr"] = clicks / impressions
         report["deduped_away"] += len(rows) - 1
         merged.append(first)
-    merged.sort(
-        key=lambda r: (-float(r.get("impressions", 0) or 0), str(r.get("query", "")))
-    )
+    merged.sort(key=lambda r: (-float(r.get("impressions", 0) or 0), str(r.get("query", ""))))
     return merged, report
 
 
@@ -257,9 +266,7 @@ class _HopLimitedRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         hops = getattr(req, "_seo_fleet_hops", 0) + 1
         if hops > self._max_hops:
-            raise urllib.error.URLError(
-                f"redirect hop budget exceeded (>{self._max_hops})"
-            )
+            raise urllib.error.URLError(f"redirect hop budget exceeded (>{self._max_hops})")
         req._seo_fleet_hops = hops  # type: ignore[attr-defined]
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 

@@ -38,9 +38,7 @@ LOCK_HEARTBEAT_TTL_HOURS = 2
 # heading edit. Case-insensitive: site:/inurl:/intitle:/filetype:, raw URLs,
 # www. hosts, and negation terms (-word). A mid-query "-free" style token is
 # only ever a Boolean negation in telemetry, never prose.
-JUNK_QUERY_RE = re.compile(
-    r"(?i)(\bsite:|\binurl:|\bintitle:|\bfiletype:|https?://|www\.|(^|\s)-\w)"
-)
+JUNK_QUERY_RE = re.compile(r"(?i)(\bsite:|\binurl:|\bintitle:|\bfiletype:|https?://|www\.|(^|\s)-\w)")
 
 # Boolean operators are only junk when typed UPPERCASE (the operator form);
 # lowercase "and"/"or" are ordinary English words ("send and receive sms").
@@ -194,9 +192,11 @@ def preflight_hygiene(
     uncovered, unowned candidates handed to ``lease_tasks``).
     """
     stamp = _iso(now)
+    from fleet_state import canonicalize_backlog_action_codes
+
+    canonicalize_backlog_action_codes(conn)
     rows = conn.execute(
-        "SELECT id, page, query, action_code, file_target FROM atomic_task_backlog "
-        "WHERE status = 'PENDING'"
+        "SELECT id, page, query, action_code, file_target FROM atomic_task_backlog WHERE status = 'PENDING'"
     ).fetchall()
     report = {
         "rejected": 0,
@@ -208,8 +208,7 @@ def preflight_hygiene(
     intent_counts: Dict[str, int] = {}
     if max_intent_tasks_per_page > 0:
         for (page,) in conn.execute(
-            "SELECT page FROM atomic_task_backlog WHERE action_code LIKE 'INJECT_%' "
-            "AND status IN ('SHIPPED', 'LEASED')"
+            "SELECT page FROM atomic_task_backlog WHERE action_code LIKE 'INJECT_%' AND status IN ('SHIPPED', 'LEASED')"
         ):
             intent_counts[page] = intent_counts.get(page, 0) + 1
 
@@ -219,11 +218,7 @@ def preflight_hygiene(
             report["rejected"] += 1
             continue
         intent_text = (route_intent_map or {}).get(page, "")
-        if (
-            (action_code or "").startswith("INJECT_")
-            and intent_text
-            and _tokens_covered(query or "", intent_text)
-        ):
+        if (action_code or "").startswith("INJECT_") and intent_text and _tokens_covered(query or "", intent_text):
             _cas_status(conn, task_id, "SHIPPED", shipped=True, stamp=stamp)
             report["graduated"] += 1
             continue
@@ -243,9 +238,7 @@ def preflight_hygiene(
 
 def _is_locked(page: str, file_target: Optional[str], prefixes: Sequence[str]) -> bool:
     for prefix in prefixes:
-        if prefix and (
-            (page or "").startswith(prefix) or (file_target or "").startswith(prefix)
-        ):
+        if prefix and ((page or "").startswith(prefix) or (file_target or "").startswith(prefix)):
             return True
     return False
 
@@ -259,8 +252,7 @@ def _cas_status(
 ) -> bool:
     if shipped:
         cursor = conn.execute(
-            "UPDATE atomic_task_backlog SET status = ?, shipped_at = ? "
-            "WHERE id = ? AND status = 'PENDING'",
+            "UPDATE atomic_task_backlog SET status = ?, shipped_at = ? WHERE id = ? AND status = 'PENDING'",
             (status, stamp, task_id),
         )
     else:
@@ -423,9 +415,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         default="",
         help="comma-separated task ids to return to PENDING",
     )
-    parser.add_argument(
-        "--register-locks", nargs="*", default=None, help="prefixes to register"
-    )
+    parser.add_argument("--register-locks", nargs="*", default=None, help="prefixes to register")
     parser.add_argument("--show-locks", action="store_true")
     parser.add_argument("--release-locks", action="store_true")
     args = parser.parse_args(argv)

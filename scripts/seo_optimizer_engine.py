@@ -25,24 +25,23 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
-import sys
 import time
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 # ==============================================================================
 # Expected CTR Baseline Curve & Mathematical Constants
 # ==============================================================================
 
+
 def expected_ctr(position: float) -> float:
     """Calculates industry & empirical baseline CTR given organic average position.
-    
+
     Curve:
     - Position 1.0: 30.0%
     - Position 2.0: 18.0%
@@ -67,6 +66,7 @@ def expected_ctr(position: float) -> float:
 # ==============================================================================
 # Data Structures
 # ==============================================================================
+
 
 @dataclass
 class GSCRecord:
@@ -140,6 +140,7 @@ class UnifiedOptimizationTarget:
 # Data Fetchers (Live APIs + Mock Fallbacks)
 # ==============================================================================
 
+
 class MultiPlatformTelemetryIngestor:
     """Ingests and correlates data across GSC, Clarity, PostHog, and Cloudflare."""
 
@@ -201,10 +202,12 @@ class MultiPlatformTelemetryIngestor:
             "iat": now,
         }
         token_jwt = jwt.encode(payload, key_data["private_key"], algorithm="RS256")
-        token_data = urllib.parse.urlencode({
-            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            "assertion": token_jwt,
-        }).encode()
+        token_data = urllib.parse.urlencode(
+            {
+                "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                "assertion": token_jwt,
+            }
+        ).encode()
 
         req = urllib.request.Request("https://oauth2.googleapis.com/token", data=token_data)
         with urllib.request.urlopen(req, timeout=15) as resp:
@@ -352,8 +355,10 @@ class MultiPlatformTelemetryIngestor:
                 for item in data
             }
 
-        print("[2/4 Clarity] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
-              "pass --clarity-file with a real export or wire CLARITY_API_TOKEN before trusting friction penalties.")
+        print(
+            "[2/4 Clarity] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
+            "pass --clarity-file with a real export or wire CLARITY_API_TOKEN before trusting friction penalties."
+        )
         return {
             "/tools/phone-number-formatter/": ClarityRecord(
                 page="/tools/phone-number-formatter/",
@@ -408,8 +413,10 @@ class MultiPlatformTelemetryIngestor:
                 for item in data
             }
 
-        print("[3/4 PostHog] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
-              "pass --posthog-file with a real export before trusting conversion metrics.")
+        print(
+            "[3/4 PostHog] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
+            "pass --posthog-file with a real export before trusting conversion metrics."
+        )
         return {
             "/tools/phone-number-formatter/": PostHogRecord(
                 page="/tools/phone-number-formatter/",
@@ -461,8 +468,10 @@ class MultiPlatformTelemetryIngestor:
                 for item in data
             }
 
-        print("[4/4 Cloudflare] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
-              "pass --cloudflare-file with a real export before trusting CWV/TTFB penalties.")
+        print(
+            "[4/4 Cloudflare] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
+            "pass --cloudflare-file with a real export before trusting CWV/TTFB penalties."
+        )
         return {
             "/tools/phone-number-formatter/": CloudflareRecord(
                 page="/tools/phone-number-formatter/",
@@ -506,6 +515,7 @@ class MultiPlatformTelemetryIngestor:
 # The Correlation & Decision Engine
 # ==============================================================================
 
+
 class SEOOptimizerEngine:
     """Fuses multi-platform data, scores expected click lift, and enforces agentic guardrails."""
 
@@ -518,12 +528,47 @@ class SEOOptimizerEngine:
         clarity_file: Optional[str] = None,
         posthog_file: Optional[str] = None,
         cf_file: Optional[str] = None,
+        action_queue_file: Optional[str] = None,
     ) -> List[UnifiedOptimizationTarget]:
         """Executes full multi-source correlation and produces prioritized optimization targets."""
         gsc_records = self.ingestor.fetch_gsc_data(gsc_file)
         clarity_data = self.ingestor.fetch_clarity_insights(clarity_file)
         posthog_data = self.ingestor.fetch_posthog_funnels(posthog_file)
         cf_data = self.ingestor.fetch_cloudflare_vitals(cf_file)
+
+        # Resolve action queue if not passed explicitly
+        domain = (
+            self.ingestor.site_url.replace("sc-domain:", "").replace("https://", "").replace("http://", "").strip("/")
+        )
+        if not action_queue_file:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            candidates = [
+                os.path.join(base_dir, "data", "fleet_queues", f"action_queue_{domain}.json"),
+                os.path.join(base_dir, "data", "action_queue.json"),
+            ]
+            for c in candidates:
+                if os.path.isfile(c):
+                    action_queue_file = c
+                    break
+
+        queue_lookup: Dict[Any, Dict[str, Any]] = {}
+        if action_queue_file and os.path.isfile(action_queue_file):
+            try:
+                with open(action_queue_file, "r", encoding="utf-8") as f:
+                    q_data = json.load(f)
+                items = (
+                    q_data.get("leased", [])
+                    if isinstance(q_data, dict)
+                    else (q_data if isinstance(q_data, list) else [])
+                )
+                for it in items:
+                    p_key = str(it.get("page", "")).rstrip("/")
+                    q_key = str(it.get("query", "")).strip().lower()
+                    queue_lookup[(p_key, q_key)] = it
+                    if p_key not in queue_lookup:
+                        queue_lookup[p_key] = it
+            except Exception:
+                pass
 
         # Detect Cannibalization clusters: queries with multiple URLs sharing >= 15% impressions
         query_map: Dict[str, List[GSCRecord]] = {}
@@ -552,7 +597,14 @@ class SEOOptimizerEngine:
             if cf.ttfb_ms > 400:
                 friction_penalty += 15.0
 
-            potential_impact_score = round(potential_click_lift - friction_penalty, 2)
+            # Bind to LGBMRanker priority_score if present in action_queue
+            p_clean = r.page.rstrip("/")
+            q_clean = r.query.strip().lower()
+            q_item = queue_lookup.get((p_clean, q_clean)) or queue_lookup.get(p_clean)
+            if q_item and "priority_score" in q_item:
+                potential_impact_score = round(float(q_item["priority_score"]), 3)
+            else:
+                potential_impact_score = round(potential_click_lift - friction_penalty, 2)
 
             evidence_notes: List[str] = []
 
@@ -609,10 +661,14 @@ class SEOOptimizerEngine:
                 action_desc = []
                 if is_cannibal:
                     action_desc.append("Consolidate overlapping URLs via canonical or 301 redirect.")
-                    evidence_notes.append(f"Keyword cannibalization detected: query '{r.query}' split across {len(siblings)} URLs.")
+                    evidence_notes.append(
+                        f"Keyword cannibalization detected: query '{r.query}' split across {len(siblings)} URLs."
+                    )
                 if is_decaying:
                     drop_pct = round(((r.previous_clicks - r.clicks) / r.previous_clicks) * 100, 1)
-                    action_desc.append(f"Content decay remediation (-{drop_pct}% clicks MoM). Re-align intent and refresh data.")
+                    action_desc.append(
+                        f"Content decay remediation (-{drop_pct}% clicks MoM). Re-align intent and refresh data."
+                    )
                     evidence_notes.append(f"MoM click drop: {r.previous_clicks} -> {r.clicks} (-{drop_pct}%).")
 
                 targets.append(
@@ -680,7 +736,7 @@ class SEOOptimizerEngine:
                         recommended_action=rec_action,
                         guardrail_status="APPROVED",
                         evidence_notes=[
-                            f"Actual CTR {r.ctr*100:.1f}% is below 70% of expected benchmark ({exp_ctr*100:.1f}%).",
+                            f"Actual CTR {r.ctr * 100:.1f}% is below 70% of expected benchmark ({exp_ctr * 100:.1f}%).",
                             f"Clarity rage clicks: {clarity.rage_clicks}; Cloudflare LCP: {cf.lcp_seconds}s.",
                         ],
                     )
@@ -725,7 +781,7 @@ class SEOOptimizerEngine:
                         guardrail_status="APPROVED",
                         evidence_notes=[
                             f"Page ranks at Pos {r.position} with {r.impressions} impressions. Semantic gap detected.",
-                            f"PostHog conversion rate: {posthog.organic_conversion_rate*100:.1f}%.",
+                            f"PostHog conversion rate: {posthog.organic_conversion_rate * 100:.1f}%.",
                         ],
                     )
                 )
@@ -776,6 +832,7 @@ class SEOOptimizerEngine:
 # Reporting & Formatted Outputs
 # ==============================================================================
 
+
 def format_ascii_report(targets: List[UnifiedOptimizationTarget], site_url: str) -> str:
     lines = [
         "=" * 82,
@@ -787,11 +844,19 @@ def format_ascii_report(targets: List[UnifiedOptimizationTarget], site_url: str)
     for idx, t in enumerate(targets, 1):
         lines.append(f"\n[#{idx}] TARGET URL: {t.page}")
         lines.append(f"     Pipeline:       {t.pipeline} (Status: {t.guardrail_status})")
-        lines.append(f"     Primary Query:  '{t.primary_query}' | Pos: {t.position:.1f} | Imp: {t.impressions:,} | Clicks: {t.clicks}")
-        lines.append(f"     CTR Health:     Actual {t.actual_ctr*100:.1f}% vs Expected {t.expected_ctr*100:.1f}% (Deficit: {t.ctr_deficit*100:.1f}%)")
-        lines.append(f"     Potential Gain: +{int(t.potential_click_lift):,} clicks/mo | Friction Penalty: -{t.friction_penalty:.0f} | Score: {t.potential_impact_score}")
-        lines.append(f"     UX Telemetry:   Clarity Rage Clicks: {t.rage_clicks} | Dead Clicks: {t.dead_clicks} | Scroll: {t.scroll_depth:.1f}%")
-        lines.append(f"     Business Funnel:PostHog Conv: {t.conversion_rate*100:.2f}% | Dropoff: {t.funnel_dropoff}")
+        lines.append(
+            f"     Primary Query:  '{t.primary_query}' | Pos: {t.position:.1f} | Imp: {t.impressions:,} | Clicks: {t.clicks}"
+        )
+        lines.append(
+            f"     CTR Health:     Actual {t.actual_ctr * 100:.1f}% vs Expected {t.expected_ctr * 100:.1f}% (Deficit: {t.ctr_deficit * 100:.1f}%)"
+        )
+        lines.append(
+            f"     Priority Score: {t.potential_impact_score:.3f} (LGBMRanker rank_xendcg) | Friction Penalty: -{t.friction_penalty:.0f}"
+        )
+        lines.append(
+            f"     UX Telemetry:   Clarity Rage Clicks: {t.rage_clicks} | Dead Clicks: {t.dead_clicks} | Scroll: {t.scroll_depth:.1f}%"
+        )
+        lines.append(f"     Business Funnel:PostHog Conv: {t.conversion_rate * 100:.2f}% | Dropoff: {t.funnel_dropoff}")
         lines.append(f"     Edge Tech CWV:  Cloudflare TTFB: {t.ttfb_ms}ms | LCP: {t.lcp_seconds:.1f}s")
         lines.append(f"     --> ACTION:     {t.recommended_action}")
         if t.evidence_notes:
@@ -803,46 +868,50 @@ def format_ascii_report(targets: List[UnifiedOptimizationTarget], site_url: str)
 
 def format_markdown_report(targets: List[UnifiedOptimizationTarget], site_url: str) -> str:
     md = [
-        f"# Multi-Source SEO Growth & Conversion Action Report",
+        "# Multi-Source SEO Growth & Conversion Action Report",
         f"**Site Property:** `{site_url}`  ",
         f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}  ",
-        f"**Telemetry Planes:** Google Search Console · Microsoft Clarity · PostHog · Cloudflare Edge  ",
+        "**Telemetry Planes:** Google Search Console · Microsoft Clarity · PostHog · Cloudflare Edge · LGBMRanker  ",
         "",
         "---",
         "",
-        "## Executive Priority Action Queue",
+        "## Executive Priority Action Queue (LGBMRanker rank_xendcg)",
         "",
-        "| Rank | Target URL | Pipeline | Position | Impressions | Actual CTR | Expected CTR | Impact Score | Recommended Action |",
-        "| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |",
+        "| Rank | Target URL | Pipeline | Position | Impressions | Actual CTR | Priority Score | Recommended Action |",
+        "| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |",
     ]
 
     for idx, t in enumerate(targets, 1):
         md.append(
             f"| **#{idx}** | `{t.page}` | {t.pipeline.split(':')[1].strip() if ':' in t.pipeline else t.pipeline} | "
-            f"{t.position:.1f} | {t.impressions:,} | {t.actual_ctr*100:.1f}% | {t.expected_ctr*100:.1f}% | "
-            f"**{t.potential_impact_score}** | {t.recommended_action} |"
+            f"{t.position:.1f} | {t.impressions:,} | {t.actual_ctr * 100:.1f}% | "
+            f"**{t.potential_impact_score:.3f}** | {t.recommended_action} |"
         )
 
-    md.extend([
-        "",
-        "---",
-        "",
-        "## Diagnostic Telemetry Fusion & Evidence Detail",
-        "",
-    ])
+    md.extend(
+        [
+            "",
+            "---",
+            "",
+            "## Diagnostic Telemetry Fusion & Evidence Detail",
+            "",
+        ]
+    )
 
     for idx, t in enumerate(targets, 1):
-        md.extend([
-            f"### #{idx}: {t.page}",
-            f"- **Primary Search Query:** `{t.primary_query}` (Position {t.position:.1f}, {t.impressions:,} impressions, {t.clicks} clicks)",
-            f"- **CTR Residual:** Actual `{t.actual_ctr*100:.1f}%` vs Expected Baseline `{t.expected_ctr*100:.1f}%` (Potential Click Lift: `+{int(t.potential_click_lift):,}` clicks/mo)",
-            f"- **Microsoft Clarity UX Friction:** `{t.rage_clicks}` rage clicks, `{t.dead_clicks}` dead clicks, `{t.scroll_depth:.1f}%` average scroll depth",
-            f"- **PostHog Organic Funnel:** `{t.conversion_rate*100:.2f}%` conversion rate (Primary Dropoff Step: `{t.funnel_dropoff}`)",
-            f"- **Cloudflare Edge Reliability:** TTFB `{t.ttfb_ms}ms`, LCP `{t.lcp_seconds:.1f}s` (Friction Penalty: `-{t.friction_penalty:.0f}`)",
-            f"- **Prescribed Engineering Action:** {t.recommended_action}",
-            f"- **Guardrail Invariant:** `{t.guardrail_status}`",
-            "",
-        ])
+        md.extend(
+            [
+                f"### #{idx}: {t.page}",
+                f"- **Primary Search Query:** `{t.primary_query}` (Position {t.position:.1f}, {t.impressions:,} impressions, {t.clicks} clicks)",
+                f"- **Priority Ranking:** `{t.potential_impact_score:.3f}` (LGBMRanker rank_xendcg) | Actual CTR `{t.actual_ctr * 100:.1f}%`",
+                f"- **Microsoft Clarity UX Friction:** `{t.rage_clicks}` rage clicks, `{t.dead_clicks}` dead clicks, `{t.scroll_depth:.1f}%` average scroll depth",
+                f"- **PostHog Organic Funnel:** `{t.conversion_rate * 100:.2f}%` conversion rate (Primary Dropoff Step: `{t.funnel_dropoff}`)",
+                f"- **Cloudflare Edge Reliability:** TTFB `{t.ttfb_ms}ms`, LCP `{t.lcp_seconds:.1f}s` (Friction Penalty: `-{t.friction_penalty:.0f}`)",
+                f"- **Prescribed Engineering Action:** {t.recommended_action}",
+                f"- **Guardrail Invariant:** `{t.guardrail_status}`",
+                "",
+            ]
+        )
 
     return "\n".join(md)
 
@@ -850,6 +919,7 @@ def format_markdown_report(targets: List[UnifiedOptimizationTarget], site_url: s
 # ==============================================================================
 # CLI Entry Point
 # ==============================================================================
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -860,6 +930,7 @@ def main():
     parser.add_argument("--clarity-file", help="Path to Microsoft Clarity JSON export")
     parser.add_argument("--posthog-file", help="Path to PostHog conversion funnels JSON export")
     parser.add_argument("--cf-file", help="Path to Cloudflare edge performance / CWV JSON export")
+    parser.add_argument("--action-queue", help="Path to action_queue JSON from LGBMRanker")
     parser.add_argument("--output-json", help="Path to write prioritized JSON action queue")
     parser.add_argument("--output-md", help="Path to write Markdown executive report")
 
@@ -873,6 +944,7 @@ def main():
         clarity_file=args.clarity_file,
         posthog_file=args.posthog_file,
         cf_file=args.cf_file,
+        action_queue_file=args.action_queue,
     )
 
     # Print ASCII CLI report

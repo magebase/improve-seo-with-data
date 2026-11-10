@@ -95,9 +95,13 @@ Google Search Console shows post-impression behavior on the SERP, but is a black
 
 ---
 
-## 4. Mathematical Expected CTR Baseline & Opportunity Scoring
+## 4. Learning-to-Rank (LGBMRanker `rank_xendcg`) Opportunity Scoring & Priority Queue
 
-### Expected Baseline CTR Curve
+Opportunity ranking is governed by the trained **`LGBMRanker` (`rank_xendcg`) + SHAP driver engine** (`scripts/ltr_ranker.py`, `scripts/score_backlog.py`), rather than uncalibrated linear multiplication. The legacy heuristic ($\text{Impressions} \times (\text{Expected CTR} - \text{Actual CTR})$) has been replaced because raw impression multiplication artificially inflates low-volume striking-distance terms (e.g. 2 impressions) while burying high-volume long-tail opportunities.
+
+### Expected Baseline CTR Curve (Prior / Warm-Start Baseline)
+
+The baseline CTR curve serves as the inverse-propensity position-bias prior:
 
 $$\text{Expected CTR}(\text{Position}) = \begin{cases} 
 0.30 & \text{if } \text{Pos} \le 1.0 \\
@@ -108,15 +112,11 @@ $$\text{Expected CTR}(\text{Position}) = \begin{cases}
 0.01 & \text{if } \text{Pos} > 10.0 
 \end{cases}$$
 
-### Deterministic Opportunity & Impact Scoring Formulas
+### Priority Score & Stratified Backlog Execution
 
-$$\text{Potential Click Lift} = \text{Impressions} \times \left(\text{Expected CTR}(\max(1.0, \text{Pos} - 2.0)) - \text{Actual CTR}\right)$$
-
-$$\text{Friction Penalty} = (\text{Rage Clicks} > 10) \times 20 + (\text{LCP} > 2.5\text{s}) \times 30 + (\text{TTFB} > 400\text{ms}) \times 15$$
-
-$$\text{Potential Impact Score} = \text{Potential Click Lift} - \text{Friction Penalty}$$
-
-Tasks are sorted strictly by `Potential Impact Score` descending so engineering agents always execute the highest-ROI changes first.
+1. **LTR Model Scoring:** Each candidate row is scored across the 8-feature matrix (`domain_centroid_sim`, `serp_forum_ratio`, `title_exact_match_rate`, `serp_pixel_crowding`, `parent_hub_internal_links`, `current_pos`, `search_volume_log`, `conversion_intent_score`) using `LGBMRanker` with LambdaMART (`rank_xendcg`).
+2. **Action Queue Binding:** Tasks are bound directly to `action_queue_{domain}.json` and `~/.seo_fleet/fleet_state.db` sorted by `priority_score DESC`.
+3. **Winner Protection Invariant:** If a URL's actual CTR exceeds baseline by $\ge 20\%$ at Position $\le 3.0$, it is locked `LOCKED_PROTECTED` with zero metadata changes permitted.
 
 ---
 
