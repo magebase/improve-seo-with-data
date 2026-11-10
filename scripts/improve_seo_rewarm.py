@@ -159,3 +159,38 @@ def rewarm_urls(
         for path in targets.paths
     ]
     return RewarmSummary(results=tuple(results))
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(description="Re-warm mutated URLs via X-SEO-Verify GETs.")
+    parser.add_argument("--host", default="figiva.com", help="Target hostname (default: figiva.com)")
+    parser.add_argument("--urls", nargs="+", help="Full URLs to re-warm")
+    parser.add_argument("--paths", nargs="+", help="Canonical paths to re-warm")
+    args = parser.parse_args()
+
+    paths: list[str] = []
+    host = args.host
+    if args.urls:
+        for u in args.urls:
+            p = urlparse(u)
+            if p.netloc:
+                host = p.netloc
+            paths.append(p.path or "/")
+    elif args.paths:
+        paths = args.paths
+
+    if not paths:
+        print("Usage: improve_seo_rewarm.py --urls <url1> <url2>... or --paths <p1> <p2>...")
+        sys.exit(1)
+
+    print(f"Re-warming {len(paths)} paths on {host}...")
+    summary = rewarm_urls(RewarmTargets(host=host, paths=paths))
+    for r in summary.results:
+        status_str = f"{r.status}" if r.status else f"ERR: {r.error}"
+        print(f"  [{status_str}] {r.path} (attempts={r.attempts})")
+    print(f"Summary: {summary.ok_count}/{len(paths)} OK, {summary.fail_count} failed.")
+    sys.exit(0 if summary.all_ok else 1)
+

@@ -20,7 +20,7 @@
     1
   ],
   "objective": "rank_xendcg",
-  "best_iteration": 24,
+  "best_iteration": 1,
   "train_clusters": [
     "?country=DE",
     "?country=GB",
