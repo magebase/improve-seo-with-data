@@ -476,3 +476,31 @@ GA4 remain dark fleet-wide and PostHog counts only consent-accepters.
 Test evidence at commit time: clarity-fleet conformance 6/6 (RED->GREEN),
 posthog/security/adsense suites 31/31, posthog_fleet 6/6 params (were failing
 on main), smsriver smoke 11/11 manual post-purge.
+
+## 2026-11-10 (later): checkpoint regression discovered — production lost the OFC route waves
+
+Fresh `/improve-seo-with-data openfileconverter.com` invocation. Findings:
+
+- **GSC Nov 1-9 finalized (OFC):** 167 imps / 2 clicks. Impressions grew ~3x
+  through the window (6-14/day -> 29-37/day Nov 7-9). Only click: 'png to
+  svg online' -> /convert/png-to-svg/ at pos 85.
+- **Structural fault:** local main is ahead 50 / behind 136 vs origin/main.
+  Concurrent windows deploy origin/main, which predates the OFC waves AND the
+  CSP/un-gating fixes. Live bundle 404s GSC-earning routes
+  (/convert/stl-to-step/, /convert/dxf-to-pdf/, /convert/step-to-dxf/,
+  /convert/3mf-to-stl/, /compare/step-vs-stl/), sitemap had only 33 URLs.
+- **Checkpoint clobber:** commit 0153f395 ("Checkpoint uncommitted working-tree
+  changes at operator request") captured a STALE working tree and reverted
+  multiple shipped OFC waves inside the repo too: 86 tests across 4 OFC GSC
+  TDD files RED on main (16 GSC pairs gone from FORMAT_PAIR_CATALOG, per-pair
+  SERP calibration table gone, /screen/37/ cannibalization redirect gone,
+  studio outbound links gone). Recovery from git impossible (no dangling
+  commits/blobs/stashes contain it; Cloudflare retains only last 10 worker
+  versions, all from today). Rebuilding TDD-style from the surviving tests.
+- **Redeployed OFC worker from local main** (version 34c71f32): CSP
+  scripts.clarity.ms + googletagmanager.com live again, telemetry un-gated
+  (text/plain 7 -> 1), Clarity ID z77gyk5y1e renders, sitemap 33 -> 66 URLs,
+  /convert/pdf-to-docx/ back to 200.
+- www->apex 301, llms.txt decode, robots.txt: all healthy on OFC.
+- Rebuild claimed in TASKS.md; worker running test-green loop in
+  /tmp/sf-agent-fleet-csp. Next: commit, CAS main, redeploy, verify live.
