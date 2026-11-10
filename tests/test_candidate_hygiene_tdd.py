@@ -381,3 +381,40 @@ def test_final_url_tracking_params_stripped(monkeypatch):
         mapping["https://incomecanvas.com/legacy-x"]
         == "https://incomecanvas.com/article/x/"
     )
+
+
+# ------------------------------------------------- subdomain leak hygiene
+
+
+def test_subdomain_leak_rejected():
+    domain = "figiva.com"
+    # Foreign subdomain from sc-domain export must be rejected
+    assert not is_valid_seo_candidate(
+        domain,
+        "https://landscaping.figiva.com/lookup/landscaping-standards",
+        "iso certification for landscaping companies",
+    )
+    assert not is_valid_seo_candidate(
+        f"sc-domain:{domain}",
+        "https://sub.figiva.com/calculators/sample/",
+        "sample query",
+    )
+
+
+def test_apex_and_www_survive_hostname_filter():
+    domain = "figiva.com"
+    assert is_valid_seo_candidate(
+        domain,
+        "https://figiva.com/compare/btu-vs-cfm/",
+        "btu cfm",
+    )
+    assert is_valid_seo_candidate(
+        f"sc-domain:{domain}",
+        "https://www.figiva.com/compare/btu-vs-cfm/",
+        "btu cfm",
+    )
+    assert is_valid_seo_candidate(
+        domain,
+        "/compare/btu-vs-cfm/",
+        "btu cfm",
+    )

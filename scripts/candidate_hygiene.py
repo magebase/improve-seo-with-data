@@ -103,17 +103,30 @@ def _brand_stems(domain: str) -> list:
 
 
 def is_valid_seo_candidate(domain: str, url_path_or_url: str, query: str) -> bool:
-    """Rejects legal/utility pages and navigational brand-typo queries.
+    """Rejects legal/utility pages, foreign subdomains, and navigational brand-typo queries.
 
     Called BEFORE SERP enrichment: a rejected row never consumes DataForSEO
     credits or a lease slot.
     """
+    clean_domain = (domain or "").strip().lower()
+    if clean_domain.startswith("sc-domain:"):
+        clean_domain = clean_domain[len("sc-domain:") :]
+
+    raw_url = (url_path_or_url or "").strip()
+    if "://" in raw_url:
+        parsed = urllib.parse.urlparse(raw_url)
+        netloc = (parsed.netloc or "").split(":")[0].lower()
+        if clean_domain and netloc:
+            allowed = {clean_domain, f"www.{clean_domain}"}
+            if netloc not in allowed:
+                return False
+
     if NON_SEO_PATH_RE.search(url_path(url_path_or_url).strip() or "/"):
         return False
     collapsed_q = re.sub(r"[^a-z0-9]", "", (query or "").lower())
     if not collapsed_q:
         return False
-    stems = _brand_stems(domain)
+    stems = _brand_stems(clean_domain)
     if collapsed_q in stems:
         return False
     base_stem = stems[0]
