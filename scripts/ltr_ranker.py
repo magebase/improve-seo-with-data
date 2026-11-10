@@ -860,7 +860,10 @@ def compile_wave_backlog(
         ),
         (
             "CREATE_PROGRAMMATIC_ROUTE",
-            lambda r: float(r.get("current_pos", 0.0) or 0.0) >= 90.0,
+            lambda r: (
+                float(r.get("current_pos", 0.0) or 0.0) >= 90.0
+                and str(r.get("coverage_state", "")) != "Discovered - currently not indexed"
+            ),
         ),
         (
             "ADD_D1_SPEC_COMPARISON_TABLE",
