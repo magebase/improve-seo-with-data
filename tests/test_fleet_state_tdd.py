@@ -25,7 +25,9 @@ from fleet_state import (
     load_cached_serps,
     load_gsc_snapshot,
     mark_shipped,
+    mark_tasks_reverted,
     pending_count,
+    release_stale_leases,
     save_gsc_snapshot,
     upsert_serp_cache,
 )
@@ -124,3 +126,73 @@ def test_budget_gate_caps_daily_spend_and_resets_next_day(tmp_path: Path):
     assert gate.record(60, now=now) == 0, "gate allowed spend beyond the daily cap"
     assert gate.remaining(now=now) == 0
     assert gate.remaining(now=now + timedelta(days=1)) == 100, "bucket did not reset"
+
+
+# ---------------------------------------------------------------------------
+# 50x/day hardening: stale-lease release, atomic RETURNING cursor, REVERTED
+# ---------------------------------------------------------------------------
+
+
+def _enqueue(conn, n, domain="smsriver.com", now=NOW):
+    tasks = [
+        {
+            "domain": domain,
+            "page": f"https://{domain}/p{i}/",
+            "query": f"q{i}",
+            "action_code": f"ACTION_{i % 3}",
+            "priority_score": float(n - i),
+        }
+        for i in range(n)
+    ]
+    enqueue_tasks(conn, tasks, now=now)
+
+
+def test_wal_mode_enabled_on_connect(tmp_path):
+    # WAL is a file-DB journal mode; :memory: always reports "memory".
+    conn = connect_state_db(str(tmp_path / "wal.db"))
+    mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+    assert mode == "wal"
+    assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+
+
+def test_stale_leases_released_after_ttl(tmp_path):
+    conn = connect_state_db(":memory:")
+    _enqueue(conn, 3)
+    old = NOW - timedelta(hours=2)
+    first = lease_tasks(conn, limit=2, now=old)
+    assert len(first) == 2 and all(t["status"] == "LEASED" for t in first)
+
+    # A fresh run 1 hour later must reclaim the crashed agent's leases.
+    now = NOW + timedelta(hours=1)
+    release_stale_leases(conn, ttl_seconds=3600, now=now)
+    reclaimed = lease_tasks(conn, limit=3, now=now)
+    assert len(reclaimed) == 3  # the 2 stale + the 1 still-pending
+
+
+def test_lease_cursor_never_repeats_and_exhausts_cleanly():
+    conn = connect_state_db(":memory:")
+    _enqueue(conn, 5)
+    batch1 = lease_tasks(conn, limit=3)
+    batch2 = lease_tasks(conn, limit=3)
+    batch3 = lease_tasks(conn, limit=3)
+    ids = [t["id"] for t in batch1 + batch2 + batch3]
+    assert len(ids) == len(set(ids)) == 5  # no overlap, all 5 leased once
+    assert pending_count(conn) == 0
+
+
+def test_mark_tasks_reverted_is_terminal_and_unleasable():
+    conn = connect_state_db(":memory:")
+    _enqueue(conn, 2)
+    leased = lease_tasks(conn, limit=2)
+    mark_shipped(conn, [t["id"] for t in leased], commit_sha="abc1234")
+    mark_tasks_reverted(conn, [t["id"] for t in leased])
+
+    statuses = dict(
+        conn.execute("SELECT id, status FROM atomic_task_backlog").fetchall()
+    )
+    assert set(statuses.values()) == {"REVERTED"}
+    assert lease_tasks(conn, limit=5) == []  # REVERTED never re-enters the cursor
+    remaining = conn.execute(
+        "SELECT COUNT(*) FROM atomic_task_backlog WHERE status='REVERTED' AND commit_sha='abc1234'"
+    ).fetchone()[0]
+    assert remaining == 2  # audit trail preserved

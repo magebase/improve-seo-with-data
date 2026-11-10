@@ -101,6 +101,11 @@ def connect_state_db(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     path = Path(db_path).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
+    # WAL + busy timeout: 20-50 skill invocations may run concurrently on one
+    # machine; readers must never block the lease-cursor writer, and contending
+    # writers retry briefly instead of failing with "database is locked".
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.executescript(_SCHEMA)
     conn.commit()
     return conn
@@ -259,49 +264,75 @@ def enqueue_tasks(
     return added
 
 
+DEFAULT_STALE_LEASE_TTL_SECONDS = 3600
+
+
+def release_stale_leases(
+    conn: sqlite3.Connection,
+    ttl_seconds: int = DEFAULT_STALE_LEASE_TTL_SECONDS,
+    now: Optional[datetime] = None,
+) -> int:
+    """Returns crashed agents' uncommitted leases to the PENDING cursor.
+
+    A terminal session that died mid-run must not orphan LEASED tasks forever:
+    anything leased more than ``ttl_seconds`` ago (default 1 hour) flips back
+    to PENDING so the next invocation can lease it again.
+    """
+    cutoff = _utc_now(now) - timedelta(seconds=ttl_seconds)
+    cursor = conn.execute(
+        "UPDATE atomic_task_backlog SET status = 'PENDING', leased_at = NULL "
+        "WHERE status = 'LEASED' AND leased_at IS NOT NULL AND leased_at < ?",
+        (_iso(cutoff),),
+    )
+    conn.commit()
+    return cursor.rowcount
+
+
 def lease_tasks(
     conn: sqlite3.Connection,
     domain: Optional[str] = None,
     limit: int = 35,
     now: Optional[datetime] = None,
 ) -> list:
-    """Pops the next PENDING tasks (priority DESC) and marks them LEASED."""
+    """Atomically pops the next PENDING tasks (priority DESC) as LEASED.
+
+    Runs `release_stale_leases` first, then performs the cursor flip in ONE
+    UPDATE ... RETURNING statement, so two concurrent invocations can never
+    lease the same task (SQLite serializes the write; the subquery's LIMIT
+    hands out each row exactly once). REVERTED tasks never re-enter.
+    """
+    release_stale_leases(conn, now=now)
     stamp = _iso(_utc_now(now))
-    if domain:
-        rows = conn.execute(
-            "SELECT id, domain, page, query, action_code, target_component, file_target, "
-            "tdd_assertion, lgbm_score, priority_score FROM atomic_task_backlog "
-            "WHERE status = 'PENDING' AND domain = ? ORDER BY priority_score DESC LIMIT ?",
-            (domain, limit),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT id, domain, page, query, action_code, target_component, file_target, "
-            "tdd_assertion, lgbm_score, priority_score FROM atomic_task_backlog "
-            "WHERE status = 'PENDING' ORDER BY priority_score DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    leased: list[dict[str, Any]] = []
-    for row in rows:
-        conn.execute(
-            "UPDATE atomic_task_backlog SET status = 'LEASED', leased_at = ? WHERE id = ?",
-            (stamp, row[0]),
-        )
-        leased.append(
-            {
-                "id": row[0],
-                "domain": row[1],
-                "page": row[2],
-                "query": row[3],
-                "action_code": row[4],
-                "target_component": row[5],
-                "file_target": row[6],
-                "tdd_assertion": row[7],
-                "lgbm_score": row[8],
-                "priority_score": row[9],
-                "status": "LEASED",
-            }
-        )
+    domain_filter = "AND domain = ?" if domain else ""
+    params = ([domain] if domain else []) + [limit]
+    cursor = conn.execute(
+        f"UPDATE atomic_task_backlog SET status = 'LEASED', leased_at = ? "
+        f"WHERE id IN ("
+        f"  SELECT id FROM atomic_task_backlog "
+        f"  WHERE status = 'PENDING' {domain_filter} "
+        f"  ORDER BY priority_score DESC LIMIT ?"
+        f") "
+        f"RETURNING id, domain, page, query, action_code, target_component, "
+        f"file_target, tdd_assertion, lgbm_score, priority_score",
+        (stamp, *params),
+    )
+    leased = [
+        {
+            "id": row[0],
+            "domain": row[1],
+            "page": row[2],
+            "query": row[3],
+            "action_code": row[4],
+            "target_component": row[5],
+            "file_target": row[6],
+            "tdd_assertion": row[7],
+            "lgbm_score": row[8],
+            "priority_score": row[9],
+            "status": "LEASED",
+        }
+        for row in cursor.fetchall()
+    ]
+    leased.sort(key=lambda t: t["priority_score"], reverse=True)
     conn.commit()
     return leased
 
@@ -323,6 +354,32 @@ def mark_shipped(
         marked += cur.rowcount
     conn.commit()
     return marked
+
+
+def mark_tasks_reverted(
+    conn: sqlite3.Connection,
+    task_ids: list,
+    now: Optional[datetime] = None,
+) -> int:
+    """Records the auto-rollback detector's reverts (SHIPPED -> REVERTED).
+
+    REVERTED is terminal: the wave's change was rolled back (Stage 4
+    negative-delta detector), so the task must NOT re-enter the lease cursor
+    and thrash the same page. The commit_sha audit trail is preserved; the
+    JSONL cooldown ledger governs whether the (page, action) can be
+    re-prescribed later through a fresh scoring run.
+    """
+    stamp = _iso(_utc_now(now))
+    reverted = 0
+    for task_id in task_ids:
+        cur = conn.execute(
+            "UPDATE atomic_task_backlog SET status = 'REVERTED', shipped_at = ? "
+            "WHERE id = ? AND status = 'SHIPPED'",
+            (stamp, task_id),
+        )
+        reverted += cur.rowcount
+    conn.commit()
+    return reverted
 
 
 def pending_count(conn: sqlite3.Connection, domain: Optional[str] = None) -> int:
