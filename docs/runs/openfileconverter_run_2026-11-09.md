@@ -533,3 +533,46 @@ failures that also fail on pristine baseline (round3/pwa/offerwall/
 edge_cache/indexnow/wave9-10 files), smsriver-origin drift per prior notes.
 Deploy-war hazard unchanged: local main is still ~ahead/behind vs origin/main;
 any concurrent window deploying origin/main re-stomps all of this.
+
+## RECONCILE SHIPPED: split brain closed, guardrails live (2026-11-10 final)
+
+Operator authorized the full reconcile + push. Executed:
+1. `3f38ff04` merged origin/main (146 commits) into local main (56 commits).
+   58 conflicts resolved by class: checkpoint-only-driver files took origin
+   wholesale (~40), genuine-work files were unioned (OFC GSC-pair surface +
+   origin's editorial guides/indexability/honesty contracts). Worker also
+   caught the checkpoint REINTRODUCING ALLOWED_HOSTS ["*"], DEBUG-true,
+   fabricated metrics, publisher-id swaps — all reverted to origin's
+   verified state. Re-applied on top: OBSERVABILITY_CONSENT_GATED=False
+   (figiva/smspool/seo_alpha/OFC), wrangler 4.113 pin, csp_nonce context
+   processor restoration.
+2. Second merge caught up 7 more origin commits (wave63/64, KV L2).
+3. PUSHED: origin/main == local main == `6e70412f`. Future origin deploys
+   carry the restored OFC surface — re-stomping via origin is no longer
+   possible. (One real re-stomp happened mid-reconcile from a stale window;
+   recovered by the final deploy.)
+4. Migration reconciliation: file_converter had conflicting leaves
+   (origin 0010_indexnowledger vs restored 0012_merge) → no-op merge node
+   `0013_merge_20261110_1009` pushed; prod D1 provisioned via
+   `provision_openfileconverter_d1.py --apply` (marked 2 migrations, 52
+   tables).
+5. GUARDRAILS LANDED (`7773f9df`, `92d408b2`, fix in final push):
+   `scripts/preflight_deploy_guard.py` + `deploy_test_baselines.json`,
+   wired into the OFC deploy wrapper BEFORE load_dotenv (baseline measured
+   in developer-shell env). Gates: (1) HEAD must be strict descendant of
+   origin/main, (2) no uncommitted product-path changes + no cross-product
+   staging, (3) pytest failures <= baseline (OFC: 31 measured / 40 allowed).
+   The guard caught a false-positive on its first live run ("error" in test
+   stdout) — fixed to use pytest exit codes. Skill doc:
+   `docs/fleet_deploy_safety.md`. Emergency override: DEPLOY_GUARD_DISABLE=1.
+6. FINAL DEPLOY `e551c9d6` through all gates. Verified live:
+   all 8 spot routes 200 (ply-to-step, gbr-to-dxf, 3mf-to-stl, stl-to-step,
+   parquet-to-csv, pdf-to-docx, studio/gerber, compare/step-vs-stl),
+   /screen/37/ 301 -> /studio/gerber/, www->apex 301, calibrated titles,
+   CSP clarity+gtm+ga, un-gated Clarity z77gyk5y1e + PostHog + gtag,
+   sitemap 46 honest URLs (origin's indexability contract: queue pairs
+   noindexed).
+
+Open: wire preflight_deploy_guard into the other four deploy wrappers
+(figiva, seo_alpha, smsriver, legacy OFC) — same call shape; OFC is the
+proven template.
