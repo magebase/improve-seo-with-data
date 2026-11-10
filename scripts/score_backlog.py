@@ -36,7 +36,13 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from bootstrap_labels import generate_bootstrap_grades
-from fleet_state import enqueue_tasks, lease_tasks, pending_count
+from fleet_state import (
+    DEFAULT_TYPE_CAPS,
+    DEFAULT_TYPE_CAP_FALLBACK,
+    enqueue_tasks,
+    lease_tasks,
+    pending_count,
+)
 from ltr_ranker import (
     EXPLOIT_SLOTS,
     EXPLORE_SLOTS,
@@ -217,7 +223,32 @@ def main(argv: list[str] | None = None) -> int:
         "backlog holds fewer than this many tasks; at or above it the "
         "invocation is a pure <1s cursor lease (2 waves of buffer)",
     )
+    parser.add_argument(
+        "--intent-map",
+        default="~/.seo_fleet/route_intent_map.json",
+        help="JSON map {page: rendered_text} used by cursor hygiene to "
+        "graduate INJECT_* tasks whose query tokens the page already covers "
+        "(empty string disables graduation)",
+    )
+    parser.add_argument(
+        "--no-lock-registry",
+        action="store_true",
+        help="skip the multi-worktree lock registry (~/.seo_fleet/"
+        "worktree_locks.json) when picking locked route prefixes",
+    )
     args = parser.parse_args(argv)
+
+    def _hygiene_context():
+        from cursor_hygiene import active_locked_prefixes
+
+        intent_map: dict = {}
+        if args.intent_map:
+            map_path = os.path.expanduser(args.intent_map)
+            if os.path.exists(map_path):
+                with open(map_path, encoding="utf-8") as fh:
+                    intent_map = json.load(fh)
+        locked = () if args.no_lock_registry else active_locked_prefixes()
+        return intent_map, locked
 
     # Fast path (the 50x/day cursor): when the backlog holds at least two
     # waves of PENDING tasks, lease and return in well under a second — no
@@ -231,19 +262,45 @@ def main(argv: list[str] | None = None) -> int:
 
         fast_conn = _connect(args.state_db)
         if _pending(fast_conn) >= max(args.replenish_below, args.lease_size):
+            # Pre-lease hygiene: junk queries -> REJECTED (terminal), intent
+            # tasks already covered by the route/country maps -> SHIPPED,
+            # other worktrees' locked prefixes -> skipped this invocation.
+            from cursor_hygiene import preflight_hygiene
+
+            intent_map, locked = _hygiene_context()
+            hygiene = preflight_hygiene(
+                fast_conn,
+                route_intent_map=intent_map,
+                locked_path_prefixes=locked,
+            )
             leased = _lease(
                 fast_conn,
                 limit=args.lease_size,
                 family_caps={"number": 3},
                 default_family_cap=10,
+                type_caps=DEFAULT_TYPE_CAPS,
+                default_type_cap=DEFAULT_TYPE_CAP_FALLBACK,
             )
             os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
             with open(args.output, "w", encoding="utf-8") as fh:
-                json.dump({"fast_path": True, "leased": leased}, fh, indent=2)
+                json.dump(
+                    {"fast_path": True, "hygiene": hygiene, "leased": leased},
+                    fh,
+                    indent=2,
+                )
             print(
                 f"Fast path: leased {len(leased)} tasks from the backlog cursor "
                 f"(no collection/scoring; {_pending(fast_conn)} still pending)."
             )
+            if any(
+                hygiene[k] for k in ("rejected", "graduated", "locked", "intent_capped")
+            ):
+                print(
+                    f"  Hygiene: {hygiene['rejected']} junk REJECTED, "
+                    f"{hygiene['graduated']} intent tasks graduated to SHIPPED, "
+                    f"{hygiene['locked']} locked by other worktrees, "
+                    f"{hygiene['intent_capped']} intent-capped."
+                )
             for task in leased[:5]:
                 print(
                     f"  LEASED {task['action_code']} -> {task['page']}"
@@ -378,21 +435,45 @@ def main(argv: list[str] | None = None) -> int:
         conn = connect_state_db(args.state_db)
         pending = full_backlog + queue if args.compile_wave > 0 else queue
         added = enqueue_tasks(conn, pending)
+        # Pre-lease hygiene on the freshly enqueued backlog too (junk from the
+        # compile never reaches the lease), then the stratified lease with
+        # BOTH diversity axes: route-family caps AND task-type quotas.
+        from cursor_hygiene import preflight_hygiene
+
+        intent_map, locked = _hygiene_context()
+        hygiene = preflight_hygiene(
+            conn,
+            route_intent_map=intent_map,
+            locked_path_prefixes=locked,
+        )
         lease_n = args.lease_size if args.lease_size > 0 else len(pending)
         # Stratified lease: /number/* (or any single template family) can
         # never take more than 3 slots of a 35-task wave; other families cap
-        # at 10 so no one family monopolizes the wave either.
+        # at 10 so no one family monopolizes the wave either. Task-type
+        # quotas force the wave to carry D1 tables, inlinks, CTR hooks and
+        # route builds (8/8/6/5/3 split) instead of 30 heading checks.
         leased = lease_tasks(
             conn,
             limit=lease_n,
             family_caps={"number": 3},
             default_family_cap=10,
+            type_caps=DEFAULT_TYPE_CAPS,
+            default_type_cap=DEFAULT_TYPE_CAP_FALLBACK,
         )
         still_pending = pending_count(conn)
         print(
             f"State DB {args.state_db}: enqueued {added} new, leased {len(leased)} "
             f"(PENDING -> LEASED), {still_pending} still pending."
         )
+        if any(
+            hygiene[k] for k in ("rejected", "graduated", "locked", "intent_capped")
+        ):
+            print(
+                f"      Hygiene: {hygiene['rejected']} junk REJECTED, "
+                f"{hygiene['graduated']} intent tasks graduated to SHIPPED, "
+                f"{hygiene['locked']} locked by other worktrees, "
+                f"{hygiene['intent_capped']} intent-capped."
+            )
         if 0 < still_pending < 100:
             print(
                 "      NOTE: backlog below 100 pending - the next collection "

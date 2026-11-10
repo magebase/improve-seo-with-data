@@ -330,6 +330,21 @@ def load_cached_serps(
 
 # ------------------------------------------------------------- task backlog
 
+# Wave-62 task-type quota split (per 30-task wave): every wave must carry a
+# MIX of work products, not 30 identical heading checks. The inlink family
+# shares the 8-slot slice across its two codes; the title/H2 intent family
+# shares the 5-slot slice. Uncapped codes fall back to ``default_type_cap``.
+DEFAULT_TYPE_CAPS = {
+    "ADD_D1_SPEC_COMPARISON_TABLE": 8,
+    "BOOST_CLUSTER_CROSS_LINKS": 4,
+    "STRENGTHEN_HUB_INTERNAL_LINKS": 4,
+    "OVERHAUL_CTR_HOOK_AND_WEBAPP_SCHEMA": 6,
+    "INJECT_EXACT_TITLE_AND_H2": 3,
+    "INJECT_EXACT_H2_AND_TITLE": 2,
+    "CREATE_PROGRAMMATIC_ROUTE": 3,
+}
+DEFAULT_TYPE_CAP_FALLBACK = 3
+
 
 def enqueue_tasks(
     conn: sqlite3.Connection,
@@ -349,6 +364,18 @@ def enqueue_tasks(
             parts = host.split(".")
             domain = ".".join(parts[-2:]) if len(parts) > 2 else host
         try:
+            action_code = str(
+                task.get("action_code") or task.get("prescribed_action") or ""
+            )
+            # REJECTED is terminal (cursor hygiene): junk queries purged by
+            # preflight_hygiene must never re-enter via the next compile wave.
+            already_rejected = conn.execute(
+                "SELECT 1 FROM atomic_task_backlog "
+                "WHERE page = ? AND action_code = ? AND status = 'REJECTED'",
+                (page, action_code),
+            ).fetchone()
+            if already_rejected:
+                continue
             conn.execute(
                 "INSERT INTO atomic_task_backlog "
                 "(domain, page, query, action_code, target_component, file_target, "
@@ -358,7 +385,7 @@ def enqueue_tasks(
                     domain,
                     page,
                     str(task.get("query") or ""),
-                    str(task.get("action_code") or task.get("prescribed_action") or ""),
+                    action_code,
                     task.get("target_component"),
                     task.get("file_target"),
                     task.get("tdd_assertion"),
@@ -406,6 +433,8 @@ def lease_tasks(
     now: Optional[datetime] = None,
     family_caps: Optional[dict] = None,
     default_family_cap: int = 0,
+    type_caps: Optional[dict] = None,
+    default_type_cap: int = 0,
 ) -> list:
     """Atomically pops the next PENDING tasks (priority DESC) as LEASED.
 
@@ -417,6 +446,13 @@ def lease_tasks(
     - ``family_caps`` / ``default_family_cap``: per-wave caps on tasks from
       one route family (ROW_NUMBER partition), so a deep /number/* backlog
       cannot make every wave identical.
+    - ``type_caps`` / ``default_type_cap``: per-wave caps on tasks of one
+      ACTION CODE (second ROW_NUMBER partition), so a wave carries a mix of
+      D1 tables, inlinks, CTR hooks and route builds instead of 30 identical
+      heading checks. ``DEFAULT_TYPE_CAPS`` encodes the wave-62 quota split
+      (8x D1 tables, 8x inlinks, 6x CTR hooks, 5x title/H2 intents,
+      3x programmatic routes). Uncapped codes ride ``default_type_cap``
+      (0 = unlimited when ``type_caps`` is None, i.e. back-compat).
     - file-target locks: a wave never leases a PENDING task whose
       ``file_target`` is already held by an ACTIVE lease in another agent
       worktree (NULL/empty file targets are exempt - legacy tasks and
@@ -438,18 +474,35 @@ def lease_tasks(
             f"AND family_rank <= ?)"
         )
         family_params.extend([*caps.keys(), default_family_cap])
-    where_clauses = " OR ".join(family_filters) if family_filters else "1 = 1"
+    type_filters = []
+    type_params: list = []
+    tcaps = dict(type_caps or {})
+    if tcaps or default_type_cap > 0:
+        for code in sorted(tcaps):
+            type_filters.append("(action_code = ? AND type_rank <= ?)")
+            type_params.extend([code, tcaps[code]])
+        if default_type_cap > 0:
+            type_filters.append(
+                f"(action_code NOT IN ({', '.join('?' * len(tcaps)) or "''"}) "
+                f"AND type_rank <= ?)"
+            )
+            type_params.extend([*tcaps.keys(), default_type_cap])
+    family_where = " OR ".join(family_filters) if family_filters else "1 = 1"
+    type_where = " OR ".join(type_filters) if type_filters else "1 = 1"
     sql = (
         "WITH ranked_pending AS ("
-        "  SELECT id, route_family, priority_score,"
+        "  SELECT id, route_family, action_code, priority_score,"
         "         ROW_NUMBER() OVER ("
         "             PARTITION BY route_family ORDER BY priority_score DESC"
-        "         ) AS family_rank"
+        "         ) AS family_rank,"
+        "         ROW_NUMBER() OVER ("
+        "             PARTITION BY action_code ORDER BY priority_score DESC"
+        "         ) AS type_rank"
         "  FROM atomic_task_backlog"
         f"  WHERE status = 'PENDING' {domain_filter}"
         "), diversified_wave AS ("
         "  SELECT id FROM ranked_pending"
-        f"  WHERE {where_clauses}"
+        f"  WHERE ({family_where}) AND ({type_where})"
         "    AND (file_target IS NULL OR file_target = '' OR file_target NOT IN ("
         "        SELECT DISTINCT file_target FROM atomic_task_backlog"
         "        WHERE status = 'LEASED' AND file_target IS NOT NULL AND file_target != ''"
@@ -464,8 +517,8 @@ def lease_tasks(
     cursor = conn.execute(
         sql,
         # Placeholder order: domain filter (ranked_pending) -> family-cap
-        # filters (diversified_wave) -> LIMIT -> lease stamp.
-        (*([domain] if domain else []), *family_params, limit, stamp),
+        # filters -> type-cap filters (diversified_wave) -> LIMIT -> stamp.
+        (*([domain] if domain else []), *family_params, *type_params, limit, stamp),
     )
     leased = [
         {
