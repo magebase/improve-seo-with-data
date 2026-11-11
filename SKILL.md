@@ -836,6 +836,104 @@ Replaces superficial tag sniffing with real domain-specific functional proofs:
 - Dirty worktree rejection: `git status --porcelain` must be clean before wave sign-off unless explicitly overridden with `--allow-dirty`.
 - Negative validation against missing task IDs, non-existent Git commit SHAs, omitted modified files, missing test run evidence in Section 5, and Rule 32 emojis.
 
+---
+
+## 15. Outcome-Driven SEO Engine v2.2.1: Evidence and Statistical Integrity
+
+The Outcome-Driven SEO Engine v2.2.1 establishes rigorous empirical truth, statutory calculation reality, and mathematical statistical integrity across all fleet operations.
+
+### 15.1 P0.1 — Statutory Reality & Section 179 Limits (IRS Publication 946)
+Replaces stale 2025 limits with verified statutory limits under current IRS Publication 946:
+1. **Tax Year 2026 Statutory Limits:**
+   - **Maximum Deduction Cap:** $2,560,000.
+   - **Phaseout Threshold:** $4,090,000.
+   - **Full Phaseout Ceiling:** $6,650,000 ($4,090,000 + $2,560,000).
+   - **Qualifying SUV Deduction Limit:** $32,000.
+   - **Reduction Mechanism:** Dollar-for-dollar reduction:
+     $$\text{Reduction} = \max(0, \text{Cost} - \$4{,}090{,}000)$$
+     $$\text{AvailableCap} = \max(0, \$2{,}560{,}000 - \text{Reduction})$$
+     $$\text{BaseDeduction} = \min(\text{Cost}, \text{AvailableCap})$$
+2. **Tax Year 2025 Statutory Limits:**
+   - **Maximum Deduction Cap:** $1,250,000.
+   - **Phaseout Threshold:** $3,130,000.
+   - **Full Phaseout Ceiling:** $4,380,000.
+   - **Qualifying SUV Deduction Limit:** $30,500.
+3. **Strict Statutory Invariant:**
+   Presenting stale 2025 limits ($1,250,000 / $3,130,000) on 2026 calculators constitutes a fatal validation failure (`Section 179 Stale Limit Invariant Failure`).
+
+### 15.2 P0.2 — Calibrated Bayesian Expected Value & Holdout Evaluation (`score_backlog.py`)
+1. **Brier Skill Score (BSS) vs Base-Rate Baseline:**
+   Brier score $\le 0.25$ alone does NOT qualify a model as calibrated when base rates are low. Enforces Brier Skill Score:
+   $$BSS = 1 - \frac{BS_{\text{model}}}{BS_{\text{baseline}}}$$
+   where $BS_{\text{baseline}} = \bar{y}(1 - \bar{y})$ (the sample variance of observed outcomes).
+2. **Baseline Benchmarks & Calibration Parameters:**
+   - **Baseline Log Loss:** $LL_{\text{baseline}} = -[\bar{y}\ln(\bar{y}) + (1-\bar{y})\ln(1-\bar{y})]$.
+   - **Calibration Intercept ($a$) and Slope ($b$):** Estimated via logistic regression on logits ($z = \text{logit}(p)$). Well-calibrated models exhibit $a \approx 0$ and $b \approx 1$.
+   - **Sample Size Gate ($N \ge 20$):** Calibration verdicts require at least 20 matured experiments. When $N < 20$, verdict is strictly `INSUFFICIENT_SAMPLE_SIZE_FOR_CALIBRATION`. Only when $N \ge 20$, $BSS > 0$, and $BS \le 0.25$ is a model labeled `WELL_CALIBRATED`.
+3. **Full EV Decomposition (`ev_decomposition`):**
+   Every scored opportunity returns an explicit mathematical derivation:
+   `expected_delta_clicks`, `conversion_rate`, `value_per_conversion`, `time_horizon_days`, `gross_business_value`, `labor_hours`, `labor_hourly_rate`, `implementation_labor_cost`, `cannibalization_risk`, `expected_risk_cost`, `posterior_success_probability`, and `net_expected_value`.
+4. **Canonical Outcome Reconciliation (`determine_canonical_outcome`):**
+   Standardized mapping across causal DiD estimation and empirical growth:
+   - `STATISTICALLY_SIGNIFICANT_LIFT`: Lower 95% bound $> 0.05$ and incremental clicks $\ge$ commercial threshold.
+   - `COMMERCIALLY_WORTHWHILE_LIFT`: Incremental clicks $\ge$ commercial threshold and relative lift $\ge 10\%$.
+   - `COMMERCIALLY_NEGLIGIBLE_LIFT`: Positive lift or lower bound $> 0$, but incremental clicks $<$ commercial threshold.
+   - `STATISTICALLY_SIGNIFICANT_DROP`: Upper 95% bound $< -0.05$.
+   - `INCONCLUSIVE_EVIDENCE`: Confidence interval spans zero or control cohort $< 3$.
+   - `NEUTRAL_NO_EFFECT`: Confidence interval tightly bounds zero.
+
+### 15.3 P0.3 — Exact Poisson-Normal DiD Estimator (`fleet_state.py`)
+1. **Exact Degrees of Freedom ($df = N_c - 1$):**
+   For sample variance $s_C^2$ across $N_c$ controls, degrees of freedom are $df = \max(1, N_c - 1)$:
+   - $N_c = 2 \implies df = 1, t = 12.706$
+   - $N_c = 3 \implies df = 2, t = 4.303$
+   - $N_c = 4 \implies df = 3, t = 3.182$
+   - $N_c = 5 \implies df = 4, t = 2.776$
+   - $N_c = 6 \implies df = 5, t = 2.571$
+   - $N_c \ge 31 \implies df \ge 30, t = 1.960$
+2. **Exact Poisson-Normal Standard Error:**
+   Removed arbitrary $0.5$ scaling multiplier. Standard error is derived directly from count variances:
+   $$SE = \sqrt{\frac{Y_{T1} + Y_{T0}}{\max(Y_{T0}, 1)^2} + \frac{s_C^2}{\max(1, N_c)}}$$
+3. **Multi-Period Event Study Diagnostics (`check_event_study_parallel_trends`):**
+   Evaluates consecutive pre-treatment periods ($[-56d, -42d]$, $[-42d, -28d]$, $[-28d, -14d]$, $[-14d, 0d]$) to prove parallel trends hold before treatment. Divergence $> 0.30$ triggers `PARALLEL_TRENDS_VIOLATION`.
+4. **Configurable Commercial Threshold:**
+   Replaces hardcoded 2.0 clicks with configurable `min_incremental_clicks` per property.
+
+### 15.4 P0.4 — True Product Functional Testing (`verify_product_functionality.py`)
+Crucial Distinction:
+- `FUNCTIONALLY_VERIFIED`: Real input/output executed and mathematically/structurally validated.
+- `IMPLEMENTATION_PRESENT`: Static HTML/script element presence verified.
+- `VERIFICATION_FAILED`: Required product logic or statutory limits missing or invalid.
+
+Reference Engines Implemented:
+1. **OpenFileConverter (`execute_converter_pipeline`):** Real byte-level conversions with magic byte validation (BMP $\to$ PNG with `\x89PNG`, STEP $\to$ STL with `solid ...`, DOCX $\to$ PDF with `%PDF`, and malformed byte rejection).
+2. **IncomeCanvas Financial Engines:**
+   - Section 179 (`calculate_section_179_deduction`): 2025 vs 2026 statutory limits, SUV limit, business income limit.
+   - ACA APTC (`calculate_aca_excess_aptc_repayment`): 2026 100% full repayment vs 2025 capped repayment.
+   - Corporate WACC (`calculate_wacc`): Weighting and after-tax interest tax shield $(1 - T_c)$.
+3. **Figiva (`calculate_figiva_gpa`):** Collegiate 4.0 weighted cumulative GPA scale.
+4. **SMSRiver (`verify_smsriver_operational_pipeline`):** E.164 phone verification and JSON polling message extraction with OTP verification.
+
+### 15.5 P1 — Multi-Dimensional Query Ownership & Fleet Learning
+1. **Query Classification Terminology:**
+   - `HIGH_SERP_OVERLAP`: Shared SERP Top 10 results ($\ge 0.50$) without full canonical ownership.
+   - `LOW_DATA_UNCERTAIN`: Queries with $\le 100$ impressions and $\le 5$ clicks assigned uncertain risk ($\sim 0.15$) rather than false certainty.
+   - `CONSOLIDATION_CANDIDATE`: 301 consolidation strictly requires multiple corroborating signals (shared SERP $\ge 0.50$, split impressions, and declining traffic trend).
+2. **Hierarchical Fleet Learning Structure:**
+   Preserves 5-tier partial pooling without double-counting:
+   - Tier 5: Position Band + Route Family + Action + Property
+   - Tier 4: Route Family + Action + Property
+   - Tier 3: Action + Property (pooled across route families)
+   - Tier 2: Action pooled across Fleet (all domains)
+   - Tier 1: Global Prior $\text{Beta}(1.5, 3.5)$
+
+### 15.6 P1 — Wave-Close Gate & Auditor (`validate_wave_close.py` v2.2.1)
+1. **Version Reporting:** `--version` reports `validate_wave_close.py v2.2.1`.
+2. **Worktree Waiver Requirement:** `--allow-dirty` requires an explicit `--waiver-reason` and lists affected dirty/untracked files.
+3. **Test Summary Verification:** Section 5 must report standardized test results with explicit `Passed`, `Failed`, and `Skipped` (or `XFailed`) classifications.
+4. **Deployment & Re-Warm Arithmetic Reconciliation:** Mathematically impossible claims (e.g. 36/38 paths with 100% success) are strictly rejected.
+
+
 
 
 
