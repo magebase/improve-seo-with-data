@@ -176,12 +176,43 @@ def _tokens_covered(query: str, text: str) -> bool:
     return all(f" {token} " in haystack for token in tokens)
 
 
+def auto_graduate_shipped_query_siblings(conn: sqlite3.Connection) -> int:
+    """Auto-graduates PENDING tasks whose exact (page, query) was already SHIPPED.
+
+    Prevents the 'same-query downgrade trap' where historical backlog triplets
+    (CREATE_ROUTE, INJECT_TITLE_H2, WIRE_INLINKS) with identical target queries
+    get downgraded to INJECT_SECONDARY_H2_ONLY and re-leased even though their
+    query is already live on that page.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE atomic_task_backlog
+        SET status = 'SHIPPED', shipped_at = CURRENT_TIMESTAMP
+        WHERE status = 'PENDING'
+          AND query IS NOT NULL
+          AND trim(query) != ''
+          AND (page, lower(trim(query))) IN (
+              SELECT page, lower(trim(query))
+              FROM atomic_task_backlog
+              WHERE status = 'SHIPPED'
+                AND query IS NOT NULL
+                AND trim(query) != ''
+          )
+        """
+    )
+    graduated = cur.rowcount
+    conn.commit()
+    return graduated
+
+
 def enforce_url_title_lock(conn: sqlite3.Connection, cooldown_days: int = 21) -> int:
     """Prevents secondary queries in later waves from overwriting a URL's primary calibrated <title>.
 
     Downgrades pending title mutations on recently shipped URLs to H2/table-only enrichments,
     merging secondary queries and keeping max priority_score to prevent token loss on deduplication.
     """
+    auto_graduate_shipped_query_siblings(conn)
     cur = conn.cursor()
     # Find all recently shipped pages with title mutations
     cur.execute(
@@ -331,6 +362,7 @@ def preflight_hygiene(
     from fleet_state import canonicalize_backlog_action_codes
 
     canonicalize_backlog_action_codes(conn)
+    same_query_graduated = auto_graduate_shipped_query_siblings(conn)
     title_locked = enforce_url_title_lock(conn)
     rows = conn.execute(
         "SELECT id, page, query, action_code, file_target, domain FROM atomic_task_backlog WHERE status = 'PENDING'"
@@ -342,6 +374,7 @@ def preflight_hygiene(
         "intent_capped": 0,
         "leasable": 0,
         "title_locked": title_locked,
+        "same_query_graduated": same_query_graduated,
     }
     intent_counts: Dict[str, int] = {}
     if max_intent_tasks_per_page > 0:

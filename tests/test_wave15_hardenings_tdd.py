@@ -11,7 +11,7 @@ import sqlite3
 import pytest
 
 from candidate_hygiene import is_valid_property_host
-from cursor_hygiene import enforce_url_title_lock, preflight_hygiene
+from cursor_hygiene import auto_graduate_shipped_query_siblings, enforce_url_title_lock, preflight_hygiene
 from fleet_state import DailyBudgetGate, connect_state_db
 from ltr_ranker import is_truly_unbuilt_route, compile_wave_backlog
 
@@ -132,3 +132,50 @@ def test_daily_budget_gate_dynamic_floor_cap():
 
     # 5 domains: floor is min(35, 150 // 5 = 30) = 30
     assert gate._dynamic_floor(5) == 30
+
+
+def test_auto_graduate_shipped_query_siblings(mem_db):
+    """Pending tasks sharing (page, query) with an already SHIPPED row must auto-graduate to SHIPPED."""
+    # Seed an already shipped task on /convert/stl-to-step/ with query 'stl to step'
+    mem_db.execute(
+        """
+        INSERT INTO atomic_task_backlog (domain, page, query, action_code, status, created_at, shipped_at)
+        VALUES ('openfileconverter.com', 'https://openfileconverter.com/convert/stl-to-step/', 'stl to step', 'CREATE_PROGRAMMATIC_ROUTE', 'SHIPPED', datetime('now', '-3 days'), datetime('now', '-3 days'))
+        """
+    )
+    # Seed a PENDING triplet sibling on the same page with the SAME query (casing/whitespace variation)
+    mem_db.execute(
+        """
+        INSERT INTO atomic_task_backlog (domain, page, query, action_code, status, priority_score, created_at)
+        VALUES ('openfileconverter.com', 'https://openfileconverter.com/convert/stl-to-step/', '  STL to STEP  ', 'INJECT_EXACT_TITLE_AND_H2', 'PENDING', 0.8, datetime('now'))
+        """
+    )
+    # Seed a PENDING task on the same page with a DIFFERENT secondary query (different action_code due to UNIQUE constraint)
+    mem_db.execute(
+        """
+        INSERT INTO atomic_task_backlog (domain, page, query, action_code, status, priority_score, created_at)
+        VALUES ('openfileconverter.com', 'https://openfileconverter.com/convert/stl-to-step/', 'convert 3d stl mesh to step nurbs', 'REWRITE_SNIPPET_AND_TOP_300PX', 'PENDING', 0.6, datetime('now'))
+        """
+    )
+    mem_db.commit()
+
+    # Pre-flight hygiene should auto-graduate the sibling with the same query, leaving only the different secondary query for title lock downgrade
+    report = preflight_hygiene(mem_db)
+    assert report["same_query_graduated"] == 1
+    assert report["title_locked"] == 1
+
+    # Check statuses
+    sibling = mem_db.execute(
+        "SELECT status, action_code FROM atomic_task_backlog WHERE query = '  STL to STEP  '"
+    ).fetchone()
+    assert sibling[0] == "SHIPPED"
+    # Action code remained original (did not get downgraded to INJECT_SECONDARY_H2_ONLY)
+    assert sibling[1] == "INJECT_EXACT_TITLE_AND_H2"
+
+    # Check that the different secondary query was properly downgraded
+    secondary = mem_db.execute(
+        "SELECT status, action_code, query FROM atomic_task_backlog WHERE query LIKE '%nurbs%'"
+    ).fetchone()
+    assert secondary[0] == "PENDING"
+    assert secondary[1] == "INJECT_SECONDARY_H2_ONLY"
+
