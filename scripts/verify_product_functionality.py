@@ -69,7 +69,7 @@ class FunctionalTestResult:
 # Statutory Reference Tables
 # -----------------------------------------------------------------------------
 
-SECTION_179_STATUTORY_TABLE = {
+SECTION_179_STATUTORY_TABLE: dict[int, dict[str, Any]] = {
     2025: {
         "max_deduction": 1_250_000,
         "phaseout_threshold": 3_130_000,
