@@ -348,7 +348,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     result = score_rows(rows, args.models_dir)
-    scored = result["rows"]
+    all_scored = list(result["rows"])
+    scored = list(result["rows"])
 
     # Cannibalization detector: BEFORE the per-query collapse (which discards
     # the competitor rows), flag queries carried by >= 2 distinct pages all
@@ -436,13 +437,13 @@ def main(argv: list[str] | None = None) -> int:
         # cursor without re-running collection/scoring. The JSON output keeps
         # only the actionable --compile-wave slice of that inventory.
         full_backlog = compile_wave_backlog(
-            scored,
+            all_scored,
             shipped_ledger=cooled_keys,
             target_wave_size=10_000_000,
             # Catalog families are derived from the rows themselves so a
             # top-ranked child route propagates its fix across every sibling
             # without a hand-maintained prefix map.
-            sibling_counts=derive_sibling_counts(scored),
+            sibling_counts=derive_sibling_counts(all_scored),
             known_live_urls=known_live_urls,
         )
         wave_tasks = full_backlog[: max(0, args.compile_wave)]
