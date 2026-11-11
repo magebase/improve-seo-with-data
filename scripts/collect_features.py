@@ -50,6 +50,7 @@ import json
 import math
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import time
@@ -68,6 +69,7 @@ from fleet_state import (
     DEFAULT_DAILY_SERP_BUDGET,
     DailyBudgetGate,
     connect_state_db,
+    extract_route_family,
     gsc_snapshot_fresh,
     inspection_calls_remaining,
     load_cached_serps,
@@ -466,6 +468,338 @@ def ensure_candidate_depth(
     return active, {"tiers_used": tiers_used, "rows": len(active), "min_rows": min_rows}
 
 
+def mine_paa_and_related_from_cache(
+    conn_or_cache: Any,
+    domain: str,
+    sitemap_urls: list[str] | None = None,
+    max_candidates: int = 75,
+) -> list[dict[str, Any]]:
+    """Mines People-Also-Ask (PAA) and related search queries from cached SERP blobs.
+
+    Zero-cost candidate source: reads Google's own PAA questions and related searches
+    cached in dfs_serp_cache / .serp_cache.json, filters them for topical relevance
+    against the target domain's vocabulary, and maps each query to its best existing
+    sitemap route (for H2/FAQ/table enrichments) or a clean programmatic route.
+    """
+    clean_domain = str(domain).replace("sc-domain:", "").strip().lower()
+    if not clean_domain:
+        return []
+
+    # 1. Build domain topical vocabulary
+    domain_vocab: set[str] = set()
+    domain_seed = clean_domain.split(".")[0]
+    for tok in tokenize(domain_seed):
+        domain_vocab.add(tok)
+
+    if sitemap_urls:
+        for u in sitemap_urls:
+            domain_vocab.update(tokenize(u))
+
+    domain_vocab.discard("https")
+    domain_vocab.discard("http")
+    domain_vocab.discard("com")
+    domain_vocab.discard("net")
+    domain_vocab.discard("org")
+
+    domain_queries: set[str] = set()
+    cache_rows: list[tuple[str, Any]] = []
+
+    # 2. Extract from sqlite3 connection, dict, or file
+    if hasattr(conn_or_cache, "execute"):
+        cur = conn_or_cache.cursor()
+        try:
+            for (q,) in cur.execute(
+                "SELECT DISTINCT lower(trim(query)) FROM atomic_task_backlog WHERE domain = ? AND query IS NOT NULL",
+                (clean_domain,),
+            ):
+                if q:
+                    domain_queries.add(q)
+                    domain_vocab.update(tokenize(q))
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            for (rows_json,) in cur.execute(
+                "SELECT rows_json FROM gsc_snapshots WHERE site LIKE ? ORDER BY window_end DESC LIMIT 2",
+                (f"%{clean_domain}%",),
+            ):
+                try:
+                    for r in json.loads(rows_json):
+                        q = str(r.get("query") or "").lower().strip()
+                        if q:
+                            domain_queries.add(q)
+                            domain_vocab.update(tokenize(q))
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            for sq, items_str in cur.execute("SELECT query, items_json FROM dfs_serp_cache"):
+                cache_rows.append((sq, items_str))
+        except Exception:  # noqa: BLE001
+            pass
+
+    elif isinstance(conn_or_cache, dict):
+        for sq, data in conn_or_cache.items():
+            if isinstance(data, dict):
+                items = data.get("items") or []
+                cache_rows.append((sq, items))
+            elif isinstance(data, list):
+                cache_rows.append((sq, data))
+
+    elif isinstance(conn_or_cache, str) and os.path.isfile(conn_or_cache):
+        if conn_or_cache.endswith((".db", ".sqlite")):
+            try:
+                temp_conn = sqlite3.connect(conn_or_cache)
+                return mine_paa_and_related_from_cache(
+                    temp_conn, clean_domain, sitemap_urls=sitemap_urls, max_candidates=max_candidates
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        else:
+            try:
+                with open(conn_or_cache, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                if isinstance(data, dict):
+                    return mine_paa_and_related_from_cache(
+                        data, clean_domain, sitemap_urls=sitemap_urls, max_candidates=max_candidates
+                    )
+            except Exception:  # noqa: BLE001
+                pass
+
+    if not cache_rows:
+        return []
+
+    generic_web_tokens = {
+        "free", "online", "download", "tool", "tools", "app", "apps",
+        "best", "near", "service", "services", "web", "site", "page",
+        "guide", "overview", "list", "top", "how", "what", "calculator",
+    }
+
+    candidates: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for serp_q, items_val in cache_rows:
+        if isinstance(items_val, str):
+            try:
+                items = json.loads(items_val)
+            except Exception:
+                continue
+        elif isinstance(items_val, list):
+            items = items_val
+        else:
+            continue
+
+        serp_q_clean = str(serp_q).lower().strip()
+        serp_toks = set(tokenize(serp_q_clean))
+        is_known_query = (serp_q_clean in domain_queries) or isinstance(conn_or_cache, dict)
+        serp_specific = (serp_toks & domain_vocab) - generic_web_tokens
+        if not is_known_query and not serp_specific and len(serp_toks & domain_vocab) < 2:
+            continue
+
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            t = it.get("type")
+            extracted: list[tuple[str, str]] = []
+            if t == "people_also_ask":
+                for elem in (it.get("items") or []):
+                    if isinstance(elem, dict):
+                        title = elem.get("title") or elem.get("keyword")
+                        if title:
+                            extracted.append(("paa", str(title)))
+            elif t in ("related_searches", "people_also_search"):
+                for elem in (it.get("items") or []):
+                    if isinstance(elem, str):
+                        extracted.append(("related_search", elem))
+                    elif isinstance(elem, dict):
+                        title = elem.get("title") or elem.get("keyword")
+                        if title:
+                            extracted.append(("related_search", str(title)))
+
+            for kind, raw_text in extracted:
+                clean_text = raw_text.strip().rstrip("?.!").strip()
+                if len(clean_text) < 3:
+                    continue
+                q_toks = set(tokenize(clean_text))
+                if not q_toks:
+                    continue
+
+                specific_overlap = (q_toks & domain_vocab) - generic_web_tokens
+                if not specific_overlap and len(q_toks & domain_vocab) < 2:
+                    continue
+
+                # Map to best existing sitemap URL if high token overlap
+                best_url = None
+                best_overlap = 0
+                if sitemap_urls:
+                    for u in sitemap_urls:
+                        u_path = u.split("://", 1)[-1].split("?", 1)[0]
+                        u_toks = (
+                            set(tokenize(u_path))
+                            - {"https", "http", "com", "net", "org"}
+                            - set(tokenize(clean_domain.split(".")[0]))
+                        )
+                        ov = len(q_toks & u_toks)
+                        if ov > best_overlap and ov >= 2:
+                            best_overlap = ov
+                            best_url = u
+
+                if not best_url:
+                    slug = "-".join(list(tokenize(clean_text).keys())) or "guide"
+                    best_url = f"https://{clean_domain}/{slug}/"
+
+                key = (clean_text.lower(), best_url.lower().rstrip("/"))
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                candidates.append(
+                    {
+                        "query": clean_text,
+                        "page": best_url,
+                        "clicks_30d": 0.0,
+                        "impressions": 50.0 if kind == "paa" else 75.0,
+                        "current_pos": 100.0,
+                        "ctr": 0.0,
+                        "window_days": 0,
+                        "source": f"{kind}_expansion",
+                    }
+                )
+                if len(candidates) >= max_candidates:
+                    return candidates
+
+    return candidates
+
+
+def auto_expand_candidates_if_depleted(
+    domain: str,
+    candidates: list[dict[str, Any]],
+    sitemap_urls: list[str] | None = None,
+    state_conn: Any = None,
+    pending_threshold: int = 15,
+    min_rows: int = 150,
+    force: bool = False,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Auto-triggers Tier-2/Tier-3 expansion when domain pending task backlog < threshold.
+
+    Prevents pipeline starvation when high-frequency waves burn down the atomic
+    task backlog faster than GSC refreshes. Executes:
+      1. Zero-impression sitemap orphan routes (Tier 2.1).
+      2. Mined PAA questions and related searches from cached SERPs (Tier 2.2).
+      3. Combinatorial entity pairwise and three-way modifier matrices (Tier 3).
+    """
+    clean_domain = str(domain).replace("sc-domain:", "").strip().lower()
+    sitemap_urls = sitemap_urls or []
+
+    pending = 0
+    if state_conn is not None and hasattr(state_conn, "execute"):
+        try:
+            row = state_conn.execute(
+                "SELECT COUNT(*) FROM atomic_task_backlog WHERE domain = ? AND status = 'PENDING'",
+                (clean_domain,),
+            ).fetchone()
+            pending = int(row[0]) if row else 0
+        except Exception:
+            pending = 0
+
+    should_expand = force or (pending < pending_threshold) or (len(candidates) < min_rows)
+    if not should_expand:
+        return candidates, {
+            "expanded": False,
+            "pending_before": pending,
+            "reason": "backlog_healthy",
+            "threshold": pending_threshold,
+        }
+
+    expanded: list[dict[str, Any]] = list(candidates)
+    seen_keys: set[tuple[str, str]] = {
+        (str(c.get("query", "")).lower().strip(), str(c.get("page", "")).lower().rstrip("/"))
+        for c in expanded
+    }
+
+    report = {
+        "expanded": True,
+        "pending_before": pending,
+        "orphans_added": 0,
+        "mined_paa_added": 0,
+        "pairwise_added": 0,
+        "three_way_added": 0,
+        "threshold": pending_threshold,
+    }
+
+    # Tier 2.1: Sitemap orphan routes
+    if sitemap_urls:
+        gsc_pages = {str(c["page"]).rstrip("/") + "/" for c in expanded} | {
+            str(c["page"]).rstrip("/") for c in expanded
+        }
+        orphans = synthesize_orphan_rows(sitemap_urls, gsc_pages, domain=clean_domain)
+        for o in orphans:
+            k = (str(o["query"]).lower().strip(), str(o["page"]).lower().rstrip("/"))
+            if k not in seen_keys:
+                seen_keys.add(k)
+                expanded.append(o)
+                report["orphans_added"] += 1
+
+    # Tier 2.2: PAA and related searches from cached SERPs
+    if state_conn is not None:
+        mined = mine_paa_and_related_from_cache(
+            state_conn, clean_domain, sitemap_urls=sitemap_urls, max_candidates=75
+        )
+        for m in mined:
+            k = (str(m["query"]).lower().strip(), str(m["page"]).lower().rstrip("/"))
+            if k not in seen_keys:
+                seen_keys.add(k)
+                expanded.append(m)
+                report["mined_paa_added"] += 1
+
+    # Tier 3: Combinatorial entity pairwise & three-way modifier matrices
+    if sitemap_urls:
+        family_counts: Counter = Counter()
+        for u in sitemap_urls:
+            fam = extract_route_family(u)
+            if fam and fam not in ("root", "static", "media", "assets", "api"):
+                family_counts[fam] += 1
+
+        top_families = [fam for fam, cnt in family_counts.most_common(3) if cnt >= 2]
+        for fam in top_families:
+            if fam in ("convert", "compare", "tools"):
+                templates = [
+                    f"{fam} {{a}} to {{b}}",
+                    f"{{a}} to {{b}} {fam}",
+                    "{a} vs {b}",
+                ]
+            else:
+                templates = [f"{fam} {{entity}}", f"{{entity}} {fam}"]
+
+            pairs = pairwise_matrix_from_sitemap(sitemap_urls, fam, templates, max_pairs=30)
+            for p in pairs:
+                k = (str(p["query"]).lower().strip(), str(p["page"]).lower().rstrip("/"))
+                if k not in seen_keys:
+                    seen_keys.add(k)
+                    expanded.append(p)
+                    report["pairwise_added"] += 1
+
+            modifiers = ["free", "online", "2026", "calculator", "without verification"]
+            three_way = three_way_matrix_from_sitemap(
+                sitemap_urls,
+                fam,
+                modifiers=modifiers,
+                templates=["{entity} {modifier}", "best {entity} {modifier}"],
+                max_rows=20,
+            )
+            for tw in three_way:
+                k = (str(tw["query"]).lower().strip(), str(tw["page"]).lower().rstrip("/"))
+                if k not in seen_keys:
+                    seen_keys.add(k)
+                    expanded.append(tw)
+                    report["three_way_added"] += 1
+
+    report["total_candidates"] = len(expanded)
+    return expanded, report
+
+
 def dom_gap_flags(
     our_html: str,
     serp_items: list[dict[str, Any]],
@@ -751,7 +1085,15 @@ def pull_gsc_window(site: str, start: str, end: str) -> list[dict[str, Any]]:
 
 def tokenize(text: str) -> Counter:
     tokens = []
-    for raw in str(text).lower().replace("-", " ").split():
+    for raw in (
+        str(text)
+        .lower()
+        .replace("-", " ")
+        .replace("/", " ")
+        .replace(".", " ")
+        .replace("_", " ")
+        .split()
+    ):
         token = "".join(ch for ch in raw if ch.isalnum())
         if len(token) > 2 and token not in STOP_TOKENS:
             tokens.append(token)
@@ -1048,6 +1390,18 @@ def main(argv: list[str] | None = None) -> int:
         "cache layer, daily DataForSEO budget gate, and the URL Inspection "
         "coverageState cache",
     )
+    parser.add_argument(
+        "--pending-threshold",
+        type=int,
+        default=15,
+        help="backlog replenishment threshold: when domain pending task count "
+        "falls below this (default 15), triggers Tier-2/Tier-3 candidate expansion",
+    )
+    parser.add_argument(
+        "--force-expand",
+        action="store_true",
+        help="force Tier-2/Tier-3 candidate expansion regardless of pending backlog count",
+    )
     args = parser.parse_args(argv)
 
     state_conn = connect_state_db(args.state_db) if args.state_db else None
@@ -1159,6 +1513,33 @@ def main(argv: list[str] | None = None) -> int:
             )
         except Exception as exc:  # noqa: BLE001 - sitemap fetch must never kill collection
             print(f"      orphan detection skipped ({exc}).")
+
+    # Tier-2/Tier-3 auto-expansion when domain pending task backlog < threshold
+    if state_conn is not None or args.force_expand:
+        try:
+            cur_sitemaps = sitemap_urls if not args.no_orphans and "sitemap_urls" in locals() else (
+                fetch_sitemap_urls(args.site) if not args.no_orphans else []
+            )
+            candidates, exp_report = auto_expand_candidates_if_depleted(
+                domain=args.site,
+                candidates=candidates,
+                sitemap_urls=cur_sitemaps,
+                state_conn=state_conn,
+                pending_threshold=args.pending_threshold,
+                min_rows=args.top,
+                force=args.force_expand,
+            )
+            if exp_report.get("expanded"):
+                print(
+                    f"      candidate expansion (pending={exp_report.get('pending_before', 0)} < {args.pending_threshold}): "
+                    f"injected {exp_report.get('orphans_added', 0)} orphans, "
+                    f"{exp_report.get('mined_paa_added', 0)} PAA/related queries, "
+                    f"{exp_report.get('pairwise_added', 0)} pairwise, "
+                    f"{exp_report.get('three_way_added', 0)} 3-way rows "
+                    f"({len(candidates)} total candidates)."
+                )
+        except Exception as exc:  # noqa: BLE001 - expansion must never kill collection
+            print(f"      candidate expansion skipped ({exc}).")
 
     # Wave-64 candidate hygiene: resolve 301s, scrub utility/brand-typo rows,
     # and collapse duplicate (page, query) rows BEFORE any SERP enrichment
