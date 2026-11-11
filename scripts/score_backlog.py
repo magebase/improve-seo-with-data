@@ -419,12 +419,16 @@ def main(argv: list[str] | None = None) -> int:
             else set()
         )
         known_live_urls: set[str] = set()
-        if state_conn is not None:
+        if args.state_db:
             try:
-                for (p,) in state_conn.execute("SELECT DISTINCT page FROM atomic_task_backlog WHERE status = 'SHIPPED'"):
+                temp_conn = connect_state_db(args.state_db)
+                for (p,) in temp_conn.execute(
+                    "SELECT DISTINCT page FROM atomic_task_backlog WHERE status = 'SHIPPED'"
+                ):
                     if p:
                         known_live_urls.add(str(p).rstrip("/"))
                         known_live_urls.add(str(p).rstrip("/") + "/")
+                temp_conn.close()
             except Exception:
                 pass
         # FULL-depth decomposition: the SQLite backlog gets EVERY rule hit
