@@ -713,6 +713,35 @@ def auto_expand_candidates_if_depleted(
             "threshold": pending_threshold,
         }
 
+    # Invariant P0: Quality-Adjusted Expansion Gate (Outcome-Driven SEO Engine)
+    # Check domain indexation ratio from url_inspections to prevent runaway expansion on unindexed cohorts
+    if state_conn is not None and hasattr(state_conn, "execute") and not force:
+        try:
+            insp_rows = state_conn.execute(
+                "SELECT coverage_state, COUNT(*) FROM url_inspections WHERE url LIKE ? GROUP BY coverage_state",
+                (f"%{clean_domain}%",),
+            ).fetchall()
+            if insp_rows:
+                total_insp = sum(int(r[1]) for r in insp_rows)
+                indexed = sum(int(r[1]) for r in insp_rows if str(r[0]).strip().lower() == "submitted and indexed")
+                unindexed = total_insp - indexed
+                unindexed_ratio = unindexed / max(1, total_insp)
+                if total_insp >= 10 and unindexed_ratio > 0.50:
+                    return candidates, {
+                        "expanded": False,
+                        "pending_before": pending,
+                        "reason": "expansion_halted_indexation_debt",
+                        "unindexed_ratio": round(unindexed_ratio, 2),
+                        "total_inspected": total_insp,
+                        "indexed": indexed,
+                        "message": (
+                            f"Expansion halted: existing cohort audit required before new route generation "
+                            f"(unindexed ratio {unindexed_ratio:.1%} > 50.0% across {total_insp} inspected URLs)"
+                        ),
+                    }
+        except Exception:
+            pass
+
     expanded: list[dict[str, Any]] = list(candidates)
     seen_keys: set[tuple[str, str]] = {
         (str(c.get("query", "")).lower().strip(), str(c.get("page", "")).lower().rstrip("/"))
@@ -1538,6 +1567,8 @@ def main(argv: list[str] | None = None) -> int:
                     f"{exp_report.get('three_way_added', 0)} 3-way rows "
                     f"({len(candidates)} total candidates)."
                 )
+            elif exp_report.get("reason") == "expansion_halted_indexation_debt":
+                print(f"      [QUALITY GATE] {exp_report.get('message')}")
         except Exception as exc:  # noqa: BLE001 - expansion must never kill collection
             print(f"      candidate expansion skipped ({exc}).")
 
