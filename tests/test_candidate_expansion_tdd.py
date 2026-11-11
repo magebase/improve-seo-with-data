@@ -326,3 +326,45 @@ def test_expansion_respects_url_title_lock_cooldown(mem_db):
     assert row is not None
     assert row[0] == "INJECT_SECONDARY_H2_ONLY"
     assert row[1] == "PENDING"
+
+
+def test_mine_paa_and_related_from_cache_cross_tenant_isolation(mem_db):
+    """Verifies that queries from sibling domains in dfs_serp_cache never leak across tenant boundaries."""
+    # Seed a cached SERP for an SMS query (smsriver.com tenant)
+    sms_serp = [
+        {
+            "type": "people_also_ask",
+            "items": [{"type": "elem", "title": "What is the E.164 phone format?"}],
+        },
+        {
+            "type": "related_searches",
+            "items": ["E 164 format converter free", "SMS receive online"],
+        },
+    ]
+    mem_db.execute(
+        """
+        INSERT INTO dfs_serp_cache (query, fetched_at, items_json, item_types, search_volume)
+        VALUES ('e 164 phone number format', datetime('now'), ?, '[]', 500.0)
+        """,
+        (json.dumps(sms_serp),),
+    )
+
+    # Seed known query ONLY for smsriver.com, NOT openfileconverter.com
+    mem_db.execute(
+        """
+        INSERT INTO atomic_task_backlog (domain, page, query, action_code, status, created_at)
+        VALUES ('smsriver.com', 'https://smsriver.com/tools/format/', 'e 164 phone number format', 'INJECT_EXACT_TITLE_AND_H2', 'SHIPPED', datetime('now'))
+        """
+    )
+    mem_db.commit()
+
+    # Mining for openfileconverter.com MUST NOT return any candidates from smsriver's SERP cache
+    mined = mine_paa_and_related_from_cache(
+        mem_db,
+        domain="openfileconverter.com",
+        sitemap_urls=["https://openfileconverter.com/convert/pdf-to-docx/"],
+        max_candidates=10,
+    )
+
+    assert len(mined) == 0, f"Expected 0 cross-tenant leaked candidates, got {len(mined)}: {mined}"
+

@@ -509,7 +509,7 @@ def mine_paa_and_related_from_cache(
         cur = conn_or_cache.cursor()
         try:
             for (q,) in cur.execute(
-                "SELECT DISTINCT lower(trim(query)) FROM atomic_task_backlog WHERE domain = ? AND query IS NOT NULL",
+                "SELECT DISTINCT lower(trim(query)) FROM atomic_task_backlog WHERE domain = ? AND status = 'SHIPPED' AND query IS NOT NULL",
                 (clean_domain,),
             ):
                 if q:
@@ -594,8 +594,8 @@ def mine_paa_and_related_from_cache(
         serp_q_clean = str(serp_q).lower().strip()
         serp_toks = set(tokenize(serp_q_clean))
         is_known_query = (serp_q_clean in domain_queries) or isinstance(conn_or_cache, dict)
-        serp_specific = (serp_toks & domain_vocab) - generic_web_tokens
-        if not is_known_query and not serp_specific and len(serp_toks & domain_vocab) < 2:
+        # Multi-tenant fleet barrier: only mine cached SERPs for queries verified to belong to this domain
+        if not is_known_query:
             continue
 
         for it in items:
