@@ -933,6 +933,41 @@ Reference Engines Implemented:
 3. **Test Summary Verification:** Section 5 must report standardized test results with explicit `Passed`, `Failed`, and `Skipped` (or `XFailed`) classifications.
 4. **Deployment & Re-Warm Arithmetic Reconciliation:** Mathematically impossible claims (e.g. 36/38 paths with 100% success) are strictly rejected.
 
+## 16. Outcome-Driven SEO Engine v2.2.2: Statutory Attribution & Multi-Commit Audit Reconciliation
+
+The Outcome-Driven SEO Engine v2.2.2 enforces exact federal statutory citations, multi-regime healthcare calculation models, precise macroeconomic disclosures, and multi-commit Git diff reconciliation.
+
+### 16.1 P0.1 — ACA Excess APTC Repayment Regimes (ARPA 2020 Relief & IRC § 36B Sunset)
+1. **Three-Regime Excess Advance Premium Tax Credit (APTC) Engine:**
+   - **Tax Year 2020 (ARPA § 9662 / IRC § 36B(f)(2)(B)(iii)):** Complete statutory suspension of excess APTC repayment. Any excess subsidy received is fully protected ($0.00 repayment liability regardless of income level or excess amount).
+   - **Tax Years 2021–2025 (IRC § 36B(f)(2)(B)(i) & Form 8962 Line 28):** Statutory repayment limitation caps apply based on household income as a percentage of the Federal Poverty Line (FPL) (e.g. Under 200% FPL: $375 single / $750 family; 200%-300% FPL: $950 single / $1,900 family; 300%-400% FPL: $1,575 single / $3,150 family). Above 400% FPL prior to 2026, full repayment was required unless enhanced subsidies applied.
+   - **Tax Year 2026 Onward (IRC § 36B Sunsets):** Form 8962 Lines 28-29 reserved; statutory limitation caps expire. Any excess APTC must be repaid in full (100% uncapped repayment liability) up to total advance credits received.
+2. **Statutory Engine Verification:**
+   `scripts/verify_product_functionality.py` enforces regression verification across all three distinct historical and future statutory regimes.
+
+### 16.2 P0.2 — Statutory Precision for ACA FTE Compliance
+All ACA shared responsibility computations and advisory materials must cite exact statutory and regulatory authorities:
+1. **Applicable Large Employer (ALE):** IRC § 4980H(c)(2)(A) (average of at least 50 full-time employees including FTEs on business days during the preceding calendar year).
+2. **Full-Time Employee (FT):** IRC § 4980H(c)(4)(A) (employed on average at least 30 hours of service per week).
+3. **Monthly Equivalency Standard:** 26 C.F.R. § 54.4980H-1(a)(21)(ii) (130 service hours in a calendar month treated as the monthly equivalent of 30 service hours per week).
+4. **FTE Monthly Divisor:** IRC § 4980H(c)(2)(E) (aggregate non-full-time service hours up to 120 per employee divided by 120).
+
+### 16.3 P1.1 — Insurance Data Disclosure & Risk Cohorts (NAIC 2024 Benchmark)
+1. **Macroeconomic vs Underwriting Distinction:** NAIC state average expenditures are macroeconomic statewide market benchmarks from the NAIC 2024 Auto Insurance Database Average Premium Supplement (released October 1, 2026), NOT individual underwriting quotes.
+2. **Custom Derived Cohorts:** Analytical risk tiers (e.g. Prime Preferred, Standard Commuter, Urban Congestion, High Risk Subprime, Young Driver Novice) must be explicitly identified as *custom derived analytical groupings* categorized by NAIC state expenditure percentiles, NOT official NAIC-defined risk cohorts.
+
+### 16.4 P1.2 — Unsecured Personal Loan Borrower Scenarios & Financing Disclaimers
+1. **Underwriting Assumptions:** High-balance ($100,000) personal loan scenarios must document underwriting qualification criteria (FICO $\ge 760$, income $\ge \$150,000$, DTI $\le 36\%$, origination fees $1\%\text{--}8\%$).
+2. **Mandatory Conspicuous Disclosure:**
+   `> **Illustrative borrower profile and financing assumptions. Actual lender eligibility, rates, fees and borrowing limits vary.**`
+
+### 16.5 P1.3 — Multi-Commit Audit Reconciliation (`validate_wave_close.py` v2.2.2 & `generate_wave_changelog.py`)
+1. **Version Reporting:** `--version` reports `validate_wave_close.py v2.2.2`.
+2. **Multi-Commit Range Support:**
+   `validate_wave_close.py` and `generate_wave_changelog.py` support `--commit-range <start_sha>..<end_sha>` (as well as comma-separated commit SHAs). The reconciliation engine parses `git diff --name-only <start_sha>..<end_sha>` across the entire commit sequence, guaranteeing zero omitted file modifications in Section 4.
+3. **Execution Gate Enforcement:** Wave-close fails if any file modified across the multi-commit delivery range is missing from Section 4.
+
+
 
 
 

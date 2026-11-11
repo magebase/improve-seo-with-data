@@ -49,26 +49,58 @@ def _utc_now_timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def get_git_commit_files(repo_path: Path | str, commit_sha: str) -> list[str]:
-    """Get list of files changed in a git commit."""
+def get_git_commit_files(repo_path: Path | str, commit_or_range: str) -> list[str]:
+    """Get list of files changed in a git commit, multiple commits, or a commit range (e.g. A..B)."""
+    target = str(commit_or_range).strip()
+    files: set[str] = set()
     try:
-        res = subprocess.run(
-            ["git", "show", "--name-only", "--format=", commit_sha],
-            cwd=str(repo_path),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return [f.strip() for f in res.stdout.strip().splitlines() if f.strip()]
+        if ".." in target:
+            res = subprocess.run(
+                ["git", "diff", "--name-only", target],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            for line in res.stdout.strip().splitlines():
+                if line.strip():
+                    files.add(line.strip())
+        elif "," in target or (" " in target and not target.startswith("-")):
+            parts = [p.strip() for p in re.split(r"[, ]+", target) if p.strip()]
+            for p in parts:
+                res = subprocess.run(
+                    ["git", "show", "--name-only", "--format=", p],
+                    cwd=str(repo_path),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                for line in res.stdout.strip().splitlines():
+                    if line.strip():
+                        files.add(line.strip())
+        else:
+            res = subprocess.run(
+                ["git", "show", "--name-only", "--format=", target],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            for line in res.stdout.strip().splitlines():
+                if line.strip():
+                    files.add(line.strip())
+        return sorted(list(files))
     except Exception:
         return []
 
 
-def get_git_commit_diff(repo_path: Path | str, commit_sha: str, max_chars: int = 15000) -> str:
-    """Get the git diff for a commit."""
+def get_git_commit_diff(repo_path: Path | str, commit_or_range: str, max_chars: int = 15000) -> str:
+    """Get the git diff for a commit or range."""
+    target = str(commit_or_range).strip()
     try:
+        cmd = ["git", "diff", "--stat", target] if ".." in target else ["git", "show", "--stat", target]
         res = subprocess.run(
-            ["git", "show", "--stat", commit_sha],
+            cmd,
             cwd=str(repo_path),
             capture_output=True,
             text=True,
@@ -446,6 +478,7 @@ def main() -> int:
     parser.add_argument("--wave", type=int, required=True, help="Wave number (e.g. 15)")
     parser.add_argument("--skill-commit", default="latest", help="Skill engine commit SHA")
     parser.add_argument("--repo-commit", default="latest", help="Repository commit SHA")
+    parser.add_argument("--commit-range", default=None, help="Commit range (e.g. start..end)")
     parser.add_argument("--repo-path", default=".", help="Path to git repository")
     parser.add_argument("--deploy-version", default="live-worker-version", help="Worker deploy version ID")
     parser.add_argument("--app-target", default="apps/seo_alpha_site/", help="Application target directory")
@@ -463,7 +496,8 @@ def main() -> int:
         finally:
             conn.close()
 
-    changed_files = get_git_commit_files(args.repo_path, args.repo_commit)
+    target_commit_spec = args.commit_range or args.repo_commit
+    changed_files = get_git_commit_files(args.repo_path, target_commit_spec)
 
     report_md = generate_wave_changelog_markdown(
         domain=args.domain,

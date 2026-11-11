@@ -168,14 +168,23 @@ def calculate_aca_excess_aptc_repayment(
 ) -> dict[str, Any]:
     """Calculates excess Advance Premium Tax Credit (APTC) repayment under IRC § 36B.
 
-    Invariant: For Tax Year 2026, limitation caps sunset under the statute;
-    100% of excess advance credit must be repaid regardless of FPL.
-    For Tax Year 2025, statutory limitation caps apply below 400% FPL.
+    Statutory Distinction by Tax Year (IRS Form 8962 Instructions):
+    - Tax Year 2020: American Rescue Plan Act of 2021 (ARPA § 9662) suspended excess APTC
+      repayment requirement entirely ($0.00 repayment liability regardless of income).
+    - Tax Years 2021–2025: IRC § 36B(f)(2)(B) statutory repayment limitation caps apply
+      based on household income percentage of the Federal Poverty Line (FPL).
+    - Tax Years 2026 onward: Under current statutory instructions, repayment caps do not apply
+      for tax years after 2025; full excess advance premium tax credits must be repaid (100% liability; Form 8962 Lines 28-29 reserved).
     """
     excess = max(0.0, float(excess_aptc))
     fpl = max(0.0, float(household_income_fpl_pct))
 
-    if tax_year >= 2026:
+    if tax_year == 2020:
+        # American Rescue Plan Act of 2021 § 9662 suspended excess APTC repayment entirely
+        repayment = 0.0
+        cap = 0.0
+        rule = "American Rescue Plan Act of 2021 (Excess APTC repayment requirement suspended entirely; $0 repayment)"
+    elif tax_year >= 2026:
         # Statutory sunset of repayment limitations
         repayment = excess
         cap = None
@@ -502,13 +511,13 @@ def verify_calculator_functionality(url: str, html: str) -> FunctionalTestResult
                 "The full excess advance credit must be repaid without limitation."
             )
 
-        # Invariant 2: Statutory 130-Hour Full-Time Employee Classification Threshold (IRC § 4980H(c)(4))
+        # Invariant 2: Statutory 130-Hour Full-Time Employee Classification Threshold (IRC § 4980H(c)(4)(A) & 26 C.F.R. § 54.4980H-1(a)(21)(ii))
         has_130h_threshold = bool(re.search(r"\b130\s*(?:hours?|hrs?)\b", html, re.IGNORECASE))
         if has_130h_threshold:
             math_passed += 1
         else:
             issues.append(
-                "ACA Statutory Hour Invariant Failure: Missing 130-hour/month full-time employee definition (IRC § 4980H(c)(4))."
+                "ACA Statutory Hour Invariant Failure: Missing 130-hour/month full-time employee definition (IRC § 4980H(c)(4)(A) & 26 C.F.R. § 54.4980H-1(a)(21)(ii))."
             )
 
         # Invariant 3: Statutory 120-Hour Divisor for FTE Aggregate Calculation (IRC § 4980H(c)(2)(E))

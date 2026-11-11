@@ -329,8 +329,39 @@ def test_validate_wave_close_rejects_missing_task_ids(valid_report_markdown):
 
 
 def test_validate_wave_close_cli_version():
-    """Verifies validate_wave_close.py reports v2.2.1 via CLI."""
+    """Verifies validate_wave_close.py reports v2.2.2 via CLI."""
     import subprocess
     cmd = [sys.executable, str(SCRIPTS_DIR / "validate_wave_close.py"), "--version"]
     res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    assert "validate_wave_close.py v2.2.1" in res.stdout
+    assert "validate_wave_close.py v2.2.2" in res.stdout
+
+
+def test_validate_wave_close_supports_commit_range(valid_report_markdown, monkeypatch):
+    """Verifies multi-commit range reconciliation in validate_report_content."""
+    from validate_wave_close import get_git_changed_files
+
+    # Mock get_git_changed_files to return files matching Section 4 of valid_report_markdown
+    monkeypatch.setattr(
+        "validate_wave_close.verify_git_commit_exists",
+        lambda repo, commit_or_range: True,
+    )
+    monkeypatch.setattr(
+        "validate_wave_close.get_git_changed_files",
+        lambda repo, commit_or_range: [
+            "apps/seo_alpha_site/views.py",
+        ],
+    )
+    monkeypatch.setattr(
+        "validate_wave_close.check_git_worktree_clean",
+        lambda repo: (True, ""),
+    )
+
+    passed, errors, warnings = validate_report_content(
+        content=valid_report_markdown,
+        domain="incomecanvas.com",
+        wave=15,
+        repo_path="/fake/repo",
+        commit_range="abc1234..def5678",
+    )
+    assert passed is True
+    assert not errors

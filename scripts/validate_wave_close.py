@@ -35,7 +35,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-VERSION = "2.2.1"
+VERSION = "2.2.2"
 
 MANDATORY_SECTIONS = [
     ("Executive Summary & Two-Part Scorecard", re.compile(r"##\s*1\.\s*Executive Summary.*Scorecard", re.IGNORECASE)),
@@ -62,31 +62,90 @@ PLACEHOLDER_WORKER_VERSIONS = {
 }
 
 
-def verify_git_commit_exists(repo_path: Path | str, commit_sha: str) -> bool:
-    """Check if commit exists in git repository."""
+def verify_git_commit_exists(repo_path: Path | str, commit_or_range: str) -> bool:
+    """Check if commit, multiple commits, or range endpoints exist in git repository."""
+    target = str(commit_or_range).strip()
     try:
-        res = subprocess.run(
-            ["git", "cat-file", "-e", f"{commit_sha}^{{commit}}"],
-            cwd=str(repo_path),
-            capture_output=True,
-            check=False,
-        )
-        return res.returncode == 0
+        if ".." in target:
+            parts = target.split("..")
+            start = parts[0].strip()
+            end = parts[1].strip()
+            for p in (start, end):
+                if p:
+                    res = subprocess.run(
+                        ["git", "cat-file", "-e", f"{p}^{{commit}}"],
+                        cwd=str(repo_path),
+                        capture_output=True,
+                        check=False,
+                    )
+                    if res.returncode != 0:
+                        return False
+            return True
+        elif "," in target or (" " in target and not target.startswith("-")):
+            parts = [p.strip() for p in re.split(r"[, ]+", target) if p.strip()]
+            for p in parts:
+                res = subprocess.run(
+                    ["git", "cat-file", "-e", f"{p}^{{commit}}"],
+                    cwd=str(repo_path),
+                    capture_output=True,
+                    check=False,
+                )
+                if res.returncode != 0:
+                    return False
+            return True
+        else:
+            res = subprocess.run(
+                ["git", "cat-file", "-e", f"{target}^{{commit}}"],
+                cwd=str(repo_path),
+                capture_output=True,
+                check=False,
+            )
+            return res.returncode == 0
     except Exception:
         return False
 
 
-def get_git_changed_files(repo_path: Path | str, commit_sha: str) -> list[str]:
-    """Get list of changed files from git commit."""
+def get_git_changed_files(repo_path: Path | str, commit_or_range: str) -> list[str]:
+    """Get list of changed files from git commit, multiple commits, or commit range (e.g. A..B)."""
+    target = str(commit_or_range).strip()
+    files: set[str] = set()
     try:
-        res = subprocess.run(
-            ["git", "show", "--name-only", "--format=", commit_sha],
-            cwd=str(repo_path),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return [line.strip() for line in res.stdout.strip().splitlines() if line.strip()]
+        if ".." in target:
+            res = subprocess.run(
+                ["git", "diff", "--name-only", target],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            for line in res.stdout.strip().splitlines():
+                if line.strip():
+                    files.add(line.strip())
+        elif "," in target or (" " in target and not target.startswith("-")):
+            parts = [p.strip() for p in re.split(r"[, ]+", target) if p.strip()]
+            for p in parts:
+                res = subprocess.run(
+                    ["git", "show", "--name-only", "--format=", p],
+                    cwd=str(repo_path),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                for line in res.stdout.strip().splitlines():
+                    if line.strip():
+                        files.add(line.strip())
+        else:
+            res = subprocess.run(
+                ["git", "show", "--name-only", "--format=", target],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            for line in res.stdout.strip().splitlines():
+                if line.strip():
+                    files.add(line.strip())
+        return sorted(list(files))
     except Exception:
         return []
 
@@ -116,6 +175,7 @@ def validate_report_content(
     expected_task_ids: list[int] | None = None,
     repo_path: Path | str | None = None,
     commit_sha: str | None = None,
+    commit_range: str | None = None,
     allow_measured_seo: bool = False,
     allow_worker_placeholder: bool = False,
     allow_dirty: bool = False,
@@ -167,8 +227,12 @@ def validate_report_content(
         errors.append("Cloudflare Worker Deployment Version header missing from report.")
 
     # 5. Git Commit Verification & Changed-File Inventory Reconciliation
-    commit_match = re.search(r"\*\*(?:Repository Commit|Integration Commit SHA):\*\*\s*\[?`?([a-f0-9]{7,40})`?\]?", content, re.IGNORECASE)
-    reported_commit = commit_match.group(1) if commit_match else commit_sha
+    commit_match = re.search(
+        r"\*\*(?:Repository Commit|Integration Commit SHA|Commit Range):\*\*\s*\[?`?([a-f0-9]{7,40}(?:\.\.[a-f0-9]{7,40})?)`?\]?",
+        content,
+        re.IGNORECASE,
+    )
+    reported_commit = commit_range or commit_sha or (commit_match.group(1) if commit_match else None)
     if repo_path:
         # Git worktree clean check (v2.2.1 P1)
         if not allow_dirty:
@@ -192,7 +256,7 @@ def validate_report_content(
 
         if reported_commit:
             if not verify_git_commit_exists(repo_path, reported_commit):
-                errors.append(f"Git commit verification failed: Commit '{reported_commit}' does not exist in repository {repo_path}.")
+                errors.append(f"Git commit verification failed: Commit/range '{reported_commit}' does not exist in repository {repo_path}.")
             else:
                 actual_files = get_git_changed_files(repo_path, reported_commit)
                 if actual_files:
@@ -202,7 +266,7 @@ def validate_report_content(
                     missing_files = [f for f in actual_files if f not in sec4_text]
                     if missing_files:
                         errors.append(
-                            f"Git diff reconciliation failure: Commit {reported_commit[:8]} modified {len(actual_files)} files, "
+                            f"Git diff reconciliation failure: Commit/range {reported_commit[:16]} modified {len(actual_files)} files, "
                             f"but the following files were omitted from Section 4: {missing_files}"
                         )
 
@@ -306,6 +370,7 @@ def validate_wave_close(
     db_path: Path | str | None = None,
     repo_path: Path | str | None = None,
     commit_sha: str | None = None,
+    commit_range: str | None = None,
     allow_measured_seo: bool = False,
     allow_worker_placeholder: bool = False,
     allow_dirty: bool = False,
@@ -343,6 +408,7 @@ def validate_wave_close(
         expected_task_ids=expected_tasks,
         repo_path=repo_path,
         commit_sha=commit_sha,
+        commit_range=commit_range,
         allow_measured_seo=allow_measured_seo,
         allow_worker_placeholder=allow_worker_placeholder,
         allow_dirty=allow_dirty,
@@ -359,6 +425,7 @@ def main() -> int:
     parser.add_argument("--repo-path", default=None, help="Path to git repository for diff verification")
     parser.add_argument("--db-path", default=None, help="Path to fleet_state.db for task reconciliation")
     parser.add_argument("--commit-sha", default=None, help="Commit SHA to reconcile tasks and git diff against")
+    parser.add_argument("--commit-range", default=None, help="Commit range (e.g. start..end) to reconcile git diff against")
     parser.add_argument("--allow-measured-seo", action="store_true", help="Allow numerical Part 2 SEO score (post-28d)")
     parser.add_argument("--allow-worker-placeholder", action="store_true", help="Allow placeholder worker version")
     parser.add_argument("--allow-dirty", action="store_true", help="Allow uncommitted changes in git worktree")
@@ -376,6 +443,7 @@ def main() -> int:
         db_path=args.db_path,
         repo_path=args.repo_path,
         commit_sha=args.commit_sha,
+        commit_range=args.commit_range,
         allow_measured_seo=args.allow_measured_seo,
         allow_worker_placeholder=args.allow_worker_placeholder,
         allow_dirty=args.allow_dirty,

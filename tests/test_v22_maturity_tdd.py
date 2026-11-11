@@ -649,18 +649,34 @@ def test_section_179_mathematical_engine_2025_vs_2026():
 
 
 def test_aca_excess_aptc_repayment_statutory_engine():
-    """Validates 2026 full repayment rule vs 2025 statutory limitation caps."""
+    """Validates 2020 ARPA exemption, 2021/2025 statutory limitation caps, and 2026 full repayment."""
     from verify_product_functionality import calculate_aca_excess_aptc_repayment
 
-    # 2026 Invariant: 100% full repayment regardless of FPL percent
-    r2026 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2026)
-    assert r2026["repayment_amount"] == 3500.0
-    assert r2026["repayment_cap"] is None
+    # 1. 2020 Invariant: American Rescue Plan Act suspended repayment entirely ($0 due)
+    r2020 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2020, filing_status="single")
+    assert r2020["tax_year"] == 2020
+    assert r2020["repayment_amount"] == 0.0
+    assert r2020["repayment_cap"] == 0.0
+    assert "American Rescue Plan Act" in r2020["rule"]
 
-    # 2025 Statutory caps: 250% FPL single has $950 cap
+    # 2. 2021 Statutory caps: 250% FPL single has $950 cap
+    r2021 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2021, filing_status="single")
+    assert r2021["tax_year"] == 2021
+    assert r2021["repayment_cap"] == 950.0
+    assert r2021["repayment_amount"] == 950.0
+
+    # 3. 2025 Statutory caps: 250% FPL single has $950 cap
     r2025 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2025, filing_status="single")
+    assert r2025["tax_year"] == 2025
     assert r2025["repayment_cap"] == 950.0
     assert r2025["repayment_amount"] == 950.0
+
+    # 4. 2026 Invariant: 100% full repayment regardless of FPL percent (statutory cap sunset)
+    r2026 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2026)
+    assert r2026["tax_year"] == 2026
+    assert r2026["repayment_amount"] == 3500.0
+    assert r2026["repayment_cap"] is None
+    assert "Repayment Cap Sunset" in r2026["rule"]
 
 
 def test_corporate_wacc_formula_engine():
