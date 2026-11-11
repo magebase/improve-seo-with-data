@@ -22,7 +22,7 @@ def mem_db():
 
 
 def test_21_day_url_title_lock(mem_db):
-    """Pending title mutations on URLs shipped in the last 21 days downgrade to INJECT_SECONDARY_H2_ONLY."""
+    """Pending title mutations on URLs shipped in the last 21 days downgrade to INJECT_SECONDARY_H2_ONLY and merge queries."""
     # Seed a shipped title task on /convert/pdf-to-docx/ 5 days ago
     mem_db.execute(
         """
@@ -30,11 +30,17 @@ def test_21_day_url_title_lock(mem_db):
         VALUES ('openfileconverter.com', 'https://openfileconverter.com/convert/pdf-to-docx/', 'pdf to docx', 'INJECT_EXACT_TITLE_AND_H2', 'SHIPPED', datetime('now', '-5 days'), datetime('now', '-5 days'))
         """
     )
-    # Seed a pending secondary task on the same page
+    # Seed TWO pending secondary tasks on the same page with different queries and priorities
     mem_db.execute(
         """
-        INSERT INTO atomic_task_backlog (domain, page, query, action_code, status, created_at)
-        VALUES ('openfileconverter.com', 'https://openfileconverter.com/convert/pdf-to-docx/', 'file converter pdf to docx', 'INJECT_EXACT_TITLE_AND_H2', 'PENDING', datetime('now'))
+        INSERT INTO atomic_task_backlog (domain, page, query, action_code, status, priority_score, created_at)
+        VALUES ('openfileconverter.com', 'https://openfileconverter.com/convert/pdf-to-docx/', 'file converter pdf to docx', 'INJECT_EXACT_TITLE_AND_H2', 'PENDING', 0.5, datetime('now'))
+        """
+    )
+    mem_db.execute(
+        """
+        INSERT INTO atomic_task_backlog (domain, page, query, action_code, status, priority_score, created_at)
+        VALUES ('openfileconverter.com', 'https://openfileconverter.com/convert/pdf-to-docx/', 'convert pdf to docx free', 'CREATE_PROGRAMMATIC_ROUTE', 'PENDING', 0.9, datetime('now'))
         """
     )
     # Seed another pending task on a different page that has NOT shipped
@@ -47,13 +53,19 @@ def test_21_day_url_title_lock(mem_db):
     mem_db.commit()
 
     downgraded = enforce_url_title_lock(mem_db, cooldown_days=21)
-    assert downgraded == 1
+    assert downgraded == 2
 
-    # Verify the secondary query was downgraded to INJECT_SECONDARY_H2_ONLY
-    row = mem_db.execute(
-        "SELECT action_code FROM atomic_task_backlog WHERE page = 'https://openfileconverter.com/convert/pdf-to-docx/' AND status = 'PENDING'"
-    ).fetchone()
-    assert row[0] == "INJECT_SECONDARY_H2_ONLY"
+    # Verify exactly ONE pending row remains for /convert/pdf-to-docx/
+    rows = mem_db.execute(
+        "SELECT action_code, query, priority_score, tdd_assertion FROM atomic_task_backlog WHERE page = 'https://openfileconverter.com/convert/pdf-to-docx/' AND status = 'PENDING'"
+    ).fetchall()
+    assert len(rows) == 1
+    action_code, query, priority_score, assertion = rows[0]
+    assert action_code == "INJECT_SECONDARY_H2_ONLY"
+    assert priority_score == 0.9
+    assert "convert pdf to docx free" in query
+    assert "file converter pdf to docx" in query
+    assert query in assertion
 
     # Verify the fresh page remained INJECT_EXACT_TITLE_AND_H2
     fresh_row = mem_db.execute(

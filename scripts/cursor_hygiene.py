@@ -180,46 +180,131 @@ def enforce_url_title_lock(conn: sqlite3.Connection, cooldown_days: int = 21) ->
     """Prevents secondary queries in later waves from overwriting a URL's primary calibrated <title>.
 
     Downgrades pending title mutations on recently shipped URLs to H2/table-only enrichments,
-    deleting any redundant duplicate tasks that would violate the (page, action_code) unique index.
+    merging secondary queries and keeping max priority_score to prevent token loss on deduplication.
     """
     cur = conn.cursor()
+    # Find all recently shipped pages with title mutations
     cur.execute(
         """
-        SELECT id, page
+        SELECT DISTINCT page
         FROM atomic_task_backlog
-        WHERE status = 'PENDING'
+        WHERE status = 'SHIPPED'
           AND action_code IN ('INJECT_EXACT_TITLE_AND_H2', 'REWRITE_SNIPPET_AND_TOP_300PX', 'CREATE_PROGRAMMATIC_ROUTE')
-          AND page IN (
-              SELECT DISTINCT page
-              FROM atomic_task_backlog
-              WHERE status = 'SHIPPED'
-                AND action_code IN ('INJECT_EXACT_TITLE_AND_H2', 'REWRITE_SNIPPET_AND_TOP_300PX', 'CREATE_PROGRAMMATIC_ROUTE')
-                AND shipped_at >= datetime('now', ?)
-          )
-        ORDER BY id ASC
+          AND shipped_at >= datetime('now', ?)
         """,
         (f"-{cooldown_days} days",),
     )
-    candidates = cur.fetchall()
-    if not candidates:
+    shipped_pages = {row[0] for row in cur.fetchall()}
+    if not shipped_pages:
         return 0
 
-    cur.execute(
-        "SELECT page FROM atomic_task_backlog WHERE status IN ('PENDING', 'LEASED') AND action_code = 'INJECT_SECONDARY_H2_ONLY'"
-    )
-    pages_with_secondary = {row[0] for row in cur.fetchall()}
-
     downgraded = 0
-    for task_id, page in candidates:
-        if page in pages_with_secondary:
-            cur.execute("DELETE FROM atomic_task_backlog WHERE id = ?", (task_id,))
-        else:
+
+    for page in shipped_pages:
+        # Find all pending title mutations on this page, highest priority first
+        cur.execute(
+            """
+            SELECT id, query, priority_score, lgbm_score
+            FROM atomic_task_backlog
+            WHERE status = 'PENDING'
+              AND action_code IN ('INJECT_EXACT_TITLE_AND_H2', 'REWRITE_SNIPPET_AND_TOP_300PX', 'CREATE_PROGRAMMATIC_ROUTE')
+              AND page = ?
+            ORDER BY priority_score DESC, id ASC
+            """,
+            (page,),
+        )
+        pending_title_tasks = cur.fetchall()
+        if not pending_title_tasks:
+            continue
+
+        # Check if there is already an open INJECT_SECONDARY_H2_ONLY task for this page
+        cur.execute(
+            """
+            SELECT id, query, priority_score, lgbm_score, status
+            FROM atomic_task_backlog
+            WHERE status IN ('PENDING', 'LEASED')
+              AND action_code = 'INJECT_SECONDARY_H2_ONLY'
+              AND page = ?
+            ORDER BY priority_score DESC, id ASC
+            """,
+            (page,),
+        )
+        existing_secondary = cur.fetchone()
+
+        if existing_secondary:
+            # We already have an open INJECT_SECONDARY_H2_ONLY task on this page.
+            # Merge candidate queries into existing task to preserve keyword context.
+            surviving_id, ex_query, ex_p_score, ex_lgbm_score, _ = existing_secondary
+
+            existing_queries = [q.strip() for q in (ex_query or "").split("|") if q.strip()]
+            queries_set = {q.lower() for q in existing_queries}
+
+            max_p_score = float(ex_p_score or 0.0)
+            max_lgbm = float(ex_lgbm_score or 0.0)
+
+            for cand_id, cand_query, cand_p_score, cand_lgbm in pending_title_tasks:
+                for q in (cand_query or "").split("|"):
+                    q_clean = q.strip()
+                    if q_clean and q_clean.lower() not in queries_set:
+                        existing_queries.append(q_clean)
+                        queries_set.add(q_clean.lower())
+                if float(cand_p_score or 0.0) > max_p_score:
+                    max_p_score = float(cand_p_score or 0.0)
+                if float(cand_lgbm or 0.0) > max_lgbm:
+                    max_lgbm = float(cand_lgbm or 0.0)
+                # Delete the redundant pending title task
+                cur.execute("DELETE FROM atomic_task_backlog WHERE id = ?", (cand_id,))
+
+            merged_query_str = " | ".join(existing_queries)
+            assertion = f"assert a new <h2> or <table> section covers '{merged_query_str}' without altering the established <title>"
             cur.execute(
-                "UPDATE atomic_task_backlog SET action_code = 'INJECT_SECONDARY_H2_ONLY' WHERE id = ?",
-                (task_id,),
+                """
+                UPDATE atomic_task_backlog
+                SET query = ?, priority_score = ?, lgbm_score = ?, tdd_assertion = ?
+                WHERE id = ?
+                """,
+                (merged_query_str, max_p_score, max_lgbm, assertion, surviving_id),
             )
-            pages_with_secondary.add(page)
-            downgraded += 1
+            downgraded += len(pending_title_tasks)
+        else:
+            # No existing INJECT_SECONDARY_H2_ONLY task.
+            # Pick the top priority task as the surviving task, and merge remaining candidates into it.
+            top_task = pending_title_tasks[0]
+            surviving_id, top_query, top_p_score, top_lgbm = top_task
+
+            collected_queries = [q.strip() for q in (top_query or "").split("|") if q.strip()]
+            queries_set = {q.lower() for q in collected_queries}
+            max_p_score = float(top_p_score or 0.0)
+            max_lgbm = float(top_lgbm or 0.0)
+
+            for cand_id, cand_query, cand_p_score, cand_lgbm in pending_title_tasks[1:]:
+                for q in (cand_query or "").split("|"):
+                    q_clean = q.strip()
+                    if q_clean and q_clean.lower() not in queries_set:
+                        collected_queries.append(q_clean)
+                        queries_set.add(q_clean.lower())
+                if float(cand_p_score or 0.0) > max_p_score:
+                    max_p_score = float(cand_p_score or 0.0)
+                if float(cand_lgbm or 0.0) > max_lgbm:
+                    max_lgbm = float(cand_lgbm or 0.0)
+                # Delete the redundant pending title task
+                cur.execute("DELETE FROM atomic_task_backlog WHERE id = ?", (cand_id,))
+
+            merged_query_str = " | ".join(collected_queries)
+            assertion = f"assert a new <h2> or <table> section covers '{merged_query_str}' without altering the established <title>"
+            cur.execute(
+                """
+                UPDATE atomic_task_backlog
+                SET action_code = 'INJECT_SECONDARY_H2_ONLY',
+                    query = ?,
+                    priority_score = ?,
+                    lgbm_score = ?,
+                    tdd_assertion = ?
+                WHERE id = ?
+                """,
+                (merged_query_str, max_p_score, max_lgbm, assertion, surviving_id),
+            )
+            downgraded += len(pending_title_tasks)
 
     conn.commit()
     return downgraded
