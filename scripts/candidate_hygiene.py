@@ -61,6 +61,7 @@ CANONICAL_ACTION_CODE_MAP: dict[str, str] = {
     "STRENGTHEN_HUB_INTERNAL_LINKS": "WIRE_HUB_AND_FOOTER_INLINKS",
     "BOOST_INTERNAL_LINKS": "WIRE_HUB_AND_FOOTER_INLINKS",
     "RESCUE_ORPHAN_ROUTE_INLINKS": "WIRE_HUB_AND_FOOTER_INLINKS",
+    "INJECT_SECONDARY_H2_ONLY": "INJECT_SECONDARY_H2_ONLY",
 }
 
 
@@ -97,6 +98,19 @@ def strip_tracking_params(url: str) -> str:
     return cleaned
 
 
+def is_valid_property_host(page_url: str, target_domain: str) -> bool:
+    """Rejects legacy or foreign subdomains (e.g., landscaping.figiva.com) from sc-domain exports."""
+    if not page_url:
+        return False
+    if not target_domain:
+        return True
+    host = (urllib.parse.urlparse(page_url).hostname or "").lower()
+    if not host:
+        return True  # relative path
+    apex = target_domain.lower().removeprefix("sc-domain:").removeprefix("www.")
+    return host in {apex, f"www.{apex}"}
+
+
 def _brand_stems(domain: str) -> list:
     stem = (domain or "").split(".")[0].lower()
     return [stem, f"{stem}com", f"{stem}net", f"{stem}org", f"www{stem}com"]
@@ -113,13 +127,8 @@ def is_valid_seo_candidate(domain: str, url_path_or_url: str, query: str) -> boo
         clean_domain = clean_domain[len("sc-domain:") :]
 
     raw_url = (url_path_or_url or "").strip()
-    if "://" in raw_url:
-        parsed = urllib.parse.urlparse(raw_url)
-        netloc = (parsed.netloc or "").split(":")[0].lower()
-        if clean_domain and netloc:
-            allowed = {clean_domain, f"www.{clean_domain}"}
-            if netloc not in allowed:
-                return False
+    if clean_domain and raw_url and not is_valid_property_host(raw_url, clean_domain):
+        return False
 
     if NON_SEO_PATH_RE.search(url_path(url_path_or_url).strip() or "/"):
         return False

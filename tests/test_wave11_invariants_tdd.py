@@ -18,7 +18,7 @@ def test_unbuilt_routes_collapse_triplets():
             "query": "section 179 calculator",
             "page": "https://incomecanvas.com/calculators/section-179-calculator/",
             "current_pos": 95.0,
-            "impressions": 10.0,
+            "impressions": 0.0,
             "clicks_30d": 0.0,
             "features": {
                 "title_exact_match_rate": 0.1,  # would trigger INJECT_EXACT_TITLE_AND_H2
@@ -86,7 +86,12 @@ def test_purge_seo_alpha_zones_scoped_to_target_zone(monkeypatch):
     import sys
     from pathlib import Path
 
-    repo_root = Path(__file__).resolve().parents[5] / "Projects" / "saas-factory"
+    candidate_roots = [
+        Path(__file__).resolve().parents[3] / "Projects" / "saas-factory",
+        Path(__file__).resolve().parents[5] / "Projects" / "saas-factory",
+        Path.home() / "Projects" / "saas-factory",
+    ]
+    repo_root = next((p for p in candidate_roots if p.exists()), Path.home() / "Projects" / "saas-factory")
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
     if str(repo_root / "scripts") not in sys.path:

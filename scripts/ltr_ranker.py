@@ -790,12 +790,29 @@ def derive_sibling_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def is_truly_unbuilt_route(
+    url: str,
+    known_live_urls: set[str] | None = None,
+    url_total_impressions: int = 0,
+) -> bool:
+    """A route is only unbuilt if it is absent from sitemaps/shipped history AND has 0 total GSC impressions."""
+    if url_total_impressions > 0:
+        return False
+    if known_live_urls:
+        norm = url.rstrip("/")
+        norm_slash = norm + "/"
+        if norm in known_live_urls or norm_slash in known_live_urls:
+            return False
+    return True
+
+
 def compile_wave_backlog(
     rows: list[dict[str, Any]],
     shipped_ledger: set | None = None,
     target_wave_size: int = 40,
     sibling_counts: dict[str, int] | None = None,
     max_per_family: int = 3,
+    known_live_urls: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Compiles a ranked backlog into ATOMIC TDD tasks (35-60 per wave).
 
@@ -896,10 +913,20 @@ def compile_wave_backlog(
         "INJECT_PAA_SEMANTIC_SECTIONS": "assert the DOM renders <details>/<h3> blocks answering the SERP PAA questions {paa}",
         "ADD_WEBAPP_JSONLD_SCHEMA": "assert the response for '{query}' includes valid WebApplication JSON-LD (name, operatingSystem, applicationCategory, offers)",
         "REWRITE_HIGH_CONTRAST_TITLE": "assert the <title> for '{query}' contains a bracketed value hook or number and stays within 60 characters",
+        "INJECT_SECONDARY_H2_ONLY": "assert a new <h2> or <table> section covers '{query}' without altering the established <title>",
     }
     tasks: list[dict[str, Any]] = []
     emitted: set = set()
     family_counts: Counter = Counter()
+    known = set(known_live_urls or set())
+    for r in rows:
+        p = str(r.get("page", "")).rstrip("/")
+        if float(r.get("impressions", 0) or 0) > 0 or float(r.get("clicks_30d", 0) or 0) > 0:
+            known.add(p)
+            known.add(p + "/")
+    for p, _ in (shipped_ledger or set()):
+        known.add(str(p).rstrip("/"))
+        known.add(str(p).rstrip("/") + "/")
     for row in sorted(rows, key=lambda r: r.get("rank_score", 0.0), reverse=True):
         page = str(row.get("page", ""))
         page_key = page.rstrip("/")
@@ -915,12 +942,16 @@ def compile_wave_backlog(
             if path.startswith(prefix):
                 propagation = {"prefix": prefix, "siblings": int(count)}
                 break
+        total_imp = int(row.get("total_page_impressions", 0) or row.get("impressions", 0) or 0)
         is_unbuilt = (
-            float(row.get("current_pos", 0.0) or 0.0) >= 90.0
+            is_truly_unbuilt_route(page, known, total_imp)
+            and float(row.get("current_pos", 0.0) or 0.0) >= 90.0
             and str(row.get("coverage_state", "")) != "Discovered - currently not indexed"
         )
         for code, predicate in rules:
             if is_unbuilt and code != "CREATE_PROGRAMMATIC_ROUTE":
+                continue
+            if code == "CREATE_PROGRAMMATIC_ROUTE" and not is_unbuilt:
                 continue
             if not predicate(row):
                 continue

@@ -418,6 +418,15 @@ def main(argv: list[str] | None = None) -> int:
             if args.cooldown_days > 0
             else set()
         )
+        known_live_urls: set[str] = set()
+        if state_conn is not None:
+            try:
+                for (p,) in state_conn.execute("SELECT DISTINCT page FROM atomic_task_backlog WHERE status = 'SHIPPED'"):
+                    if p:
+                        known_live_urls.add(str(p).rstrip("/"))
+                        known_live_urls.add(str(p).rstrip("/") + "/")
+            except Exception:
+                pass
         # FULL-depth decomposition: the SQLite backlog gets EVERY rule hit
         # across ALL scored rows (600-900 tasks), so runs 2..50 lease from the
         # cursor without re-running collection/scoring. The JSON output keeps
@@ -430,6 +439,7 @@ def main(argv: list[str] | None = None) -> int:
             # top-ranked child route propagates its fix across every sibling
             # without a hand-maintained prefix map.
             sibling_counts=derive_sibling_counts(scored),
+            known_live_urls=known_live_urls,
         )
         wave_tasks = full_backlog[: max(0, args.compile_wave)]
         print(

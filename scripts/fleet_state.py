@@ -338,6 +338,7 @@ DEFAULT_TYPE_CAPS = {
     "INJECT_EXACT_TITLE_AND_H2": 3,
     "INJECT_EXACT_H2_AND_TITLE": 2,
     "CREATE_PROGRAMMATIC_ROUTE": 3,
+    "INJECT_SECONDARY_H2_ONLY": 4,
     # Backward compatibility aliases:
     "BOOST_CLUSTER_CROSS_LINKS": 4,
     "STRENGTHEN_HUB_INTERNAL_LINKS": 4,
@@ -413,6 +414,11 @@ def enqueue_tasks(
             host = (urlparse(page).hostname or "").lower()
             parts = host.split(".")
             domain = ".".join(parts[-2:]) if len(parts) > 2 else host
+        if domain and page and page.startswith("http"):
+            from candidate_hygiene import is_valid_property_host
+
+            if not is_valid_property_host(page, domain):
+                continue
         try:
             raw_action = str(task.get("action_code") or task.get("prescribed_action") or "")
             action_code = canonicalize_action_code(raw_action)
@@ -692,7 +698,7 @@ class DailyBudgetGate:
         # holds a guaranteed floor of the daily cap; anything past its floor
         # draws from the shared pool (cap minus all floors), so one hungry
         # domain can never drain the whole fleet budget.
-        self.max_domain_floor = 50
+        self.max_domain_floor = 35
 
     def _dynamic_floor(self, active_domains: int) -> int:
         """Per-domain guaranteed floor that scales with fleet size.

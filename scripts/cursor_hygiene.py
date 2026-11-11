@@ -176,6 +176,32 @@ def _tokens_covered(query: str, text: str) -> bool:
     return all(f" {token} " in haystack for token in tokens)
 
 
+def enforce_url_title_lock(conn: sqlite3.Connection, cooldown_days: int = 21) -> int:
+    """Prevents secondary queries in later waves from overwriting a URL's primary calibrated <title>.
+
+    Downgrades pending title mutations on recently shipped URLs to H2/table-only enrichments.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE atomic_task_backlog
+        SET action_code = 'INJECT_SECONDARY_H2_ONLY'
+        WHERE status = 'PENDING'
+          AND action_code IN ('INJECT_EXACT_TITLE_AND_H2', 'REWRITE_SNIPPET_AND_TOP_300PX', 'CREATE_PROGRAMMATIC_ROUTE')
+          AND page IN (
+              SELECT DISTINCT page
+              FROM atomic_task_backlog
+              WHERE status = 'SHIPPED'
+                AND action_code IN ('INJECT_EXACT_TITLE_AND_H2', 'REWRITE_SNIPPET_AND_TOP_300PX', 'CREATE_PROGRAMMATIC_ROUTE')
+                AND shipped_at >= datetime('now', ?)
+          )
+        """,
+        (f"-{cooldown_days} days",),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 def preflight_hygiene(
     conn: sqlite3.Connection,
     route_intent_map: Optional[Dict[str, str]] = None,
@@ -193,11 +219,13 @@ def preflight_hygiene(
     uncovered, unowned candidates handed to ``lease_tasks``).
     """
     stamp = _iso(now)
+    from candidate_hygiene import is_valid_property_host
     from fleet_state import canonicalize_backlog_action_codes
 
     canonicalize_backlog_action_codes(conn)
+    title_locked = enforce_url_title_lock(conn)
     rows = conn.execute(
-        "SELECT id, page, query, action_code, file_target FROM atomic_task_backlog WHERE status = 'PENDING'"
+        "SELECT id, page, query, action_code, file_target, domain FROM atomic_task_backlog WHERE status = 'PENDING'"
     ).fetchall()
     report = {
         "rejected": 0,
@@ -205,6 +233,7 @@ def preflight_hygiene(
         "locked": 0,
         "intent_capped": 0,
         "leasable": 0,
+        "title_locked": title_locked,
     }
     intent_counts: Dict[str, int] = {}
     if max_intent_tasks_per_page > 0:
@@ -213,7 +242,11 @@ def preflight_hygiene(
         ):
             intent_counts[page] = intent_counts.get(page, 0) + 1
 
-    for task_id, page, query, action_code, file_target in rows:
+    for task_id, page, query, action_code, file_target, domain in rows:
+        if domain and page and page.startswith("http") and not is_valid_property_host(page, domain):
+            _cas_status(conn, task_id, "REJECTED", shipped=False, stamp=stamp)
+            report["rejected"] += 1
+            continue
         if not is_clean_english_query(query or ""):
             _cas_status(conn, task_id, "REJECTED", shipped=False, stamp=stamp)
             report["rejected"] += 1

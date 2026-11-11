@@ -68,9 +68,9 @@ def test_five_domains_each_keep_a_functional_floor(tmp_path):
 
 def test_dynamic_floor_shrinks_gracefully_at_fleet_scale(tmp_path):
     gate = DailyBudgetGate(str(tmp_path / "g.db"), daily_cap=150)
-    assert gate._dynamic_floor(1) == 50, "min(max_floor, cap//1)"
-    assert gate._dynamic_floor(2) == 50
-    assert gate._dynamic_floor(5) == 30, "min(50, 150//5)"
+    assert gate._dynamic_floor(1) == 35, "min(max_floor, cap//1)"
+    assert gate._dynamic_floor(2) == 35
+    assert gate._dynamic_floor(5) == 30, "min(35, 150//5)"
     assert gate._dynamic_floor(13) == 11, "150 // 13 -> 11/day per domain"
     for n in range(1, 26):
         assert gate._dynamic_floor(n) * n <= 150, f"floors oversubscribe at N={n}"
