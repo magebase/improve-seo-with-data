@@ -179,13 +179,14 @@ def _tokens_covered(query: str, text: str) -> bool:
 def enforce_url_title_lock(conn: sqlite3.Connection, cooldown_days: int = 21) -> int:
     """Prevents secondary queries in later waves from overwriting a URL's primary calibrated <title>.
 
-    Downgrades pending title mutations on recently shipped URLs to H2/table-only enrichments.
+    Downgrades pending title mutations on recently shipped URLs to H2/table-only enrichments,
+    deleting any redundant duplicate tasks that would violate the (page, action_code) unique index.
     """
     cur = conn.cursor()
     cur.execute(
         """
-        UPDATE atomic_task_backlog
-        SET action_code = 'INJECT_SECONDARY_H2_ONLY'
+        SELECT id, page
+        FROM atomic_task_backlog
         WHERE status = 'PENDING'
           AND action_code IN ('INJECT_EXACT_TITLE_AND_H2', 'REWRITE_SNIPPET_AND_TOP_300PX', 'CREATE_PROGRAMMATIC_ROUTE')
           AND page IN (
@@ -195,11 +196,33 @@ def enforce_url_title_lock(conn: sqlite3.Connection, cooldown_days: int = 21) ->
                 AND action_code IN ('INJECT_EXACT_TITLE_AND_H2', 'REWRITE_SNIPPET_AND_TOP_300PX', 'CREATE_PROGRAMMATIC_ROUTE')
                 AND shipped_at >= datetime('now', ?)
           )
+        ORDER BY id ASC
         """,
         (f"-{cooldown_days} days",),
     )
+    candidates = cur.fetchall()
+    if not candidates:
+        return 0
+
+    cur.execute(
+        "SELECT page FROM atomic_task_backlog WHERE status IN ('PENDING', 'LEASED') AND action_code = 'INJECT_SECONDARY_H2_ONLY'"
+    )
+    pages_with_secondary = {row[0] for row in cur.fetchall()}
+
+    downgraded = 0
+    for task_id, page in candidates:
+        if page in pages_with_secondary:
+            cur.execute("DELETE FROM atomic_task_backlog WHERE id = ?", (task_id,))
+        else:
+            cur.execute(
+                "UPDATE atomic_task_backlog SET action_code = 'INJECT_SECONDARY_H2_ONLY' WHERE id = ?",
+                (task_id,),
+            )
+            pages_with_secondary.add(page)
+            downgraded += 1
+
     conn.commit()
-    return cur.rowcount
+    return downgraded
 
 
 def preflight_hygiene(
