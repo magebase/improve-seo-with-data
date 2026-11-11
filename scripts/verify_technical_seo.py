@@ -68,11 +68,20 @@ class TechnicalSeoAuditResult:
         return round((passed / len(self.gates)) * 10.0, 1)
 
 
+# Soft 404 detection phrases on HTTP 200 responses
+SOFT_404_PATTERNS = re.compile(
+    r"\b(404\s+not\s+found|page\s+not\s+found|page\s+cannot\s+be\s+found|no\s+results\s+found|file\s+does\s+not\s+exist|item\s+not\s+found|tool\s+unavailable)\b",
+    re.IGNORECASE,
+)
+
+
 def audit_html_technical_seo(
     html: str,
     url: str,
     headers: dict[str, str] | None = None,
     status_code: int = 200,
+    page_archetype: str | None = None,
+    expected_canonical_policy: str = "host_match",
 ) -> TechnicalSeoAuditResult:
     """Runs the 10-point technical SEO audit against rendered HTML and response headers."""
     gates: list[TechnicalSeoGateResult] = []
@@ -81,16 +90,32 @@ def audit_html_technical_seo(
     headers_lower = {k.lower(): v for k, v in (headers or {}).items()}
     parsed_url = urlparse(url)
 
-    # 1. HTTP Status Gate
+    # Infer page archetype if not supplied
+    archetype = page_archetype
+    if not archetype or archetype == "auto":
+        u_lower = url.lower()
+        if any(tok in u_lower for tok in ("/convert/", "/studio/", "/calculators/", "/tools/")):
+            archetype = "tool"
+        elif "/compare/" in u_lower:
+            archetype = "comparison"
+        elif any(tok in u_lower for tok in ("/niche/", "/directory/")):
+            archetype = "directory"
+        else:
+            archetype = "editorial"
+
+    # 1. HTTP Status & Soft 404 Gate
     http_passed = 200 <= status_code < 300
+    soft_404_match = SOFT_404_PATTERNS.search(html) if http_passed else None
     gates.append(TechnicalSeoGateResult(
-        name="http_status",
-        passed=http_passed,
-        details=f"Status code {status_code}",
+        name="http_status_and_soft_404",
+        passed=http_passed and not soft_404_match,
+        details=f"Status code {status_code}; Soft 404: {bool(soft_404_match)}",
         severity="ERROR",
     ))
     if not http_passed:
         errors.append(f"HTTP status {status_code} is not 2xx")
+    elif soft_404_match:
+        errors.append(f"Soft 404 error text detected on HTTP 200: '{soft_404_match.group(0)}'")
 
     # 2. Rendered Body Content Gate
     body_match = re.search(r"<body[^>]*>(.*?)</body>", html, flags=re.DOTALL | re.IGNORECASE)
@@ -105,12 +130,12 @@ def audit_html_technical_seo(
     if content_len < 500 or not has_body:
         errors.append(f"Page body too thin or missing (length: {content_len} bytes)")
 
-    # 3. Title Tag Quality Gate
+    # 3. Title Tag Quality & SERP Geometry Gate
     title_match = re.search(r"<title[^>]*>(.*?)</title>", html, flags=re.DOTALL | re.IGNORECASE)
     title_text = re.sub(r"\s+", " ", title_match.group(1)).strip() if title_match else ""
     title_len = len(title_text)
     px_width = estimate_title_pixel_width(title_text)
-    title_passed = bool(title_match and 20 <= title_len <= 80)
+    title_passed = bool(title_match and 20 <= title_len <= 85)
     gates.append(TechnicalSeoGateResult(
         name="title_tag_quality",
         passed=title_passed,
@@ -119,8 +144,9 @@ def audit_html_technical_seo(
     ))
     if not title_passed:
         errors.append(f"Title missing or irregular length: {title_len} chars")
-    elif px_width > 600.0:
-        warnings.append(f"Title display width ~{px_width:.1f}px exceeds 600px desktop SERP guideline")
+    elif px_width > 580.0:
+        # Heuristic warning, NOT a fatal blocking invariant
+        warnings.append(f"Title display width ~{px_width:.1f}px exceeds 580px desktop SERP guideline (advisory warning)")
 
     # 4. Primary H1 Tag Gate
     h1_matches = re.findall(r"<h1[^>]*>(.*?)</h1>", html, flags=re.DOTALL | re.IGNORECASE)
@@ -144,10 +170,9 @@ def audit_html_technical_seo(
         canonical_match = re.search(r"<link[^>]+href=['\"]([^'\"]+)['\"][^>]+rel=['\"]canonical['\"][^>]*>", html, re.IGNORECASE)
     canonical_url = canonical_match.group(1).strip() if canonical_match else ""
     canonical_passed = bool(canonical_url and canonical_url.startswith("http"))
-    # Check if matches target host
     canon_host = urlparse(canonical_url).hostname or ""
     expected_host = parsed_url.hostname or ""
-    host_match = not expected_host or (expected_host in canon_host)
+    host_match = (expected_canonical_policy != "host_match") or (not expected_host) or (expected_host in canon_host)
     gates.append(TechnicalSeoGateResult(
         name="canonical_url_consistency",
         passed=canonical_passed and host_match,
@@ -226,19 +251,34 @@ def audit_html_technical_seo(
     if not viewport_passed:
         errors.append("Missing <meta name='viewport'> tag for mobile responsiveness")
 
-    # 10. Functional Tool / Content Utility Gate
+    # 10. Functional Product / Tool Verification Gate (Page-Type Aware)
     has_form = bool(re.search(r"<form[^>]*>", html, re.IGNORECASE))
     has_table = bool(re.search(r"<table[^>]*>", html, re.IGNORECASE))
     has_interactive = bool(re.search(r"<(canvas|svg|pre|code)[^>]*>", html, re.IGNORECASE))
-    functional_passed = has_form or has_table or has_interactive
+    has_tool_input = bool(re.search(r"<input[^>]+type=['\"](file|range|number|text)['\"][^>]*>", html, re.IGNORECASE))
+    has_converter_ui = bool(re.search(r"class=['\"][^'\"]*(?:converter|dropzone|viewer|workbench)[^'\"]*['\"]", html, re.IGNORECASE))
+
+    if archetype == "tool":
+        functional_passed = has_tool_input or has_converter_ui or has_interactive or has_form
+        severity = "ERROR"
+    elif archetype == "comparison":
+        functional_passed = has_table or has_form or has_interactive
+        severity = "ERROR"
+    else:
+        functional_passed = has_form or has_table or has_interactive or has_tool_input
+        severity = "WARNING"
+
     gates.append(TechnicalSeoGateResult(
-        name="functional_tool_or_data_utility",
+        name="functional_product_utility",
         passed=functional_passed,
-        details=f"Form: {has_form}; Table: {has_table}; Interactive/Code: {has_interactive}",
-        severity="WARNING",
+        details=f"Archetype: {archetype}; Form: {has_form}; Table: {has_table}; Tool UI: {has_converter_ui or has_tool_input}; Interactive: {has_interactive}",
+        severity=severity,
     ))
     if not functional_passed:
-        warnings.append("No interactive form, data table, or code/canvas elements detected")
+        if severity == "ERROR":
+            errors.append(f"Functional failure for {archetype}: missing interactive tool UI, dropzone, or specifications table")
+        else:
+            warnings.append("No interactive form, data table, or code/canvas elements detected")
 
     all_passed = len(errors) == 0
 

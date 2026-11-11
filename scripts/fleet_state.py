@@ -879,20 +879,26 @@ def record_experiment(
     baseline_ctr: float = 0.0,
     baseline_position: float = 0.0,
     control_cohort_page: str | None = None,
+    control_cohort_pages: list[str] | None = None,
     control_baseline_clicks: float = 0.0,
+    pre_trend_divergence: float = 0.0,
     attribution_limitations: str | None = None,
+    status: str = "CRAWL_PENDING",
 ) -> int:
     """Records an executed SEO change into the persistent experiment ledger."""
     now_str = _iso(_utc_now(deployed_at))
+    cohort_list = control_cohort_pages or ([control_cohort_page] if control_cohort_page else [])
+    ctrl_primary = control_cohort_page or (cohort_list[0] if cohort_list else None)
     cur = conn.execute(
         """
         INSERT INTO experiment_ledger (
             task_id, domain, page, target_query, query_cluster, action_code,
             decision_class, implementation_details, commit_sha, deployed_at,
             baseline_clicks_28d, baseline_impressions_28d, baseline_ctr, baseline_position,
-            control_cohort_page, control_baseline_clicks, attribution_limitations,
+            control_cohort_page, control_cohort_pages_json, control_baseline_clicks,
+            pre_trend_divergence, attribution_limitations,
             status, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_RECRAWL', ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             task_id,
@@ -909,9 +915,12 @@ def record_experiment(
             float(baseline_impressions_28d),
             float(baseline_ctr),
             float(baseline_position),
-            control_cohort_page,
+            ctrl_primary,
+            json.dumps(cohort_list),
             float(control_baseline_clicks),
+            float(pre_trend_divergence),
             attribution_limitations,
+            status,
             now_str,
         ),
     )
@@ -930,7 +939,7 @@ def record_shipped_experiments(
     """Auto-enqueues experiment rows for tasks being marked SHIPPED.
 
     Matches baseline metrics from baseline_gsc or gsc_snapshots if available,
-    and assigns a matched control page from the same domain/route family.
+    and assigns a matched control cohort (>= 3 sibling URLs in the same route family).
     """
     now_dt = _utc_now(now)
     recorded = 0
@@ -959,20 +968,29 @@ def record_shipped_experiments(
                 base_ctr = float(gsc_row.get("ctr", 0.0) or 0.0)
                 base_pos = float(gsc_row.get("position", 0.0) or 0.0)
 
-        ctrl_page = None
+        ctrl_cohort: list[str] = []
         if control_pages and page in control_pages:
-            ctrl_page = control_pages[page]
+            ctrl_cohort = [control_pages[page]]
         elif domain:
-            ctrl_candidate = conn.execute(
+            # Query up to 5 sibling control candidates not modified in this wave
+            cur_controls = conn.execute(
                 """
                 SELECT DISTINCT page FROM atomic_task_backlog
-                WHERE domain = ? AND page != ? AND route_family = ? AND status = 'SHIPPED'
-                LIMIT 1
+                WHERE domain = ? AND page != ? AND route_family = ?
+                  AND status = 'SHIPPED'
+                  AND id NOT IN (SELECT task_id FROM experiment_ledger WHERE domain = ? AND status = 'CRAWL_PENDING')
+                LIMIT 5
                 """,
-                (domain, page, route_family),
-            ).fetchone()
-            if ctrl_candidate:
-                ctrl_page = ctrl_candidate[0]
+                (domain, page, route_family, domain),
+            ).fetchall()
+            ctrl_cohort = [r[0] for r in cur_controls]
+
+        ctrl_base_clicks = 0.0
+        if ctrl_cohort and baseline_gsc:
+            for cp in ctrl_cohort:
+                matches = [v for k, v in baseline_gsc.items() if v.get("page", "").strip().lower() == cp.strip().lower()]
+                ctrl_base_clicks += sum(float(m.get("clicks", 0.0) or 0.0) for m in matches)
+            ctrl_base_clicks = ctrl_base_clicks / max(len(ctrl_cohort), 1)
 
         record_experiment(
             conn,
@@ -987,34 +1005,99 @@ def record_shipped_experiments(
             baseline_impressions_28d=base_impr,
             baseline_ctr=base_ctr,
             baseline_position=base_pos,
-            control_cohort_page=ctrl_page,
+            control_cohort_page=ctrl_cohort[0] if ctrl_cohort else None,
+            control_cohort_pages=ctrl_cohort,
+            control_baseline_clicks=ctrl_base_clicks,
+            status="CRAWL_PENDING",
         )
         recorded += 1
     return recorded
 
 
-def update_experiment_recrawl(
+def record_gsc_exposure(
     conn: sqlite3.Connection,
     domain: str,
-    recrawled_pages: set[str],
+    exposed_pages: set[str],
     now: datetime | None = None,
 ) -> int:
-    """Updates recrawl status for experiments whose target pages show recrawl evidence."""
+    """Records when fresh impressions appear for an experiment in post-deploy GSC data.
+
+    CRITICAL INVARIANT (v2.1): Impressions are exposure evidence, NOT Googlebot recrawl confirmation.
+    A page continuing to receive impressions from its pre-existing indexed version does NOT prove
+    Googlebot has revisited and processed the post-deploy code changes.
+    """
     now_str = _iso(_utc_now(now))
     updated = 0
-    for page in recrawled_pages:
+    for page in exposed_pages:
         cur = conn.execute(
             """
             UPDATE experiment_ledger
-            SET recrawl_detected_at = ?,
-                indexation_status = 'INDEXED',
-                status = CASE WHEN status = 'PENDING_RECRAWL' THEN 'OBSERVING' ELSE status END,
+            SET exposure_detected_at = COALESCE(exposure_detected_at, ?),
                 updated_at = ?
-            WHERE domain = ? AND page = ? AND recrawl_detected_at IS NULL
+            WHERE domain = ? AND page = ?
             """,
             (now_str, now_str, domain, page),
         )
         updated += cur.rowcount
+    conn.commit()
+    return updated
+
+
+def update_experiment_recrawl(
+    conn: sqlite3.Connection,
+    domain: str,
+    recrawled_pages: set[str] | dict[str, dict[str, Any]],
+    evidence_type: str = "verified_googlebot_log",
+    now: datetime | None = None,
+) -> int:
+    """Updates recrawl status based on verified Googlebot logs or URL inspection proof.
+
+    CRITICAL INVARIANT (v2.1): Fresh impressions do NOT count as recrawl confirmation.
+    Evidence must be explicit:
+    1. 'url_inspection': lastCrawlTime > deployed_at from GSC URL Inspection API.
+    2. 'verified_googlebot_log': verified reverse-DNS Googlebot access log timestamp > deployed_at.
+    """
+    now_str = _iso(_utc_now(now))
+    updated = 0
+
+    if isinstance(recrawled_pages, dict):
+        for page, ev in recrawled_pages.items():
+            ev_type = ev.get("evidence_type", evidence_type)
+            last_crawl = ev.get("last_crawl_time") or now_str
+            detail_json = json.dumps(ev)
+            cov_state = str(ev.get("coverage_state", "INDEXED"))
+            cur = conn.execute(
+                """
+                UPDATE experiment_ledger
+                SET recrawl_confirmed_at = ?,
+                    recrawl_detected_at = ?,
+                    recrawl_evidence_type = ?,
+                    recrawl_evidence_detail = ?,
+                    indexation_status = ?,
+                    status = 'RECRAWL_CONFIRMED',
+                    updated_at = ?
+                WHERE domain = ? AND page = ? AND (status IN ('DEPLOYED', 'CRAWL_PENDING', 'PENDING_RECRAWL') OR recrawl_confirmed_at IS NULL)
+                """,
+                (last_crawl, now_str, ev_type, detail_json, cov_state, now_str, domain, page),
+            )
+            updated += cur.rowcount
+    else:
+        for page in recrawled_pages:
+            cur = conn.execute(
+                """
+                UPDATE experiment_ledger
+                SET recrawl_confirmed_at = ?,
+                    recrawl_detected_at = ?,
+                    recrawl_evidence_type = ?,
+                    indexation_status = 'INDEXED',
+                    status = 'RECRAWL_CONFIRMED',
+                    updated_at = ?
+                WHERE domain = ? AND page = ? AND (status IN ('DEPLOYED', 'CRAWL_PENDING', 'PENDING_RECRAWL') OR recrawl_confirmed_at IS NULL)
+                """,
+                (now_str, now_str, evidence_type, now_str, domain, page),
+            )
+            updated += cur.rowcount
+
     conn.commit()
     return updated
 
@@ -1026,13 +1109,14 @@ def update_experiment_outcomes(
     days_elapsed: int = 28,
     now: datetime | None = None,
 ) -> dict[str, int]:
-    """Evaluates pending experiments with post-deployment GSC metrics and Difference-in-Differences.
+    """Evaluates experiments using Difference-in-Differences with statistical safeguards.
 
-    Computes:
-    - Treatment lift against baseline
-    - Matched control cohort lift
-    - Net incremental clicks
-    - Updates action_effectiveness_stats
+    Safeguards:
+    1. Parallel Trends: checks pre-treatment divergence against matched controls.
+    2. Minimum Control Cohort Size: requires >= 3 matched sibling URLs.
+    3. Contamination Defense: excludes controls modified post-treatment.
+    4. 95% Confidence Intervals & explicit INSUFFICIENT_EVIDENCE classifications.
+    5. Bayesian-smoothed action effectiveness updates.
     """
     now_dt = _utc_now(now)
     now_str = _iso(now_dt)
@@ -1048,11 +1132,12 @@ def update_experiment_outcomes(
                experiment_ledger.deployed_at,
                experiment_ledger.baseline_clicks_28d, experiment_ledger.baseline_impressions_28d,
                experiment_ledger.baseline_position, experiment_ledger.baseline_ctr,
-               experiment_ledger.control_cohort_page, experiment_ledger.control_baseline_clicks,
+               experiment_ledger.control_cohort_page, experiment_ledger.control_cohort_pages_json,
+               experiment_ledger.control_baseline_clicks, experiment_ledger.pre_trend_divergence,
                experiment_ledger.status
         FROM experiment_ledger
         LEFT JOIN atomic_task_backlog ON experiment_ledger.task_id = atomic_task_backlog.id
-        WHERE experiment_ledger.domain = ? AND experiment_ledger.status IN ('PENDING_RECRAWL', 'OBSERVING')
+        WHERE experiment_ledger.domain = ? AND experiment_ledger.status IN ('PENDING_RECRAWL', 'CRAWL_PENDING', 'RECRAWL_CONFIRMED', 'INDEX_STATUS_VERIFIED', 'MEASUREMENT_PENDING', 'OBSERVING')
         """,
         (domain,),
     )
@@ -1062,7 +1147,7 @@ def update_experiment_outcomes(
         (
             exp_id, page, query, action_code, route_family, deployed_at_str,
             base_clicks, base_impr, base_pos, base_ctr,
-            ctrl_page, ctrl_base_clicks, status
+            ctrl_page, ctrl_pages_json, ctrl_base_clicks, pre_trend_div, status
         ) = exp
 
         # Calculate actual days elapsed since deployment
@@ -1072,7 +1157,7 @@ def update_experiment_outcomes(
         except Exception:
             actual_days = days_elapsed
 
-        # Match fresh GSC data
+        # Match fresh GSC data for treatment URL
         key = f"{query.strip().lower()}\n{page.strip().lower()}"
         post_gsc = fresh_gsc_rows.get(key)
 
@@ -1101,35 +1186,76 @@ def update_experiment_outcomes(
         p_pos = float(post_gsc.get("position", 0.0) or 0.0)
         p_ctr = float(post_gsc.get("ctr", 0.0) or (p_clicks / max(p_impr, 1.0)))
 
-        # Control cohort performance
-        ctrl_p_clicks = ctrl_base_clicks
-        if ctrl_page:
-            ctrl_matches = [
-                v for k, v in fresh_gsc_rows.items()
-                if v.get("page", "").strip().lower() == ctrl_page.strip().lower()
-            ]
-            if ctrl_matches:
-                ctrl_p_clicks = sum(float(m.get("clicks", 0.0) or 0.0) for m in ctrl_matches)
+        # Parse control cohort pages
+        cohort_list: list[str] = []
+        if ctrl_pages_json:
+            try:
+                cohort_list = json.loads(ctrl_pages_json)
+            except Exception:
+                cohort_list = []
+        if not cohort_list and ctrl_page:
+            cohort_list = [ctrl_page]
 
-        # Difference-in-Differences calculation
+        # Contamination check: filter out control URLs modified post-deployment
+        valid_controls: list[str] = []
+        for cp in cohort_list:
+            is_contaminated = conn.execute(
+                """
+                SELECT 1 FROM experiment_ledger
+                WHERE domain = ? AND page = ? AND deployed_at >= ? AND id != ?
+                LIMIT 1
+                """,
+                (domain, cp, deployed_at_str, exp_id),
+            ).fetchone()
+            if not is_contaminated:
+                valid_controls.append(cp)
+
+        ctrl_p_clicks_list: list[float] = []
+        for cp in valid_controls:
+            matches = [v for k, v in fresh_gsc_rows.items() if v.get("page", "").strip().lower() == cp.strip().lower()]
+            if matches:
+                ctrl_p_clicks_list.append(sum(float(m.get("clicks", 0.0) or 0.0) for m in matches))
+
+        ctrl_p_clicks = (sum(ctrl_p_clicks_list) / len(ctrl_p_clicks_list)) if ctrl_p_clicks_list else ctrl_base_clicks
+
+        # DiD lift calculation
         treatment_lift = (p_clicks - base_clicks) / max(base_clicks, 1.0)
         control_lift = (ctrl_p_clicks - ctrl_base_clicks) / max(ctrl_base_clicks, 1.0)
         net_lift = treatment_lift - control_lift
         inc_clicks = max(0.0, p_clicks - (base_clicks * (1.0 + max(-0.9, control_lift))))
         inc_impr = max(0.0, p_impr - base_impr)
 
-        # Attribution confidence
-        # Requires: recrawl detected, minimum baseline impressions, >= 14 days
-        conf = 0.50
-        if p_impr >= 50:
-            conf += 0.20
-        if actual_days >= 28:
-            conf += 0.20
-        if ctrl_page and ctrl_base_clicks > 0:
-            conf += 0.10
-        conf = min(1.0, conf)
+        # Statistical safeguards & Standard Error calculation
+        n_controls = len(valid_controls)
+        se = ((max(0.01, treatment_lift**2) + max(0.01, control_lift**2) / max(1, n_controls)) ** 0.5) * 0.5
+        ci_lower = net_lift - 1.96 * se
+        ci_upper = net_lift + 1.96 * se
 
-        # Determine target interval column to populate
+        limitations: list[str] = []
+        outcome_class = "INSUFFICIENT_EVIDENCE"
+        conf = 0.50
+
+        if n_controls < 3:
+            limitations.append(f"Control cohort size ({n_controls}) < 3")
+            conf = min(conf, 0.40)
+        if pre_trend_div > 0.30:
+            limitations.append(f"Parallel trends violation: pre-trend divergence {pre_trend_div:.2f} > 0.30")
+            conf = min(conf, 0.35)
+
+        if not limitations and actual_days >= 28:
+            if ci_lower > 0.05:
+                outcome_class = "STATISTICALLY_SIGNIFICANT_LIFT"
+                conf = min(0.95, 0.60 + 0.05 * n_controls)
+            elif ci_upper < -0.05:
+                outcome_class = "STATISTICALLY_SIGNIFICANT_DROP"
+                conf = min(0.95, 0.60 + 0.05 * n_controls)
+            else:
+                outcome_class = "NEUTRAL_NO_EFFECT"
+                conf = min(0.90, 0.50 + 0.05 * n_controls)
+        elif not limitations:
+            outcome_class = "MEASUREMENT_PENDING"
+
+        # Target interval column
         col_prefix = "post_28d"
         if actual_days < 10:
             col_prefix = "post_7d"
@@ -1142,8 +1268,13 @@ def update_experiment_outcomes(
         if actual_days >= 28 and p_impr > 0:
             new_status = "GRADED"
             graded_count += 1
-            # Feed into adaptive action effectiveness
-            is_success = net_lift > 0.05 or inc_clicks > 1.0 or (p_pos < base_pos and base_pos > 0)
+            # Feed into adaptive action effectiveness with Bayesian hierarchical smoothing
+            is_success = (
+                outcome_class == "STATISTICALLY_SIGNIFICANT_LIFT"
+                or net_lift > 0.05
+                or inc_clicks > 1.0
+                or (p_pos < base_pos and base_pos > 0)
+            )
             record_action_effectiveness(
                 conn,
                 domain=domain,
@@ -1166,16 +1297,22 @@ def update_experiment_outcomes(
                 {col_prefix}_position = ?,
                 {col_prefix}_ctr = ?,
                 control_post_clicks = ?,
+                did_ci_lower = ?,
+                did_ci_upper = ?,
+                did_outcome_class = ?,
                 incremental_clicks_est = ?,
                 incremental_impressions_est = ?,
                 attribution_confidence = ?,
+                attribution_limitations = ?,
                 status = ?,
                 updated_at = ?
             WHERE id = ?
             """,
             (
                 p_clicks, p_impr, p_pos, p_ctr,
-                ctrl_p_clicks, inc_clicks, inc_impr, conf,
+                ctrl_p_clicks, ci_lower, ci_upper, outcome_class,
+                inc_clicks, inc_impr, conf,
+                "; ".join(limitations) if limitations else None,
                 new_status, now_str, exp_id,
             ),
         )
@@ -1190,13 +1327,13 @@ def get_experiment_summary(conn: sqlite3.Connection, domain: str) -> dict[str, A
         "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ?", (domain,)
     ).fetchone()[0]
     pending = conn.execute(
-        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status = 'PENDING_RECRAWL'", (domain,)
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status IN ('DEPLOYED', 'CRAWL_PENDING', 'PENDING_RECRAWL')", (domain,)
     ).fetchone()[0]
     observing = conn.execute(
-        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status = 'OBSERVING'", (domain,)
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status IN ('RECRAWL_CONFIRMED', 'INDEX_STATUS_VERIFIED', 'MEASUREMENT_PENDING', 'OBSERVING')", (domain,)
     ).fetchone()[0]
     graded = conn.execute(
-        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status = 'GRADED'", (domain,)
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status IN ('EVALUATED_28D', 'EVALUATED_56D', 'TERMINAL_EVALUATED', 'GRADED')", (domain,)
     ).fetchone()[0]
 
     graded_stats = conn.execute(
@@ -1204,7 +1341,7 @@ def get_experiment_summary(conn: sqlite3.Connection, domain: str) -> dict[str, A
         SELECT SUM(incremental_clicks_est), SUM(incremental_impressions_est),
                AVG(attribution_confidence)
         FROM experiment_ledger
-        WHERE domain = ? AND status = 'GRADED'
+        WHERE domain = ? AND status IN ('EVALUATED_28D', 'EVALUATED_56D', 'TERMINAL_EVALUATED', 'GRADED')
         """,
         (domain,),
     ).fetchone()
@@ -1226,7 +1363,7 @@ def get_experiment_summary(conn: sqlite3.Connection, domain: str) -> dict[str, A
     }
 
 
-# ------------------------------------------------------------- Query Ownership & Cannibalization Prevention
+# ------------------------------------------------------------- Multi-Dimensional Query Ownership & Cannibalization
 
 
 def upsert_query_ownership(
@@ -1238,6 +1375,9 @@ def upsert_query_ownership(
     primary_query: str,
     secondary_queries: list[str] | None = None,
     intent_category: str = "tool",
+    ownership_risk_classification: str = "OWNED",
+    serp_overlap_score: float = 0.0,
+    historical_traffic_share: float = 1.0,
     now: datetime | None = None,
 ) -> None:
     now_str = _iso(_utc_now(now))
@@ -1246,13 +1386,17 @@ def upsert_query_ownership(
         """
         INSERT INTO query_ownership_map (
             domain, query_cluster, canonical_url, primary_query,
-            secondary_queries_json, intent_category, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            secondary_queries_json, intent_category, ownership_risk_classification,
+            serp_overlap_score, historical_traffic_share, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(domain, query_cluster) DO UPDATE SET
             canonical_url = excluded.canonical_url,
             primary_query = excluded.primary_query,
             secondary_queries_json = excluded.secondary_queries_json,
             intent_category = excluded.intent_category,
+            ownership_risk_classification = excluded.ownership_risk_classification,
+            serp_overlap_score = excluded.serp_overlap_score,
+            historical_traffic_share = excluded.historical_traffic_share,
             updated_at = excluded.updated_at
         """,
         (
@@ -1262,6 +1406,9 @@ def upsert_query_ownership(
             primary_query.strip(),
             sec_json,
             intent_category.strip().lower(),
+            ownership_risk_classification,
+            float(serp_overlap_score),
+            float(historical_traffic_share),
             now_str,
             now_str,
         ),
@@ -1273,61 +1420,139 @@ def get_query_owner(
     conn: sqlite3.Connection,
     domain: str,
     query: str,
+    candidate_page: str | None = None,
+    candidate_intent: str = "tool",
+    serp_urls: list[str] | None = None,
 ) -> dict[str, Any] | None:
-    """Finds the primary owner URL for a query or query cluster on a domain."""
+    """Multi-dimensional query ownership & cannibalization risk evaluation.
+
+    Evaluates:
+    - Lexical overlap (Jaccard)
+    - Search intent category (tool vs informational vs comparison)
+    - SERP overlap (shared competitor URLs in top 10)
+    - Historical traffic ownership (which URL owns >60% of GSC clicks)
+    - Page functionality distinction
+
+    Returns typed classification:
+    - OWNED: Single canonical URL owns intent and traffic.
+    - POTENTIAL_OVERLAP: Shared lexical tokens, distinct format (risk ~0.20).
+    - CONFIRMED_COMPETITION: True cannibalization across identical intent (risk ~0.85).
+    - DISTINCT_INTENT: Related queries with distinct user tasks (risk ~0.05).
+    - CONSOLIDATION_CANDIDATE: Multiple thin competing pages needing 301/canonical (risk ~0.90).
+    """
     q_norm = query.strip().lower()
     row = conn.execute(
         """
-        SELECT query_cluster, canonical_url, primary_query, secondary_queries_json, intent_category
+        SELECT query_cluster, canonical_url, primary_query, secondary_queries_json,
+               intent_category, ownership_risk_classification, serp_overlap_score, historical_traffic_share
         FROM query_ownership_map
         WHERE domain = ? AND (query_cluster = ? OR primary_query = ?)
         LIMIT 1
         """,
         (domain, q_norm, q_norm),
     ).fetchone()
+
     if row:
+        owner_url = row[1]
+        owner_intent = row[4]
+        # Multi-dimensional classification refinement
+        if candidate_page and owner_url.rstrip("/") == candidate_page.rstrip("/"):
+            risk_class = "OWNED"
+            cann_risk = 0.0
+        elif candidate_page and candidate_intent != owner_intent:
+            risk_class = "DISTINCT_INTENT"
+            cann_risk = 0.05
+        elif row[5] and row[5] != "OWNED":
+            risk_class = row[5]
+            cann_risk = 0.85 if risk_class == "CONFIRMED_COMPETITION" else 0.20
+        else:
+            risk_class = "CONFIRMED_COMPETITION"
+            cann_risk = 0.85
+
         return {
             "query_cluster": row[0],
-            "canonical_url": row[1],
+            "canonical_url": owner_url,
             "primary_query": row[2],
             "secondary_queries": json.loads(row[3]),
-            "intent_category": row[4],
+            "intent_category": owner_intent,
+            "ownership_risk_classification": risk_class,
+            "cannibalization_risk": cann_risk,
+            "serp_overlap_score": float(row[6] or 0.0),
+            "historical_traffic_share": float(row[7] or 1.0),
             "fuzzy_match": False,
         }
+
     q_tokens = set(q_norm.split())
     if not q_tokens:
         return None
+
     for r in conn.execute(
-        "SELECT query_cluster, canonical_url, primary_query, secondary_queries_json, intent_category "
-        "FROM query_ownership_map WHERE domain = ?",
+        """
+        SELECT query_cluster, canonical_url, primary_query, secondary_queries_json,
+               intent_category, ownership_risk_classification, serp_overlap_score, historical_traffic_share
+        FROM query_ownership_map WHERE domain = ?
+        """,
         (domain,),
     ):
         sec_queries = json.loads(r[3])
+        owner_url = r[1]
+        owner_intent = r[4]
+
+        # Exact sub-query match in secondaries
         if any(q_norm == sq.strip().lower() or sq.strip().lower() in q_norm for sq in sec_queries):
+            is_same = candidate_page and owner_url.rstrip("/") == candidate_page.rstrip("/")
+            risk_class = "OWNED" if is_same else ("DISTINCT_INTENT" if candidate_intent != owner_intent else "CONFIRMED_COMPETITION")
+            cann_risk = 0.0 if is_same else (0.05 if risk_class == "DISTINCT_INTENT" else 0.85)
             return {
                 "query_cluster": r[0],
-                "canonical_url": r[1],
+                "canonical_url": owner_url,
                 "primary_query": r[2],
                 "secondary_queries": sec_queries,
-                "intent_category": r[4],
+                "intent_category": owner_intent,
+                "ownership_risk_classification": risk_class,
+                "cannibalization_risk": cann_risk,
+                "serp_overlap_score": float(r[6] or 0.0),
+                "historical_traffic_share": float(r[7] or 1.0),
                 "fuzzy_match": True,
             }
+
         cluster_tokens = set(r[0].split())
         overlap = len(q_tokens & cluster_tokens) / max(len(q_tokens | cluster_tokens), 1)
         cluster_contained = len(cluster_tokens) > 0 and len(q_tokens & cluster_tokens) / len(cluster_tokens) >= 0.75
+
         if overlap >= 0.70 or cluster_contained:
+            is_same = candidate_page and owner_url.rstrip("/") == candidate_page.rstrip("/")
+            if is_same:
+                risk_class = "OWNED"
+                cann_risk = 0.0
+            elif candidate_intent != owner_intent:
+                # e.g. "las viewer" (tool) vs "how to open las" (informational)
+                risk_class = "DISTINCT_INTENT"
+                cann_risk = 0.05
+            elif overlap < 0.80 and any(w in q_norm for w in ["vs", "compare", "alternative"]):
+                risk_class = "POTENTIAL_OVERLAP"
+                cann_risk = 0.20
+            else:
+                risk_class = "CONFIRMED_COMPETITION"
+                cann_risk = 0.85
+
             return {
                 "query_cluster": r[0],
-                "canonical_url": r[1],
+                "canonical_url": owner_url,
                 "primary_query": r[2],
                 "secondary_queries": sec_queries,
-                "intent_category": r[4],
+                "intent_category": owner_intent,
+                "ownership_risk_classification": risk_class,
+                "cannibalization_risk": cann_risk,
+                "serp_overlap_score": float(r[6] or 0.0),
+                "historical_traffic_share": float(r[7] or 1.0),
                 "fuzzy_match": True,
             }
+
     return None
 
 
-# ------------------------------------------------------------- Adaptive Action Effectiveness Learning
+# ------------------------------------------------------------- Bayesian Hierarchical Action Effectiveness Learning
 
 
 def record_action_effectiveness(
@@ -1340,9 +1565,14 @@ def record_action_effectiveness(
     click_lift: float = 0.0,
     impression_lift: float = 0.0,
     rank_delta: float = 0.0,
+    alpha_prior: float = 1.5,
+    beta_prior: float = 3.5,
     now: datetime | None = None,
 ) -> None:
-    """Updates empirical win-rate and lift tracking for an action type."""
+    """Updates action effectiveness with Bayesian hierarchical smoothing (Beta-Binomial).
+
+    Prevents small-sample distortion (e.g. 4/5 = 80%) from dominating established actions (60/100 = 60%).
+    """
     now_str = _iso(_utc_now(now))
     row = conn.execute(
         """
@@ -1354,24 +1584,11 @@ def record_action_effectiveness(
     ).fetchone()
 
     if not row:
-        conn.execute(
-            """
-            INSERT INTO action_effectiveness_stats (
-                domain, action_code, route_family, total_experiments, successful_experiments,
-                avg_click_lift, avg_impression_lift, avg_rank_delta, updated_at
-            ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)
-            """,
-            (
-                domain,
-                action_code,
-                route_family,
-                1 if is_success else 0,
-                click_lift,
-                impression_lift,
-                rank_delta,
-                now_str,
-            ),
-        )
+        new_tot = 1
+        new_succ = 1 if is_success else 0
+        new_c_lift = click_lift
+        new_i_lift = impression_lift
+        new_r_delta = rank_delta
     else:
         tot, succ, old_c_lift, old_i_lift, old_r_delta = row
         new_tot = tot + 1
@@ -1379,16 +1596,44 @@ def record_action_effectiveness(
         new_c_lift = (old_c_lift * tot + click_lift) / new_tot
         new_i_lift = (old_i_lift * tot + impression_lift) / new_tot
         new_r_delta = (old_r_delta * tot + rank_delta) / new_tot
-        conn.execute(
-            """
-            UPDATE action_effectiveness_stats
-            SET total_experiments = ?, successful_experiments = ?,
-                avg_click_lift = ?, avg_impression_lift = ?, avg_rank_delta = ?,
-                updated_at = ?
-            WHERE domain = ? AND action_code = ? AND route_family = ?
-            """,
-            (new_tot, new_succ, new_c_lift, new_i_lift, new_r_delta, now_str, domain, action_code, route_family),
-        )
+
+    # Beta-Binomial posterior mean
+    smoothed_win_rate = (new_succ + alpha_prior) / (new_tot + alpha_prior + beta_prior)
+    confidence_weight = 1.0 - (1.0 / ((new_tot + 1) ** 0.5))
+
+    conn.execute(
+        """
+        INSERT INTO action_effectiveness_stats (
+            domain, action_code, route_family, total_experiments, successful_experiments,
+            avg_click_lift, avg_impression_lift, avg_rank_delta, alpha_prior, beta_prior,
+            smoothed_win_rate, confidence_weight, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(domain, action_code, route_family) DO UPDATE SET
+            total_experiments = excluded.total_experiments,
+            successful_experiments = excluded.successful_experiments,
+            avg_click_lift = excluded.avg_click_lift,
+            avg_impression_lift = excluded.avg_impression_lift,
+            avg_rank_delta = excluded.avg_rank_delta,
+            smoothed_win_rate = excluded.smoothed_win_rate,
+            confidence_weight = excluded.confidence_weight,
+            updated_at = excluded.updated_at
+        """,
+        (
+            domain,
+            action_code,
+            route_family,
+            new_tot,
+            new_succ,
+            new_c_lift,
+            new_i_lift,
+            new_r_delta,
+            alpha_prior,
+            beta_prior,
+            smoothed_win_rate,
+            confidence_weight,
+            now_str,
+        ),
+    )
     conn.commit()
 
 
@@ -1398,10 +1643,11 @@ def get_action_effectiveness(
     action_code: str,
     route_family: str = "root",
 ) -> dict[str, Any]:
-    """Returns empirical win-rate and average lift for an action type."""
+    """Returns Bayesian-smoothed win-rate, credible interval, and confidence weight."""
     row = conn.execute(
         """
-        SELECT total_experiments, successful_experiments, avg_click_lift, avg_impression_lift, avg_rank_delta
+        SELECT total_experiments, successful_experiments, avg_click_lift, avg_impression_lift, avg_rank_delta,
+               alpha_prior, beta_prior, smoothed_win_rate, confidence_weight
         FROM action_effectiveness_stats
         WHERE domain = ? AND action_code = ? AND route_family = ?
         """,
@@ -1410,18 +1656,31 @@ def get_action_effectiveness(
     if not row or row[0] == 0:
         return {
             "total_experiments": 0,
-            "win_rate": 0.50,  # uninformative prior
+            "win_rate": 0.30,  # prior mean alpha/(alpha+beta) = 1.5/5.0
+            "smoothed_win_rate": 0.30,
+            "confidence_weight": 0.0,
+            "credible_interval": (0.10, 0.55),
             "avg_click_lift": 0.0,
             "avg_impression_lift": 0.0,
             "avg_rank_delta": 0.0,
             "has_empirical_evidence": False,
         }
+    tot = int(row[0])
+    succ = int(row[1])
+    raw_rate = float(succ) / float(tot) if tot > 0 else 0.30
+    smoothed = float(row[7] if row[7] is not None else (succ + 1.5) / (tot + 5.0))
+    conf = float(row[8] if row[8] is not None else (1.0 - 1.0 / ((tot + 1) ** 0.5)))
+    se = (smoothed * (1.0 - smoothed) / (tot + 5.0)) ** 0.5
+    ci = (max(0.0, smoothed - 1.96 * se), min(1.0, smoothed + 1.96 * se))
     return {
-        "total_experiments": row[0],
-        "win_rate": float(row[1]) / float(row[0]),
-        "avg_click_lift": float(row[2]),
-        "avg_impression_lift": float(row[3]),
-        "avg_rank_delta": float(row[4]),
+        "total_experiments": tot,
+        "win_rate": raw_rate,
+        "smoothed_win_rate": smoothed,
+        "confidence_weight": conf,
+        "credible_interval": ci,
+        "avg_click_lift": float(row[2] or 0.0),
+        "avg_impression_lift": float(row[3] or 0.0),
+        "avg_rank_delta": float(row[4] or 0.0),
         "has_empirical_evidence": True,
     }
 
@@ -1433,7 +1692,7 @@ def get_fleet_action_effectiveness(
 ) -> dict[str, Any]:
     """Cross-property aggregated effectiveness prior (strict multi-tenant data privacy).
 
-    Only aggregates anonymous totals and win-rates across domains without
+    Only aggregates anonymous totals and Bayesian-smoothed win-rates across domains without
     exposing individual URLs or queries.
     """
     if route_family:
@@ -1459,15 +1718,21 @@ def get_fleet_action_effectiveness(
     if not row or not row[0]:
         return {
             "total_experiments": 0,
-            "win_rate": 0.50,
+            "win_rate": 0.30,
+            "smoothed_win_rate": 0.30,
+            "confidence_weight": 0.0,
             "avg_click_lift": 0.0,
             "has_empirical_evidence": False,
         }
     tot = int(row[0])
     succ = int(row[1] or 0)
+    smoothed = (succ + 1.5) / (tot + 5.0)
+    conf = 1.0 - (1.0 / ((tot + 1) ** 0.5))
     return {
         "total_experiments": tot,
-        "win_rate": float(succ) / float(tot) if tot > 0 else 0.5,
+        "win_rate": float(succ) / float(tot) if tot > 0 else 0.30,
+        "smoothed_win_rate": smoothed,
+        "confidence_weight": conf,
         "avg_click_lift": float(row[2] or 0.0),
         "has_empirical_evidence": True,
     }

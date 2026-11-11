@@ -32,6 +32,7 @@ from fleet_state import (
     get_experiment_summary,
     get_fleet_action_effectiveness,
     load_gsc_snapshot,
+    record_gsc_exposure,
     update_experiment_outcomes,
     update_experiment_recrawl,
 )
@@ -107,17 +108,53 @@ def evaluate_domain_experiments(
     conn: Any,
     domain: str,
     fresh_gsc_rows: dict[str, dict[str, Any]] | None = None,
+    verified_crawl_evidence: dict[str, dict[str, Any]] | set[str] | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Runs evaluation for a domain's experiments, detects recrawls, and calculates lift."""
+    """Runs evaluation for a domain's experiments, distinguishes exposure from recrawls, and calculates DiD lift."""
+    # 1. Process GSC impressions as exposure evidence (CRITICAL: NOT recrawl confirmation)
     if fresh_gsc_rows:
-        # Detect recrawls from pages that have impressions
-        pages_seen = {
+        pages_with_impressions = {
             v.get("page", "").strip()
             for v in fresh_gsc_rows.values()
             if float(v.get("impressions", 0.0) or 0.0) > 0
         }
-        update_experiment_recrawl(conn, domain, pages_seen, now=now)
+        record_gsc_exposure(conn, domain, pages_with_impressions, now=now)
+
+    # 2. Check for independently verified crawl evidence
+    crawl_proof: dict[str, dict[str, Any]] = {}
+    if verified_crawl_evidence:
+        if isinstance(verified_crawl_evidence, dict):
+            crawl_proof.update(verified_crawl_evidence)
+        elif isinstance(verified_crawl_evidence, set):
+            for p in verified_crawl_evidence:
+                crawl_proof[p] = {"evidence_type": "verified_googlebot_log"}
+
+    # Also check stored URL inspection records in state DB
+    try:
+        cur = conn.execute(
+            """
+            SELECT url, last_crawl_time, coverage_state FROM url_inspections
+            WHERE (site = ? OR site LIKE ?) AND last_crawl_time IS NOT NULL
+            """,
+            (domain, f"%{domain}%"),
+        )
+        for r in cur.fetchall():
+            u, last_crawl, cov = r
+            if u not in crawl_proof:
+                crawl_proof[u] = {
+                    "evidence_type": "url_inspection",
+                    "last_crawl_time": last_crawl,
+                    "coverage_state": cov,
+                }
+    except Exception:
+        pass
+
+    if crawl_proof:
+        update_experiment_recrawl(conn, domain, crawl_proof, now=now)
+
+    # 3. Evaluate Difference-in-Differences outcomes
+    if fresh_gsc_rows:
         outcomes_result = update_experiment_outcomes(conn, domain, fresh_gsc_rows, now=now)
     else:
         outcomes_result = {"graded": 0, "observing": 0}

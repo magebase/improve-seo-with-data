@@ -107,10 +107,10 @@ def compute_opportunity_intelligence(
     conn: Any = None,
     domain: str | None = None,
 ) -> dict[str, Any]:
-    """Computes economic expected value (EV), cannibalization risk, confidence, and decision class.
+    """Computes calibrated economic expected value (EV), cannibalization risk, confidence, and decision class.
 
-    EV = P(indexing) * P(ranking_improvement) * delta_clicks * V(conversion)
-    Priority Score = (EV * (1 - CannibalizationRisk) * Confidence) / Effort
+    EV(a) = P(success) * IncrementalBusinessValue - ImplementationCost - ExpectedRiskCost
+    Priority Score = (max(0.01, EV(a)) * Confidence) / ImplementationCost
     """
     feats = row.get("features") or {}
     cur_pos = float(feats.get("current_pos", 100.0) or 100.0)
@@ -118,22 +118,39 @@ def compute_opportunity_intelligence(
     clicks = float(row.get("clicks_30d", 0.0) or feats.get("clicks_30d", 0.0) or 0.0)
     page = str(row.get("page") or "")
     query = str(row.get("query") or "")
+    action = str(row.get("prescribed_action") or "INJECT_SECONDARY_H2_ONLY")
+    route_family = str(row.get("route_family") or "root")
 
-    # 1. P(indexing)
-    is_existing = cur_pos < 90.0 or not page.endswith("-to-/")
-    p_index = 0.95 if is_existing else 0.70
+    # 1. P(success) calibrated from empirical Bayesian stats or fleet prior
+    p_success = 0.30
+    conf_stat = 0.0
+    if conn and domain:
+        try:
+            from fleet_state import get_action_effectiveness
+            eff = get_action_effectiveness(conn, domain, action, route_family)
+            if eff.get("has_empirical_evidence"):
+                p_success = float(eff.get("smoothed_win_rate", 0.30))
+                conf_stat = float(eff.get("confidence_weight", 0.0))
+            else:
+                # Fall back to cross-fleet prior
+                from fleet_state import get_fleet_action_effectiveness
+                fleet_eff = get_fleet_action_effectiveness(conn, action, route_family)
+                p_success = float(fleet_eff.get("smoothed_win_rate", 0.30))
+        except Exception:
+            pass
 
-    # 2. P(ranking_improvement)
-    if 4.0 <= cur_pos <= 15.0:
-        p_rank = 0.75  # striking distance high leverage
-    elif cur_pos < 4.0:
-        p_rank = 0.25  # already top, CTR focus
-    elif 15.0 < cur_pos <= 30.0:
-        p_rank = 0.45
-    else:
-        p_rank = 0.25
+    # Position-adjusted calibration if no empirical history exists
+    if conf_stat == 0.0:
+        if 4.0 <= cur_pos <= 15.0:
+            p_success = 0.45  # striking distance benchmark
+        elif cur_pos < 4.0:
+            p_success = 0.35  # CTR optimization
+        elif 15.0 < cur_pos <= 30.0:
+            p_success = 0.25
+        else:
+            p_success = 0.15
 
-    # 3. Delta Clicks estimation via mathematical CTR curve
+    # 2. Incremental Clicks estimation via mathematical CTR curve
     cur_ctr = clicks / max(impr, 1.0)
     if cur_pos < 4.0:
         target_ctr = min(0.35, cur_ctr * 1.4 + 0.05)
@@ -145,60 +162,72 @@ def compute_opportunity_intelligence(
         target_ctr = 0.02
     delta_clicks = max(0.2, impr * max(0.005, target_ctr - cur_ctr))
 
-    # 4. Conversion Value
+    # 3. Conversion Probability & Value distinction
     q_lower = query.lower()
-    high_intent = ("convert", "viewer", "calculator", "tool", "pricing", "compare", "generator", "format")
-    v_conv = 1.5 if any(tok in q_lower for tok in high_intent) else 1.0
-
-    # 5. Raw Expected Value
-    ev = p_index * p_rank * delta_clicks * v_conv
-
-    # 6. Implementation Effort
-    action = str(row.get("prescribed_action") or "INJECT_SECONDARY_H2_ONLY")
-    if "CONSOLIDATE" in action:
-        effort = 3.0
-    elif "CREATE" in action or "LAUNCH" in action:
-        effort = 2.0
+    if any(tok in q_lower for tok in ("convert", "viewer", "calculator", "tool")):
+        p_conv = 0.05
+    elif any(tok in q_lower for tok in ("compare", "vs", "alternative")):
+        p_conv = 0.035
+    elif any(tok in q_lower for tok in ("directory", "list", "formats")):
+        p_conv = 0.02
     else:
-        effort = 1.0
+        p_conv = 0.015
 
-    # 7. Cannibalization Risk from Query Ownership Map
+    value_per_conversion = 10.0  # standard conversion value prior ($)
+    incremental_business_value = delta_clicks * p_conv * value_per_conversion
+
+    # 4. Implementation Cost in resource value ($)
+    if "CREATE" in action or "LAUNCH" in action:
+        implementation_cost = 125.0  # 2.5 hours @ $50/hr
+    elif "ADD_D1_SPEC" in action:
+        implementation_cost = 62.5   # 1.25 hours
+    elif "INJECT" in action:
+        implementation_cost = 25.0   # 0.5 hours
+    else:
+        implementation_cost = 12.5   # 0.25 hours
+
+    # 5. Multi-dimensional Query Ownership & Cannibalization Risk
     cann_risk = 0.0
     if conn and domain:
         try:
             from fleet_state import get_query_owner
-            owner = get_query_owner(conn, domain, query)
-            if owner:
-                owner_url = str(owner.get("canonical_url", "")).rstrip("/")
-                if owner_url and owner_url != page.rstrip("/"):
-                    if owner.get("intent_category") == "tool" and ("convert" in page or "studio" in page):
-                        cann_risk = 0.85
-                    else:
-                        cann_risk = 0.35
+            owner_info = get_query_owner(conn, domain, query, candidate_page=page)
+            if owner_info:
+                cann_risk = float(owner_info.get("cannibalization_risk", 0.0))
         except Exception:
             pass
 
-    # 8. Confidence in Available Evidence
-    confidence = 0.60
+    # Expected Risk Cost ($)
+    expected_risk_cost = cann_risk * (clicks * 1.0)
+
+    # 6. Economic Expected Value EV(a)
+    ev = (p_success * incremental_business_value) - implementation_cost - expected_risk_cost
+
+    # 7. Confidence Score in Available Telemetry
+    confidence = 0.50
     if impr >= 100:
         confidence += 0.20
     elif impr >= 20:
         confidence += 0.10
     if clicks >= 3:
-        confidence += 0.20
+        confidence += 0.15
+    if conf_stat > 0.0:
+        confidence += 0.15 * conf_stat
     confidence = min(1.0, confidence)
 
-    # 9. Priority Score
-    priority_score = (ev * (1.0 - cann_risk) * confidence) / effort
+    # 8. Priority Score
+    priority_score = (max(0.01, ev if ev > 0 else (delta_clicks * p_success)) * (1.0 - cann_risk) * confidence) / (implementation_cost / 50.0)
 
-    # 10. Explicit Decision Classes: SHIP, EXPERIMENT, OBSERVE, NO_ACTION
+    # 9. Explicit Decision Classes: SHIP, EXPERIMENT, OBSERVE, NO_ACTION
     if cann_risk >= 0.75:
         decision_class = "NO_ACTION"
+    elif cur_pos <= 3.0 and cur_ctr >= target_ctr:
+        decision_class = "NO_ACTION"  # Protect winners
     elif impr < 10 and cur_pos > 30.0:
         decision_class = "OBSERVE"
-    elif priority_score >= 2.0:
+    elif priority_score >= 1.5 and cann_risk < 0.40 and confidence >= 0.40:
         decision_class = "SHIP"
-    elif priority_score >= 0.6:
+    elif priority_score >= 0.4:
         decision_class = "EXPERIMENT"
     else:
         decision_class = "OBSERVE"

@@ -684,4 +684,82 @@ No autonomous SEO wave may be marked complete without an authoritative, auditabl
 3. **Standardized Evidence & Rigor Standard:**
    Different websites produce different technical and content tasks, but **never different standards of evidence or completeness**. Every wave across all fleet domains (`incomecanvas.com`, `openfileconverter.com`, `smsriver.com`, `figiva.com`) must produce reports meeting this identical contract.
 
+---
+
+## 13. Outcome-Driven SEO Engine v2.1: Critical Refinements
+
+Based on empirical findings and adversarial review, version 2.1 introduces seven foundational mathematical and state-machine refinements.
+
+### 13.1 P0 — Correct Experiment Recrawl State & Independent Exposure Tracking
+- **The Core Distinction:** Fresh Google Search Console impressions reflect Google's *cached representation* of a URL, NOT proof that Googlebot has recrawled and processed newly deployed code or content changes.
+- **Explicit Experiment State Transitions:**
+  ```
+  DEPLOYED -> CRAWL_PENDING -> RECRAWL_CONFIRMED -> INDEX_STATUS_VERIFIED -> MEASUREMENT_PENDING -> EVALUATED_28D -> EVALUATED_56D -> TERMINAL_EVALUATED
+  ```
+- **Recrawl Evidence Requirements:**
+  - `url_inspection`: GSC URL Inspection API `lastCrawlTime > deployed_at`.
+  - `verified_googlebot_log`: Reverse-DNS verified Googlebot access log timestamp $> \text{deployed\_at}$.
+- **Exposure Detection:** GSC impressions before verified recrawl populate `exposure_detected_at` but leave `status = 'CRAWL_PENDING'`.
+
+### 13.2 P0 — Calibrated Bayesian Economic Expected Value (EV) Model
+Replaces arbitrary point probabilities ($0.75$, $0.25$) and arbitrary multipliers with an empirical Bayesian decision framework:
+\\[ EV(a) = \\hat{P}(\\text{success}) \\times \\text{IncrementalBusinessValue} - \\text{ImplementationCost} - \\text{ExpectedRiskCost} \\]
+- **Bayesian Smoothed Success Probability:**
+  \\[ \\hat{P}(\\text{success}) = \\frac{\\text{successes} + \\alpha}{\\text{total} + \\alpha + \\beta} \\times P(\\text{rank}) \\]
+  Where position prior $P(\\text{rank})$ is:
+  - Striking distance (pos 4.0–15.0): $0.45$
+  - Top 3 (pos 1.0–3.0): $0.35$ (protecting high CTR from volatile shifts)
+  - Second-tier tail (pos 15.0–30.0): $0.25$
+  - Deep tail (pos $>30.0$): $0.15$
+- **Intent-Specific Conversion Probabilities:**
+  - Interactive tools / converters / calculators: $P(\\text{conv}) = 0.05$
+  - Format comparison / spec sheets: $P(\\text{conv}) = 0.035$
+  - Editorial / informational guides: $P(\\text{conv}) = 0.015$
+- **Explicit Economic Costs:**
+  - Implementation cost: standard \$50/hr normalized against action complexity.
+  - Expected risk cost: $\\text{CannibalizationRisk} \\times \\text{BaselineClicks} \\times \\text{ValuePerClick}$.
+
+### 13.3 P0 — Difference-in-Differences (DiD) Statistical Safeguards
+To guarantee genuine causal attribution rather than macro-seasonal coincidence:
+1. **Minimum Control Cohort Size:** Requires $N_c \\ge 3$ matched sibling URLs in the same route family. If $N_c < 3$, status is classified as `INSUFFICIENT_EVIDENCE` and attribution confidence is capped ($\le 0.40$).
+2. **Pre-Treatment Parallel Trends Validation:** Evaluates pre-treatment slope divergence ($[-56d, -28d]$ vs $[-28d, 0d]$). Divergence $> 0.30$ triggers a parallel trends violation limitation.
+3. **Contamination Defense:** Controls modified post-treatment are dynamically excluded from the valid control set.
+4. **Statistical Uncertainty & Confidence Intervals:** Reports standard errors and 95% confidence intervals (`did_ci_lower`, `did_ci_upper`). Statistically significant lift requires `did_ci_lower > 0.05`.
+
+### 13.4 P1 — Multi-Dimensional Query Ownership & Risk Scoring
+Replaces single-metric token containment with multi-dimensional classification:
+- **`OWNED`:** Single canonical URL owns intent, functional elements, and $>60\%$ of historical traffic. Cannibalization risk: $0.0$.
+- **`POTENTIAL_OVERLAP`:** Shared lexical tokens, distinct format (risk $\\sim 0.20$).
+- **`CONFIRMED_COMPETITION`:** Multiple URLs targeting identical user intent without functional distinction (risk $\\sim 0.85$).
+- **`DISTINCT_INTENT`:** Related queries with fundamentally different user tasks (e.g. `las point cloud viewer` vs `las to xyz converter`). Low risk ($\le 0.15$).
+- **`CONSOLIDATION_CANDIDATE`:** Multiple thin competing pages requiring 301-redirect or canonical consolidation (risk $\\sim 0.90$).
+
+### 13.5 P1 — Page-Type-Specific Content Quality & Usefulness Gate
+- **Dynamic Word Count Baselines:**
+  - Interactive Tools & Calculators: $40$ words minimum (with verified functional elements).
+  - Technical Comparisons: $150$ words minimum.
+  - Directories & Hubs: $50$ words minimum.
+  - Editorial & Guides: $200$ words minimum.
+- **Boilerplate Stripping:** `<header>`, `<nav>`, `<footer>`, `<dialog>`, and search forms are stripped before computing 3-shingle Jaccard distinctiveness against sibling pages.
+- **Broadened Authority Claim Provenance:** Automatically recognizes and verifies government regulations (IRS, IRC, CFR, ACA), tax years, standard jurisdictions (US, UK, EU, CA), and official technical specifications (ISO, ASPRS, RFC, W3C, NIST).
+
+### 13.6 P1 — Technical SEO 10-Point Gate & Soft-404 Detection
+1. **HTTP Status & Soft-404:** Rejects HTTP 200 responses containing soft-404 signatures (`"404 not found"`, `"page not found"`, `"tool unavailable"`).
+2. **Desktop Title Pixel Geometry:** Titles exceeding $580\\text{px}$ produce an advisory `WARNING`, never a fatal deployment-blocking error.
+3. **Functional Utility:** Tools must render interactive inputs, canvas, dropzones, or tables.
+4. **Crawlable Internal Links:** Requires $\\ge 2$ crawlable relative internal links.
+5. **Mobile Viewport & Structured Data:** Standard valid viewport and syntax-checked JSON-LD.
+
+### 13.7 P1 — Uncertainty-Aware Beta-Binomial Fleet Learning
+Replaces naive win ratios ($4/5 = 80\%$) with Beta-Binomial Bayesian smoothing:
+\\[ \\text{WinRate}_{\\text{smoothed}} = \\frac{\\text{successes} + \\alpha}{\\text{total} + \\alpha + \\beta} \\]
+- Weighted by confidence: $\\text{ConfidenceWeight} = \\min(1.0, \\sqrt{\\text{total} / 25})$.
+- Prevents small exploratory samples from displacing high-evidence established actions ($60/100$) in backlog ranking.
+
+### 13.8 Standardized Wave Changelog Generation
+- Generated via `scripts/generate_wave_changelog.py`.
+- Reconciles Git diffs (`git show --name-status`, `git show --stat`), task backlog cursor (`fleet_state.db`), and edge re-warm receipts (`improve_seo_rewarm.py`).
+- Embeds all 20 required audit dimensions cleanly across the 8 mandatory top-level headings checked by `scripts/validate_wave_close.py`.
+
+
 
