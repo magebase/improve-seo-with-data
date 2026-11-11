@@ -329,8 +329,8 @@ def test_validate_wave_close_rejects_missing_task_ids(valid_report_markdown):
 
 
 def test_validate_wave_close_cli_version():
-    """Verifies validate_wave_close.py reports v2.2.0 via CLI."""
+    """Verifies validate_wave_close.py reports v2.2.1 via CLI."""
     import subprocess
     cmd = [sys.executable, str(SCRIPTS_DIR / "validate_wave_close.py"), "--version"]
     res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    assert "validate_wave_close.py v2.2.0" in res.stdout
+    assert "validate_wave_close.py v2.2.1" in res.stdout

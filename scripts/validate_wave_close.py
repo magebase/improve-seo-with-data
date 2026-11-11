@@ -35,7 +35,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-VERSION = "2.2.0"
+VERSION = "2.2.1"
 
 MANDATORY_SECTIONS = [
     ("Executive Summary & Two-Part Scorecard", re.compile(r"##\s*1\.\s*Executive Summary.*Scorecard", re.IGNORECASE)),
@@ -119,6 +119,7 @@ def validate_report_content(
     allow_measured_seo: bool = False,
     allow_worker_placeholder: bool = False,
     allow_dirty: bool = False,
+    waiver_reason: str | None = None,
 ) -> tuple[bool, list[str], list[str]]:
     """Validate report text against mandatory contract rules.
 
@@ -169,13 +170,24 @@ def validate_report_content(
     commit_match = re.search(r"\*\*(?:Repository Commit|Integration Commit SHA):\*\*\s*\[?`?([a-f0-9]{7,40})`?\]?", content, re.IGNORECASE)
     reported_commit = commit_match.group(1) if commit_match else commit_sha
     if repo_path:
-        # Git worktree clean check
+        # Git worktree clean check (v2.2.1 P1)
         if not allow_dirty:
             is_clean, dirty_status = check_git_worktree_clean(repo_path)
             if not is_clean:
                 errors.append(
                     f"Git worktree dirty check failed: Repository {repo_path} contains uncommitted changes or untracked files:\n"
                     f"{dirty_status[:200]}\nWorking tree must be clean before wave close."
+                )
+        else:
+            is_clean, dirty_status = check_git_worktree_clean(repo_path)
+            if not is_clean:
+                if not waiver_reason or not str(waiver_reason).strip():
+                    errors.append(
+                        "Waiver requirement violation (v2.2.1 P1): --allow-dirty requires an explicit --waiver-reason "
+                        "explaining why uncommitted changes or dirty worktree were permitted during wave close."
+                    )
+                warnings.append(
+                    f"Worktree waiver applied ({waiver_reason or 'unspecified'}). Affected dirty/untracked files:\n{dirty_status[:300]}"
                 )
 
         if reported_commit:
@@ -237,6 +249,24 @@ def validate_report_content(
                     f"calculated weighted score {rounded_calc}."
                 )
 
+    # 7.5. Deployment & Re-warm Arithmetic Reconciliation (v2.2.1 P0.1)
+    # Checks for patterns like "X / Y paths (100% 200 OK)" or "X/Y ... 100%"
+    # Enforces: if successful < total, it is mathematically forbidden to claim 100% success.
+    rewarm_matches = re.finditer(
+        r"(\d+)\s*/\s*(\d+)\s*(?:paths|routes)?\s*(?:\([^\)]*?(\d+(?:\.\d+)?)\s*%\s*(?:200\s*OK)?\)|re-warmed)?",
+        content,
+        re.IGNORECASE,
+    )
+    for rm in rewarm_matches:
+        succ = int(rm.group(1))
+        total = int(rm.group(2))
+        pct_claim = float(rm.group(3)) if rm.group(3) else None
+        if total > 0 and succ < total and pct_claim is not None and pct_claim >= 99.9:
+            errors.append(
+                f"Deployment Arithmetic Discrepancy (v2.2.1 P0.1): Claimed {pct_claim}% success on {succ}/{total} paths. "
+                f"Mathematical rule: {succ}/{total} = {(succ/total)*100.0:.2f}%. Cannot claim 100% when successful < total."
+            )
+
     # 8. Domain and Wave Header check
     if domain:
         if domain.lower() not in content.lower():
@@ -279,6 +309,7 @@ def validate_wave_close(
     allow_measured_seo: bool = False,
     allow_worker_placeholder: bool = False,
     allow_dirty: bool = False,
+    waiver_reason: str | None = None,
 ) -> tuple[bool, list[str], list[str]]:
     """Validate report file existence and content against database backlog state."""
     path = Path(report_path)
@@ -315,6 +346,7 @@ def validate_wave_close(
         allow_measured_seo=allow_measured_seo,
         allow_worker_placeholder=allow_worker_placeholder,
         allow_dirty=allow_dirty,
+        waiver_reason=waiver_reason,
     )
 
 
@@ -330,8 +362,12 @@ def main() -> int:
     parser.add_argument("--allow-measured-seo", action="store_true", help="Allow numerical Part 2 SEO score (post-28d)")
     parser.add_argument("--allow-worker-placeholder", action="store_true", help="Allow placeholder worker version")
     parser.add_argument("--allow-dirty", action="store_true", help="Allow uncommitted changes in git worktree")
+    parser.add_argument("--waiver-reason", default=None, help="Explicit reason required when using --allow-dirty")
     parser.add_argument("--strict", action="store_true", help="Fail if any warnings exist")
     args = parser.parse_args()
+
+    if args.allow_dirty and not args.waiver_reason:
+        parser.error("--allow-dirty requires an explicit --waiver-reason explaining why dirty worktree was permitted.")
 
     passed, errors, warnings = validate_wave_close(
         report_path=args.report,
@@ -343,6 +379,7 @@ def main() -> int:
         allow_measured_seo=args.allow_measured_seo,
         allow_worker_placeholder=args.allow_worker_placeholder,
         allow_dirty=args.allow_dirty,
+        waiver_reason=args.waiver_reason,
     )
 
     print(f"=== Wave-Close Verification: {args.report} ===")

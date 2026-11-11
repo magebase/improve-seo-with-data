@@ -221,13 +221,14 @@ def compute_opportunity_intelligence(
     # 5. Implementation Cost in resource value ($)
     labor_rate = cfg.labor_hourly_rate
     if "CREATE" in action or "LAUNCH" in action:
-        implementation_cost = 2.5 * labor_rate   # 2.5 hours
+        labor_hours = 2.5
     elif "ADD_D1_SPEC" in action:
-        implementation_cost = 1.25 * labor_rate  # 1.25 hours
+        labor_hours = 1.25
     elif "INJECT" in action:
-        implementation_cost = 0.5 * labor_rate   # 0.5 hours
+        labor_hours = 0.5
     else:
-        implementation_cost = 0.25 * labor_rate  # 0.25 hours
+        labor_hours = 0.25
+    implementation_cost = labor_hours * labor_rate
 
     # 6. Multi-dimensional Query Ownership & Cannibalization Risk
     cann_risk = 0.0
@@ -245,6 +246,22 @@ def compute_opportunity_intelligence(
 
     # 7. Economic Expected Value EV(a)
     ev = (p_success * incremental_business_value) - implementation_cost - expected_risk_cost
+
+    # EV Decomposition (v2.2.1 P0.2)
+    ev_decomposition = {
+        "expected_delta_clicks": round(delta_clicks, 4),
+        "conversion_rate": round(p_conv, 4),
+        "value_per_conversion": round(cfg.value_per_conversion, 2),
+        "time_horizon_days": cfg.time_horizon_days,
+        "gross_business_value": round(incremental_business_value, 4),
+        "labor_hours": round(labor_hours, 2),
+        "labor_hourly_rate": round(labor_rate, 2),
+        "implementation_labor_cost": round(implementation_cost, 4),
+        "cannibalization_risk": round(cann_risk, 4),
+        "expected_risk_cost": round(expected_risk_cost, 4),
+        "posterior_success_probability": round(p_success, 4),
+        "net_expected_value": round(ev, 4),
+    }
 
     # 8. Telemetry Confidence and Decision Confidence
     telemetry_conf = 0.50
@@ -287,17 +304,57 @@ def compute_opportunity_intelligence(
         "model_type": "bayesian_smoothed_empirical" if not is_cold_start else "bayesian_cold_start_prior",
         "calibration_status": "EMPIRICALLY_ESTIMATED" if not is_cold_start else "AWAITING_HOLDOUT_TEST",
         "currency": cfg.currency,
+        "ev_decomposition": ev_decomposition,
     }
+
+
+def determine_canonical_outcome(
+    did_outcome_class: str,
+    baseline_clicks: float,
+    post_clicks: float,
+    ci_lower: float,
+    ci_upper: float,
+    min_incremental_clicks: float = 2.0,
+    growth_threshold: float = 0.10,
+) -> str:
+    """Reconciles causal DiD estimation with empirical growth thresholds into canonical outcome categories.
+
+    Categories:
+    - STATISTICALLY_SIGNIFICANT_LIFT: Lower 95% bound > 0.05 and incremental clicks >= min_incremental_clicks.
+    - COMMERCIALLY_WORTHWHILE_LIFT: Incremental clicks >= min_incremental_clicks and relative lift >= growth_threshold.
+    - COMMERCIALLY_NEGLIGIBLE_LIFT: Positive lift or lower bound > 0.0, but incremental clicks < min_incremental_clicks.
+    - STATISTICALLY_SIGNIFICANT_DROP: Upper 95% bound < -0.05.
+    - INCONCLUSIVE_EVIDENCE: Confidence interval spans zero or control cohort < 3.
+    - NEUTRAL_NO_EFFECT: Confidence interval tightly bounds zero.
+    """
+    b_clicks = float(baseline_clicks or 0.0)
+    p_clicks = float(post_clicks or 0.0)
+    delta_clicks = p_clicks - b_clicks
+    rel_growth = delta_clicks / max(b_clicks, 1.0)
+
+    if ci_lower > 0.05 and delta_clicks >= min_incremental_clicks:
+        return "STATISTICALLY_SIGNIFICANT_LIFT"
+    if ci_upper < -0.05:
+        return "STATISTICALLY_SIGNIFICANT_DROP"
+    if delta_clicks >= min_incremental_clicks and rel_growth >= growth_threshold:
+        return "COMMERCIALLY_WORTHWHILE_LIFT"
+    if (ci_lower > 0.0 or delta_clicks > 0.0) and delta_clicks < min_incremental_clicks:
+        return "COMMERCIALLY_NEGLIGIBLE_LIFT"
+    if did_outcome_class in ("INSUFFICIENT_EVIDENCE", "PARALLEL_TRENDS_VIOLATION"):
+        return "INCONCLUSIVE_EVIDENCE"
+    return "NEUTRAL_NO_EFFECT"
 
 
 def evaluate_temporal_holdout_calibration(
     conn: Any,
     domain: str | None = None,
     config: EconomicConfig | None = None,
+    min_sample_size: int = 20,
 ) -> dict[str, Any]:
-    """Evaluates probability calibration on matured experiments using temporal holdout validation.
+    """Evaluates probability calibration on matured experiments using temporal holdout validation (v2.2.1).
 
-    Computes Brier Score, Log Loss, and reliability diagram bins across matured trials.
+    Computes Brier Score, Brier Skill Score (BSS) vs base-rate baseline, Log Loss,
+    calibration intercept (a) and slope (b), reliability diagram bins, and enforces N >= 20.
     """
     cfg = config or EconomicConfig()
     query = """
@@ -322,10 +379,18 @@ def evaluate_temporal_holdout_calibration(
         return {
             "status": "INSUFFICIENT_MATURED_EXPERIMENTS",
             "sample_size": 0,
+            "total_matured_experiments": 0,
+            "min_sample_size_required": min_sample_size,
             "brier_score": None,
+            "brier_skill_score": None,
+            "baseline_brier_score": None,
             "log_loss": None,
+            "baseline_log_loss": None,
+            "calibration_intercept": None,
+            "calibration_slope": None,
             "reliability_bins": [],
-            "verdict": "AWAITING_MATURED_EXPERIMENTS: Minimum matured experiments required for calibration.",
+            "reliability_diagram_bins": [],
+            "verdict": f"AWAITING_MATURED_EXPERIMENTS: Minimum {min_sample_size} matured experiments required for calibration.",
         }
 
     y_true: list[int] = []
@@ -367,6 +432,42 @@ def evaluate_temporal_holdout_calibration(
         for p, y in zip(p_pred, y_true)
     ) / max(n, 1)
 
+    # Base rate & Baseline benchmarks (v2.2.1 P0.2)
+    base_rate = sum(y_true) / max(n, 1)
+    bs_baseline = base_rate * (1.0 - base_rate)
+    ll_baseline = -(
+        base_rate * math.log(max(base_rate, eps))
+        + (1.0 - base_rate) * math.log(max(1.0 - base_rate, eps))
+    )
+    if bs_baseline > 1e-6:
+        brier_skill_score = 1.0 - (brier_score / bs_baseline)
+    else:
+        brier_skill_score = 0.0 if brier_score < 1e-6 else -1.0
+
+    # Calibration intercept (a) and slope (b) via logistic regression on logits
+    cal_a, cal_b = 0.0, 1.0
+    if n >= 5 and 0.0 < base_rate < 1.0:
+        try:
+            logits = [math.log(max(min(p, 1.0 - eps), eps) / max(min(1.0 - p, 1.0 - eps), eps)) for p in p_pred]
+            beta = np.array([0.0, 1.0])
+            X_mat = np.array([[1.0, z] for z in logits])
+            Y_vec = np.array(y_true, dtype=float)
+            for _ in range(15):
+                lin = X_mat @ beta
+                p_hat = 1.0 / (1.0 + np.exp(-np.clip(lin, -20.0, 20.0)))
+                w = np.clip(p_hat * (1.0 - p_hat), 1e-5, 0.25)
+                W_diag = np.diag(w)
+                grad = X_mat.T @ (Y_vec - p_hat)
+                hess = -X_mat.T @ W_diag @ X_mat - (1e-4 * np.eye(2))
+                delta = np.linalg.solve(-hess, grad)
+                beta += delta
+                if np.max(np.abs(delta)) < 1e-4:
+                    break
+            cal_a = float(beta[0])
+            cal_b = float(beta[1])
+        except Exception:
+            cal_a, cal_b = 0.0, 1.0
+
     # Reliability diagram bins: [0, 0.2), [0.2, 0.4), [0.4, 0.6), [0.6, 0.8), [0.8, 1.0]
     bins_def = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0)]
     reliability_bins = []
@@ -388,13 +489,26 @@ def evaluate_temporal_holdout_calibration(
             "calibration_error": round(cal_err, 4),
         })
 
-    verdict = "WELL_CALIBRATED" if brier_score <= 0.25 else "NEEDS_CALIBRATION"
+    # Rigorous verdict: N >= min_sample_size required; BSS > 0; BS <= 0.25
+    if n < min_sample_size:
+        verdict = f"INSUFFICIENT_SAMPLE_SIZE_FOR_CALIBRATION: N={n} < {min_sample_size} minimum matured experiments."
+    elif brier_skill_score > 0.0 and brier_score <= 0.25:
+        verdict = "WELL_CALIBRATED"
+    else:
+        verdict = "NEEDS_CALIBRATION"
+
     return {
         "status": "EVALUATED",
         "sample_size": n,
         "total_matured_experiments": n,
+        "min_sample_size_required": min_sample_size,
         "brier_score": round(brier_score, 4),
+        "brier_skill_score": round(brier_skill_score, 4),
+        "baseline_brier_score": round(bs_baseline, 4),
         "log_loss": round(log_loss, 4),
+        "baseline_log_loss": round(ll_baseline, 4),
+        "calibration_intercept": round(cal_a, 4),
+        "calibration_slope": round(cal_b, 4),
         "reliability_bins": reliability_bins,
         "reliability_diagram_bins": reliability_bins,
         "verdict": verdict,

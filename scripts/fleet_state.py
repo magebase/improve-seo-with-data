@@ -27,6 +27,7 @@ stdlib sqlite3 only — no new dependencies.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1124,22 +1125,83 @@ def calculate_pre_trend_divergence(
     return abs(t_growth - c_growth)
 
 
-def get_t_critical_value(n_controls: int) -> float:
-    """Returns two-tailed 95% critical value adjusted for small control cohort size.
+def check_event_study_parallel_trends(
+    treatment_pre_periods: list[float],
+    control_pre_periods: list[float],
+    divergence_threshold: float = 0.30,
+) -> dict[str, Any]:
+    """Pre-treatment event study diagnostic across multiple baseline intervals (v2.2.1 P0.3).
 
-    Degrees of freedom small-sample correction:
-    - n_controls >= 5: 1.96 (standard normal approximation)
-    - n_controls == 4: 2.776
-    - n_controls == 3: 3.182
-    - n_controls <= 2: 4.303
+    Evaluates period-over-period divergence across consecutive pre-treatment periods
+    (e.g. [-56d, -42d], [-42d, -28d], [-28d, -14d], [-14d, 0d]).
+    Returns max divergence, period divergences, and parallel trends verification status.
     """
-    if n_controls >= 5:
-        return 1.96
-    if n_controls == 4:
-        return 2.776
-    if n_controls == 3:
-        return 3.182
-    return 4.303
+    if len(treatment_pre_periods) < 2 or len(control_pre_periods) < 2:
+        return {
+            "parallel_trends_hold": True,
+            "max_divergence": 0.0,
+            "period_divergences": [],
+            "periods_evaluated": 0,
+        }
+
+    n_periods = min(len(treatment_pre_periods), len(control_pre_periods))
+    period_divs: list[float] = []
+
+    for i in range(n_periods - 1):
+        t_prev = float(treatment_pre_periods[i])
+        t_curr = float(treatment_pre_periods[i + 1])
+        c_prev = float(control_pre_periods[i])
+        c_curr = float(control_pre_periods[i + 1])
+
+        t_growth = (t_curr - t_prev) / max(t_prev, 1.0)
+        c_growth = (c_curr - c_prev) / max(c_prev, 1.0)
+        div = abs(t_growth - c_growth)
+        period_divs.append(round(div, 4))
+
+    max_div = max(period_divs) if period_divs else 0.0
+    return {
+        "parallel_trends_hold": max_div <= divergence_threshold,
+        "max_divergence": round(max_div, 4),
+        "period_divergences": period_divs,
+        "periods_evaluated": n_periods,
+    }
+
+
+def get_t_critical_value(n_controls: int) -> float:
+    """Returns two-tailed 95% critical value adjusted for small control cohort size (v2.2.1 P0.3).
+
+    Degrees of freedom small-sample correction: df = max(1, n_controls - 1)
+    - df == 1 (n_controls <= 2): 12.706
+    - df == 2 (n_controls == 3): 4.303
+    - df == 3 (n_controls == 4): 3.182
+    - df == 4 (n_controls == 5): 2.776
+    - df == 5 (n_controls == 6): 2.571
+    - df in 6..9 (n_controls in 7..10): 2.447 to 2.262
+    - df in 10..29: 2.228 to 2.064
+    - df >= 30 (n_controls >= 31): 1.960 (standard normal approximation)
+    """
+    df = max(1, n_controls - 1)
+    t_table = {
+        1: 12.706,
+        2: 4.303,
+        3: 3.182,
+        4: 2.776,
+        5: 2.571,
+        6: 2.447,
+        7: 2.365,
+        8: 2.306,
+        9: 2.262,
+        10: 2.228,
+    }
+    if df in t_table:
+        return t_table[df]
+    if df < 15:
+        return 2.160
+    if df < 20:
+        return 2.101
+    if df < 30:
+        return 2.064
+    return 1.960
 
 
 def get_position_tier(position: float) -> str:
@@ -1257,6 +1319,7 @@ def update_experiment_outcomes(
     domain: str,
     fresh_gsc_rows: dict[str, dict[str, Any]],
     days_elapsed: int = 28,
+    min_incremental_clicks: float = 2.0,
     now: datetime | None = None,
 ) -> dict[str, int]:
     """Evaluates experiments using Difference-in-Differences with statistical safeguards.
@@ -1375,7 +1438,7 @@ def update_experiment_outcomes(
         inc_clicks = max(0.0, p_clicks - (base_clicks * (1.0 + max(-0.9, control_lift))))
         inc_impr = max(0.0, p_impr - base_impr)
 
-        # Statistical safeguards & Standard Error calculation
+        # Statistical safeguards & Standard Error calculation (v2.2.1 P0.3)
         n_controls = len(valid_controls)
         ctrl_lifts = [
             (c_clicks - ctrl_base_clicks) / max(ctrl_base_clicks, 1.0)
@@ -1386,9 +1449,11 @@ def update_experiment_outcomes(
             var_c = sum((l - mean_c_lift) ** 2 for l in ctrl_lifts) / (len(ctrl_lifts) - 1)
         else:
             var_c = max(0.01, abs(control_lift) * 0.05)
-        # Poisson-Normal count rate variance: Var(T_lift) ~ 1.0 / max(base_clicks, 1.0)
-        var_t = 1.0 / max(base_clicks, 1.0)
-        se = (max(0.0001, (var_t + var_c / max(1, n_controls)))) ** 0.5 * 0.5
+        # Poisson-Normal count rate variance without arbitrary scaling:
+        # Var(T_lift) = (Y_T1 + Y_T0) / max(Y_T0, 1)^2
+        # Var(C_lift_mean) = s_C^2 / max(1, N_c)
+        var_t = (p_clicks + base_clicks) / (max(base_clicks, 1.0) ** 2)
+        se = math.sqrt(max(0.0001, var_t + (var_c / max(1, n_controls))))
         t_crit = get_t_critical_value(n_controls)
         ci_lower = net_lift - t_crit * se
         ci_upper = net_lift + t_crit * se
@@ -1406,7 +1471,7 @@ def update_experiment_outcomes(
 
         if not limitations and actual_days >= 28:
             if ci_lower > 0.05:
-                if inc_clicks < 2.0:
+                if inc_clicks < min_incremental_clicks:
                     outcome_class = "COMMERCIALLY_NEGLIGIBLE_LIFT"
                     conf = min(0.90, 0.55 + 0.05 * n_controls)
                 else:
@@ -1415,6 +1480,9 @@ def update_experiment_outcomes(
             elif ci_upper < -0.05:
                 outcome_class = "STATISTICALLY_SIGNIFICANT_DROP"
                 conf = min(0.95, 0.60 + 0.05 * n_controls)
+            elif net_lift > 0.0 and 0.0 < inc_clicks < min_incremental_clicks:
+                outcome_class = "COMMERCIALLY_NEGLIGIBLE_LIFT"
+                conf = min(0.85, 0.50 + 0.05 * n_controls)
             else:
                 outcome_class = "NEUTRAL_NO_EFFECT"
                 conf = min(0.90, 0.50 + 0.05 * n_controls)
@@ -1439,8 +1507,8 @@ def update_experiment_outcomes(
             if pre_trend_div <= 0.30 and n_controls >= 1:
                 is_success = (
                     outcome_class == "STATISTICALLY_SIGNIFICANT_LIFT"
-                    or (outcome_class != "COMMERCIALLY_NEGLIGIBLE_LIFT" and net_lift > 0.05 and inc_clicks >= 2.0)
-                    or (outcome_class == "INSUFFICIENT_EVIDENCE" and net_lift > 0.05 and inc_clicks >= 2.0)
+                    or (outcome_class != "COMMERCIALLY_NEGLIGIBLE_LIFT" and net_lift > 0.05 and inc_clicks >= min_incremental_clicks)
+                    or (outcome_class == "INSUFFICIENT_EVIDENCE" and net_lift > 0.05 and inc_clicks >= min_incremental_clicks)
                 )
                 pos_tier = get_position_tier(base_pos)
                 record_action_effectiveness(
@@ -1592,22 +1660,27 @@ def get_query_owner(
     candidate_page: str | None = None,
     candidate_intent: str = "tool",
     serp_urls: list[str] | None = None,
+    query_impressions: float = 0.0,
+    query_clicks: float = 0.0,
 ) -> dict[str, Any] | None:
-    """Multi-dimensional query ownership & cannibalization risk evaluation.
+    """Multi-dimensional query ownership & cannibalization risk evaluation (v2.2.1 P1).
 
     Evaluates:
     - Lexical overlap (Jaccard)
     - Search intent category (tool vs informational vs comparison)
-    - SERP overlap (shared competitor URLs in top 10)
+    - SERP overlap (HIGH_SERP_OVERLAP: shared competitor URLs in top 10 >= 0.50)
     - Historical traffic ownership (which URL owns >60% of GSC clicks)
-    - Page functionality distinction
+    - Data maturity (LOW_DATA_UNCERTAIN for queries with <= 100 impr and <= 5 clicks)
+    - Multi-signal 301 consolidation candidates (shared SERP + split traffic)
 
     Returns typed classification:
     - OWNED: Single canonical URL owns intent and traffic.
     - POTENTIAL_OVERLAP: Shared lexical tokens, distinct format (risk ~0.20).
+    - HIGH_SERP_OVERLAP: Shared SERP top 10 results without full page ownership (risk ~0.50).
     - CONFIRMED_COMPETITION: True cannibalization across identical intent (risk ~0.85).
     - DISTINCT_INTENT: Related queries with distinct user tasks (risk ~0.05).
-    - CONSOLIDATION_CANDIDATE: Multiple thin competing pages needing 301/canonical (risk ~0.90).
+    - LOW_DATA_UNCERTAIN: Insufficient search volume to confirm ownership or conflict (risk ~0.15).
+    - CONSOLIDATION_CANDIDATE: Multiple thin competing pages corroborated by shared SERP + split traffic (risk ~0.90).
     """
     q_norm = query.strip().lower()
     row = conn.execute(
@@ -1621,9 +1694,14 @@ def get_query_owner(
         (domain, q_norm, q_norm),
     ).fetchone()
 
+    is_low_data = (0 < query_impressions <= 100.0 and query_clicks <= 5.0)
+
     if row:
         owner_url = row[1]
         owner_intent = row[4]
+        serp_overlap = float(row[6] or 0.0)
+        hist_share = float(row[7] or 1.0)
+
         # Multi-dimensional classification refinement
         if candidate_page and owner_url.rstrip("/") == candidate_page.rstrip("/"):
             risk_class = "OWNED"
@@ -1631,9 +1709,19 @@ def get_query_owner(
         elif candidate_page and candidate_intent != owner_intent:
             risk_class = "DISTINCT_INTENT"
             cann_risk = 0.05
-        elif row[5] and row[5] != "OWNED":
+        elif is_low_data:
+            risk_class = "LOW_DATA_UNCERTAIN"
+            cann_risk = 0.15
+        elif serp_overlap >= 0.50 and hist_share < 0.60:
+            # Multi-signal corroboration for 301 consolidation
+            risk_class = "CONSOLIDATION_CANDIDATE"
+            cann_risk = 0.90
+        elif serp_overlap >= 0.50:
+            risk_class = "HIGH_SERP_OVERLAP"
+            cann_risk = 0.50
+        elif row[5] and row[5] not in ("OWNED", "CONFIRMED_COMPETITION"):
             risk_class = row[5]
-            cann_risk = 0.85 if risk_class == "CONFIRMED_COMPETITION" else 0.20
+            cann_risk = 0.90 if risk_class == "CONSOLIDATION_CANDIDATE" else 0.20
         else:
             risk_class = "CONFIRMED_COMPETITION"
             cann_risk = 0.85
@@ -1646,8 +1734,8 @@ def get_query_owner(
             "intent_category": owner_intent,
             "ownership_risk_classification": risk_class,
             "cannibalization_risk": cann_risk,
-            "serp_overlap_score": float(row[6] or 0.0),
-            "historical_traffic_share": float(row[7] or 1.0),
+            "serp_overlap_score": serp_overlap,
+            "historical_traffic_share": hist_share,
             "fuzzy_match": False,
         }
 
@@ -1666,12 +1754,31 @@ def get_query_owner(
         sec_queries = json.loads(r[3])
         owner_url = r[1]
         owner_intent = r[4]
+        serp_overlap = float(r[6] or 0.0)
+        hist_share = float(r[7] or 1.0)
 
         # Exact sub-query match in secondaries
         if any(q_norm == sq.strip().lower() or sq.strip().lower() in q_norm for sq in sec_queries):
             is_same = candidate_page and owner_url.rstrip("/") == candidate_page.rstrip("/")
-            risk_class = "OWNED" if is_same else ("DISTINCT_INTENT" if candidate_intent != owner_intent else "CONFIRMED_COMPETITION")
-            cann_risk = 0.0 if is_same else (0.05 if risk_class == "DISTINCT_INTENT" else 0.85)
+            if is_same:
+                risk_class = "OWNED"
+                cann_risk = 0.0
+            elif candidate_intent != owner_intent:
+                risk_class = "DISTINCT_INTENT"
+                cann_risk = 0.05
+            elif is_low_data:
+                risk_class = "LOW_DATA_UNCERTAIN"
+                cann_risk = 0.15
+            elif serp_overlap >= 0.50 and hist_share < 0.60:
+                risk_class = "CONSOLIDATION_CANDIDATE"
+                cann_risk = 0.90
+            elif serp_overlap >= 0.50:
+                risk_class = "HIGH_SERP_OVERLAP"
+                cann_risk = 0.50
+            else:
+                risk_class = "CONFIRMED_COMPETITION"
+                cann_risk = 0.85
+
             return {
                 "query_cluster": r[0],
                 "canonical_url": owner_url,
@@ -1680,8 +1787,8 @@ def get_query_owner(
                 "intent_category": owner_intent,
                 "ownership_risk_classification": risk_class,
                 "cannibalization_risk": cann_risk,
-                "serp_overlap_score": float(r[6] or 0.0),
-                "historical_traffic_share": float(r[7] or 1.0),
+                "serp_overlap_score": serp_overlap,
+                "historical_traffic_share": hist_share,
                 "fuzzy_match": True,
             }
 
@@ -1695,9 +1802,17 @@ def get_query_owner(
                 risk_class = "OWNED"
                 cann_risk = 0.0
             elif candidate_intent != owner_intent:
-                # e.g. "las viewer" (tool) vs "how to open las" (informational)
                 risk_class = "DISTINCT_INTENT"
                 cann_risk = 0.05
+            elif is_low_data:
+                risk_class = "LOW_DATA_UNCERTAIN"
+                cann_risk = 0.15
+            elif serp_overlap >= 0.50 and hist_share < 0.60:
+                risk_class = "CONSOLIDATION_CANDIDATE"
+                cann_risk = 0.90
+            elif serp_overlap >= 0.50:
+                risk_class = "HIGH_SERP_OVERLAP"
+                cann_risk = 0.50
             elif overlap < 0.80 and any(w in q_norm for w in ["vs", "compare", "alternative"]):
                 risk_class = "POTENTIAL_OVERLAP"
                 cann_risk = 0.20
@@ -1713,8 +1828,8 @@ def get_query_owner(
                 "intent_category": owner_intent,
                 "ownership_risk_classification": risk_class,
                 "cannibalization_risk": cann_risk,
-                "serp_overlap_score": float(r[6] or 0.0),
-                "historical_traffic_share": float(r[7] or 1.0),
+                "serp_overlap_score": serp_overlap,
+                "historical_traffic_share": hist_share,
                 "fuzzy_match": True,
             }
 

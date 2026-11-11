@@ -224,7 +224,7 @@ if __name__ == "__main__":
         status_str = f"{r.status}" if r.status else f"ERR: {r.error}"
         audit_note = ""
         if r.technical_audit is not None:
-            audit_note = f" [SEO: {'PASS' if r.technical_audit.all_passed else 'FAIL'} ({r.technical_audit.score}/10)]"
+            audit_note = f" [Technical SEO Verification: {'PASS' if r.technical_audit.all_passed else 'FAIL'} ({r.technical_audit.score}/10 checks)]"
         print(f"  [{status_str}] {r.path} (attempts={r.attempts}){audit_note}")
     print(f"Summary: {summary.ok_count}/{len(paths)} OK, {summary.fail_count} failed.")
     sys.exit(0 if summary.all_ok else 1)

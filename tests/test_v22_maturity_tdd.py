@@ -30,6 +30,7 @@ Covers:
 from __future__ import annotations
 
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -192,13 +193,14 @@ def test_calculate_pre_trend_divergence_formula():
 
 
 def test_did_small_sample_students_t_correction():
-    """Degrees of freedom critical values apply for control cohorts N_c < 5."""
-    assert get_t_critical_value(n_controls=6) == 1.96
-    assert get_t_critical_value(n_controls=5) == 1.96
-    assert get_t_critical_value(n_controls=4) == 2.776
-    assert get_t_critical_value(n_controls=3) == 3.182
-    assert get_t_critical_value(n_controls=2) == 4.303
-    assert get_t_critical_value(n_controls=1) == 4.303
+    """Degrees of freedom critical values apply for control cohorts N_c with df = N_c - 1 (v2.2.1 P0.3)."""
+    assert get_t_critical_value(n_controls=31) == 1.960
+    assert get_t_critical_value(n_controls=6) == 2.571
+    assert get_t_critical_value(n_controls=5) == 2.776
+    assert get_t_critical_value(n_controls=4) == 3.182
+    assert get_t_critical_value(n_controls=3) == 4.303
+    assert get_t_critical_value(n_controls=2) == 12.706
+    assert get_t_critical_value(n_controls=1) == 12.706
 
 
 def test_commercially_negligible_lift_classification(temp_db: sqlite3.Connection):
@@ -355,23 +357,38 @@ def test_verify_calculator_aca_2026_repayment_rule():
 
 
 def test_verify_calculator_section_179_caps():
-    """Section 179 calculator checks 2026 statutory limits: $1,250,000 cap & $3,130,000 phaseout."""
+    """Section 179 calculator checks 2026 statutory limits: $2,560,000 cap & $4,090,000 phaseout (v2.2.1 P0.1)."""
     valid_sec179 = """
     <html>
     <body>
-        <h1>Section 179 Depreciation Calculator</h1>
-        <p>2026 Maximum Deduction Cap: $1,250,000. Phaseout begins at $3,130,000.</p>
+        <h1>Section 179 Depreciation Calculator (Tax Year 2026)</h1>
+        <p>2026 Maximum Deduction Cap: $2,560,000. Phaseout begins at $4,090,000.</p>
+        <p>Qualifying SUV deduction limit is $32,000.</p>
         <p>Dollar-for-dollar reduction formula: deduction = Math.max(0, cap - (cost - phaseout)).</p>
     </body>
     </html>
     """
-    res = verify_calculator_functionality("https://incomecanvas.com/tools/section-179-calculator/", valid_sec179)
+    res = verify_calculator_functionality("https://incomecanvas.com/tools/section-179-calculator-2026/", valid_sec179)
     assert res.passed is True
+
+    # Stale 2025 limits on 2026 calculator must fail (v2.2.1 P0.1)
+    stale_sec179 = """
+    <html>
+    <body>
+        <h1>Section 179 Depreciation Calculator (2026)</h1>
+        <p>2026 Maximum Deduction Cap: $1,250,000. Phaseout begins at $3,130,000.</p>
+        <p>Deduction formula: reduction = cost - phaseout.</p>
+    </body>
+    </html>
+    """
+    res_stale = verify_calculator_functionality("https://incomecanvas.com/tools/section-179-calculator-2026/", stale_sec179)
+    assert res_stale.passed is False
+    assert any("Section 179 Stale Limit Invariant Failure" in err for err in res_stale.issues)
 
     bad_sec179 = "<html><body><h1>Section 179</h1><p>Deduction cap is $1,000,000.</p></body></html>"
     res_bad = verify_calculator_functionality("https://incomecanvas.com/tools/section-179-calculator/", bad_sec179)
     assert res_bad.passed is False
-    assert any("Section 179 Cap Invariant Failure" in err for err in res_bad.issues)
+    assert any("Section 179" in err for err in res_bad.issues)
 
 
 def test_verify_smsriver_active_inventory():
@@ -536,3 +553,398 @@ def test_immature_experiments_excluded_from_learning(temp_db: sqlite3.Connection
     # Learning stats not populated
     eff = get_action_effectiveness(temp_db, "openfileconverter.com", "CREATE_PROGRAMMATIC_ROUTE", "convert")
     assert eff["has_empirical_evidence"] is False
+
+
+def test_deployment_arithmetic_reconciliation():
+    """Validates that reports cannot claim 100% success when successful paths < total paths."""
+    from validate_wave_close import validate_report_content
+
+    # Inconsistent report: claims 36/38 paths (100% 200 OK)
+    inconsistent_content = """
+# Test Report
+## 1. Executive Summary & Two-Part Scorecard
+### Part 1: Engineering Execution Quality (Score: 10.0 / 10.0)
+| **Category** | 100% | **10.0 / 10** |
+### Part 2: Measured SEO & Business Effectiveness
+Status: NOT YET MEASURED (Awaiting GSC Recrawl & 28-Day Observation Window)
+---
+## 2. Reconciled Task Inventory
+| Task | Description |
+## 3. Strategic Deep-Dive
+Deep dive notes.
+## 4. Exhaustive File & Configuration Changes
+Modified files.
+## 5. Standardized Test Classification & Quality Verification
+All 20 tests passed.
+## 6. Deployment, Edge Cache & Invariant Compliance
+**Cloudflare Worker Deployment Version:** `ver-12345`
+Edge cache re-warm complete: 36 / 38 paths (100% 200 OK).
+## 7. Rollback Runbook & Disaster Recovery
+Rollback notes.
+## 8. Actionable Recommendations
+Recommendations.
+"""
+    passed, errors, _ = validate_report_content(inconsistent_content, allow_dirty=True)
+    assert not passed
+    assert any("Deployment Arithmetic Discrepancy" in e for e in errors)
+
+    # Consistent report: 38 / 38 paths (100% 200 OK)
+    consistent_content = inconsistent_content.replace("36 / 38 paths (100% 200 OK)", "38 / 38 paths (100% 200 OK)")
+    passed2, errors2, _ = validate_report_content(consistent_content, allow_dirty=True)
+    assert not any("Deployment Arithmetic Discrepancy" in e for e in errors2)
+
+
+# =============================================================================
+# Outcome-Driven SEO Engine v2.2.1 Tests (Evidence and Statistical Integrity)
+# =============================================================================
+
+def test_section_179_mathematical_engine_2025_vs_2026():
+    """Validates Section 179 calculations across statutory 2025 and 2026 limits."""
+    from verify_product_functionality import calculate_section_179_deduction
+
+    # 2026: max deduction $2,560,000, phaseout threshold $4,090,000, SUV limit $32,000
+    # Case 1: Cost below phaseout threshold
+    r1 = calculate_section_179_deduction(cost=2_000_000, tax_year=2026)
+    assert r1["final_deduction"] == 2_000_000
+    assert r1["reduction"] == 0
+
+    # Case 2: Cost above deduction cap, below phaseout threshold
+    r2 = calculate_section_179_deduction(cost=3_500_000, tax_year=2026)
+    assert r2["final_deduction"] == 2_560_000
+    assert r2["reduction"] == 0
+
+    # Case 3: Cost in phaseout zone ($5,000,000):
+    # Reduction = 5,000,000 - 4,090,000 = 910,000
+    # Available Cap = 2,560,000 - 910,000 = 1,650,000
+    r3 = calculate_section_179_deduction(cost=5_000_000, tax_year=2026)
+    assert r3["reduction"] == 910_000
+    assert r3["available_cap"] == 1_650_000
+    assert r3["final_deduction"] == 1_650_000
+
+    # Case 4: Full phaseout ceiling ($6,650,000): deduction = 0
+    r4 = calculate_section_179_deduction(cost=6_650_000, tax_year=2026)
+    assert r4["available_cap"] == 0
+    assert r4["final_deduction"] == 0
+
+    # Case 5: Cost above full phaseout ($7,000,000)
+    r5 = calculate_section_179_deduction(cost=7_000_000, tax_year=2026)
+    assert r5["final_deduction"] == 0
+
+    # Case 6: Qualifying SUV limit for 2026 ($32,000)
+    r6 = calculate_section_179_deduction(cost=90_000, tax_year=2026, is_suv=True)
+    assert r6["final_deduction"] == 32_000
+
+    # Case 7: Business income limitation
+    r7 = calculate_section_179_deduction(cost=1_000_000, tax_year=2026, business_income=650_000)
+    assert r7["final_deduction"] == 650_000
+    assert r7["carryforward"] == 350_000
+    assert r7["income_limitation_applied"] is True
+
+    # Case 8: 2025 Statutory Limits ($1,250,000 cap, $3,130,000 phaseout, $30,500 SUV)
+    r8 = calculate_section_179_deduction(cost=2_000_000, tax_year=2025)
+    assert r8["final_deduction"] == 1_250_000
+
+    r9 = calculate_section_179_deduction(cost=80_000, tax_year=2025, is_suv=True)
+    assert r9["final_deduction"] == 30_500
+
+
+def test_aca_excess_aptc_repayment_statutory_engine():
+    """Validates 2026 full repayment rule vs 2025 statutory limitation caps."""
+    from verify_product_functionality import calculate_aca_excess_aptc_repayment
+
+    # 2026 Invariant: 100% full repayment regardless of FPL percent
+    r2026 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2026)
+    assert r2026["repayment_amount"] == 3500.0
+    assert r2026["repayment_cap"] is None
+
+    # 2025 Statutory caps: 250% FPL single has $950 cap
+    r2025 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2025, filing_status="single")
+    assert r2025["repayment_cap"] == 950.0
+    assert r2025["repayment_amount"] == 950.0
+
+
+def test_corporate_wacc_formula_engine():
+    """Validates Weighted Average Cost of Capital with interest tax shield."""
+    from verify_product_functionality import calculate_wacc
+
+    # Firm: Equity $600k, Debt $400k (V = $1M)
+    # Re = 10% (0.10), Rd = 6% (0.06), Tc = 25% (0.25)
+    # WACC = 0.6 * 0.10 + 0.4 * 0.06 * (1 - 0.25) = 0.06 + 0.018 = 0.078
+    res = calculate_wacc(equity=600_000, debt=400_000, cost_of_equity=0.10, cost_of_debt=0.06, corporate_tax_rate=0.25)
+    assert pytest.approx(res["wacc"], 0.0001) == 0.078
+    assert res["weight_equity"] == 0.6
+    assert res["weight_debt"] == 0.4
+
+
+def test_figiva_gpa_collegiate_engine():
+    """Validates collegiate weighted cumulative GPA scale."""
+    from verify_product_functionality import calculate_figiva_gpa
+
+    courses = [
+        {"grade": "A", "credits": 4.0},   # 4.0 * 4 = 16.0
+        {"grade": "B+", "credits": 3.0},  # 3.3 * 3 = 9.9
+        {"grade": "A-", "credits": 3.0},  # 3.7 * 3 = 11.1
+    ]
+    # Total points = 37.0, Total credits = 10.0 -> GPA = 3.70
+    res = calculate_figiva_gpa(courses)
+    assert res["total_credits"] == 10.0
+    assert pytest.approx(res["cumulative_gpa"], 0.001) == 3.70
+
+
+def test_execute_converter_pipeline():
+    """Validates genuine byte conversion and magic byte inspection."""
+    import struct
+    from verify_product_functionality import execute_converter_pipeline
+
+    # BMP to PNG
+    mock_bmp = b"BM" + struct.pack("<IHHI", 58, 0, 0, 54) + struct.pack("<IIIHHIIIIII", 40, 1, 1, 1, 24, 0, 4, 2835, 2835, 0, 0) + b"\x00\x00\x00\x00"
+    png_bytes = execute_converter_pipeline("bmp", "png", mock_bmp)
+    assert png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+
+    # STEP to STL
+    mock_step = b"ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('STEP'),'2;1');\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n"
+    stl_bytes = execute_converter_pipeline("step", "stl", mock_step)
+    assert b"solid openfileconverter_mesh" in stl_bytes
+
+    # DOCX to PDF
+    mock_docx = b"PK\x03\x04" + (b"\x00" * 26)
+    pdf_bytes = execute_converter_pipeline("docx", "pdf", mock_docx)
+    assert pdf_bytes.startswith(b"%PDF-1.4")
+
+    # Malformed BMP input
+    with pytest.raises(ValueError, match="missing 'BM'"):
+        execute_converter_pipeline("bmp", "png", b"NOT_BMP_DATA")
+
+
+def test_smsriver_operational_pipeline():
+    """Validates E.164 phone verification and JSON message polling structure."""
+    from verify_product_functionality import verify_smsriver_operational_pipeline
+
+    payload = {
+        "messages": [
+            {"from": "WhatsApp", "text": "Your code is 849201", "timestamp": "2026-11-11T12:00:00Z"},
+            {"from": "Google", "text": "G-123456 is your verification code", "timestamp": "2026-11-11T12:01:00Z"},
+        ]
+    }
+    res = verify_smsriver_operational_pipeline("+12025550199", payload)
+    assert res["is_e164"] is True
+    assert res["active_messages_count"] == 2
+    assert res["messages"][0]["extracted_otp"] == "849201"
+    assert res["messages"][1]["extracted_otp"] == "123456"
+
+    with pytest.raises(ValueError, match="Invalid E.164"):
+        verify_smsriver_operational_pipeline("invalid_number", payload)
+
+
+def test_ev_decomposition_arithmetic():
+    """Validates that compute_opportunity_intelligence provides full arithmetic EV derivation."""
+    from score_backlog import EconomicConfig, compute_opportunity_intelligence
+
+    row = {
+        "page": "https://openfileconverter.com/convert/step-to-stl/",
+        "query": "step to stl converter",
+        "prescribed_action": "CREATE_PROGRAMMATIC_ROUTE",
+        "impressions": 1000.0,
+        "clicks_30d": 10.0,
+        "features": {"current_pos": 8.0},
+    }
+    cfg = EconomicConfig(labor_hourly_rate=60.0, value_per_conversion=15.0)
+    intel = compute_opportunity_intelligence(row, config=cfg)
+
+    assert "ev_decomposition" in intel
+    decomp = intel["ev_decomposition"]
+    assert decomp["labor_hours"] == 2.5
+    assert decomp["labor_hourly_rate"] == 60.0
+    assert decomp["implementation_labor_cost"] == 150.0  # 2.5 * 60
+    assert decomp["value_per_conversion"] == 15.0
+    # Net EV formula: (p_success * gross_val) - impl_cost - risk_cost
+    expected_ev = (decomp["posterior_success_probability"] * decomp["gross_business_value"]) - decomp["implementation_labor_cost"] - decomp["expected_risk_cost"]
+    assert pytest.approx(decomp["net_expected_value"], 0.01) == expected_ev
+
+
+def test_brier_skill_score_and_sample_size_verdict(temp_db: sqlite3.Connection):
+    """Validates that Brier Skill Score > 0 and N >= 20 are required for WELL_CALIBRATED status."""
+    from score_backlog import evaluate_temporal_holdout_calibration
+
+    # Clean ledger
+    temp_db.execute("DELETE FROM experiment_ledger")
+    now = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
+
+    # Seed 10 experiments (N < 20)
+    for i in range(10):
+        is_succ = (i % 2 == 0)
+        exp_id = record_experiment(
+            temp_db,
+            domain="openfileconverter.com",
+            page=f"https://openfileconverter.com/page-{i}/",
+            target_query=f"query {i}",
+            action_code="INJECT_EXACT_TITLE_AND_H2",
+            deployed_at=now,
+            baseline_clicks_28d=5.0,
+            baseline_impressions_28d=100.0,
+            control_cohort_page="https://openfileconverter.com/ctrl/",
+            control_baseline_clicks=5.0,
+        )
+        temp_db.execute(
+            """
+            UPDATE experiment_ledger
+            SET status = 'GRADED', did_outcome_class = ?, post_28d_clicks = ?
+            WHERE id = ?
+            """,
+            ("STATISTICALLY_SIGNIFICANT_LIFT" if is_succ else "NEUTRAL_NO_EFFECT", 10.0 if is_succ else 5.0, exp_id),
+        )
+    temp_db.commit()
+
+    # N = 10 should yield INSUFFICIENT_SAMPLE_SIZE_FOR_CALIBRATION
+    res_10 = evaluate_temporal_holdout_calibration(temp_db, domain="openfileconverter.com", min_sample_size=20)
+    assert res_10["sample_size"] == 10
+    assert "INSUFFICIENT_SAMPLE_SIZE_FOR_CALIBRATION" in res_10["verdict"]
+
+    # Seed 15 more experiments -> N = 25 (N >= 20)
+    for i in range(10, 25):
+        is_succ = (i % 3 == 0)
+        exp_id = record_experiment(
+            temp_db,
+            domain="openfileconverter.com",
+            page=f"https://openfileconverter.com/page-{i}/",
+            target_query=f"query {i}",
+            action_code="INJECT_EXACT_TITLE_AND_H2",
+            deployed_at=now,
+            baseline_clicks_28d=5.0,
+            baseline_impressions_28d=100.0,
+            control_cohort_page="https://openfileconverter.com/ctrl/",
+            control_baseline_clicks=5.0,
+        )
+        temp_db.execute(
+            """
+            UPDATE experiment_ledger
+            SET status = 'GRADED', did_outcome_class = ?, post_28d_clicks = ?
+            WHERE id = ?
+            """,
+            ("STATISTICALLY_SIGNIFICANT_LIFT" if is_succ else "NEUTRAL_NO_EFFECT", 12.0 if is_succ else 5.0, exp_id),
+        )
+    temp_db.commit()
+
+    res_25 = evaluate_temporal_holdout_calibration(temp_db, domain="openfileconverter.com", min_sample_size=20)
+    assert res_25["sample_size"] == 25
+    assert "brier_skill_score" in res_25
+    assert "baseline_brier_score" in res_25
+    assert "calibration_intercept" in res_25
+    assert "calibration_slope" in res_25
+    assert res_25["verdict"] in ("WELL_CALIBRATED", "NEEDS_CALIBRATION")
+
+
+def test_determine_canonical_outcome():
+    """Validates reconciliation of DiD causal intervals and commercial thresholds."""
+    from score_backlog import determine_canonical_outcome
+
+    # Statistically significant lift
+    out1 = determine_canonical_outcome(
+        did_outcome_class="STATISTICALLY_SIGNIFICANT_LIFT",
+        baseline_clicks=10.0,
+        post_clicks=20.0,
+        ci_lower=0.10,
+        ci_upper=0.50,
+        min_incremental_clicks=2.0,
+    )
+    assert out1 == "STATISTICALLY_SIGNIFICANT_LIFT"
+
+    # Statistically significant drop
+    out2 = determine_canonical_outcome(
+        did_outcome_class="STATISTICALLY_SIGNIFICANT_DROP",
+        baseline_clicks=20.0,
+        post_clicks=10.0,
+        ci_lower=-0.60,
+        ci_upper=-0.10,
+        min_incremental_clicks=2.0,
+    )
+    assert out2 == "STATISTICALLY_SIGNIFICANT_DROP"
+
+    # Commercially negligible lift (small gain < 2.0 clicks)
+    out3 = determine_canonical_outcome(
+        did_outcome_class="COMMERCIALLY_NEGLIGIBLE_LIFT",
+        baseline_clicks=5.0,
+        post_clicks=6.2,
+        ci_lower=0.01,
+        ci_upper=0.30,
+        min_incremental_clicks=2.0,
+    )
+    assert out3 == "COMMERCIALLY_NEGLIGIBLE_LIFT"
+
+
+def test_event_study_parallel_trends():
+    """Validates multi-period event study parallel trends diagnostic."""
+    from fleet_state import check_event_study_parallel_trends
+
+    # Parallel growth: treatment and control grow ~10% each period
+    t_counts = [100.0, 110.0, 121.0, 133.0]
+    c_counts = [200.0, 220.0, 242.0, 266.0]
+    res_parallel = check_event_study_parallel_trends(t_counts, c_counts, divergence_threshold=0.30)
+    assert res_parallel["parallel_trends_hold"] is True
+    assert res_parallel["max_divergence"] < 0.05
+    assert res_parallel["periods_evaluated"] == 4
+
+    # Divergent growth: treatment spikes 50% while control drops
+    t_divergent = [100.0, 150.0, 220.0]
+    c_divergent = [200.0, 190.0, 180.0]
+    res_div = check_event_study_parallel_trends(t_divergent, c_divergent, divergence_threshold=0.30)
+    assert res_div["parallel_trends_hold"] is False
+    assert res_div["max_divergence"] > 0.30
+
+
+def test_validate_wave_close_waiver_reason(tmp_path: Path):
+    """Validates that --allow-dirty requires an explicit waiver reason when dirty files exist."""
+    import subprocess
+    from validate_wave_close import validate_report_content
+
+    # Valid report markdown
+    report = """
+# Test Report
+## 1. Executive Summary & Two-Part Scorecard
+### Part 1: Engineering Execution Quality (Score: 10.0 / 10.0)
+| **Category** | 100% | **10.0 / 10** |
+### Part 2: Measured SEO & Business Effectiveness
+Status: NOT YET MEASURED (Awaiting GSC Recrawl & 28-Day Observation Window)
+---
+## 2. Reconciled Task Inventory
+| Task | Description |
+## 3. Strategic Deep-Dive
+Deep dive notes.
+## 4. Exhaustive File & Configuration Changes
+Modified files.
+## 5. Standardized Test Classification & Quality Verification
+| Test Suite | Passed | Failed | Skipped | Total |
+| Unit Tests | 25 | 0 | 0 | 25 |
+All 25 tests passed.
+## 6. Deployment, Edge Cache & Invariant Compliance
+**Cloudflare Worker Deployment Version:** `ver-12345`
+Edge cache re-warm complete: 10 / 10 paths (100% 200 OK).
+## 7. Rollback Runbook & Disaster Recovery
+Rollback notes.
+## 8. Actionable Recommendations
+Recommendations.
+"""
+    # Create fake git repo with a dirty file
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Tester"], cwd=repo, capture_output=True)
+    (repo / "f.txt").write_text("initial")
+    subprocess.run(["git", "add", "f.txt"], cwd=repo, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, capture_output=True)
+
+    # Make it dirty
+    (repo / "f.txt").write_text("modified")
+
+    # allow_dirty=True without waiver reason -> must fail
+    passed1, errors1, _ = validate_report_content(report, repo_path=repo, allow_dirty=True, waiver_reason=None)
+    assert not passed1
+    assert any("Waiver requirement violation" in e for e in errors1)
+
+    # allow_dirty=True with waiver reason -> passes with warning listing dirty file
+    passed2, errors2, warnings2 = validate_report_content(report, repo_path=repo, allow_dirty=True, waiver_reason="Waiver for ongoing TDD tests")
+    assert passed2
+    assert any("Worktree waiver applied" in w for w in warnings2)
+
+
