@@ -424,6 +424,8 @@ proxy timeouts — see Invariants B and E; the render-cost lesson stands.)
 | [`scripts/evaluate_experiments.py`](./scripts/evaluate_experiments.py) | **Outcome Evaluation & Two-Part Scorecard:** Tracks 7, 14, 28, 56-day outcomes in `experiment_ledger`, evaluates treatment vs matched-control cohorts (Difference-in-Differences), verifies Googlebot recrawl proof, updates `action_effectiveness_stats`, and renders the two-part scorecard. |
 | [`scripts/content_usefulness_gate.py`](./scripts/content_usefulness_gate.py) | **Content Quality & Claim Provenance Gate:** Enforces anti-doorway distinctiveness, substantive content depth (>= 120 words), query fulfillment in headings, anti-vaporware copy bans, and verifies technical performance claims against code/benchmark evidence. |
 | [`scripts/verify_technical_seo.py`](./scripts/verify_technical_seo.py) | **10-Point Technical SEO & Indexability Verification:** Audits HTTP 200, non-empty HTML, title geometry, single primary H1, canonical URL consistency, robots noindex defense, >= 2 crawlable internal links, JSON-LD schema validity, mobile viewport, and functional tool presence. |
+| [`scripts/generate_wave_changelog.py`](./scripts/generate_wave_changelog.py) | **Wave Changelog & Audit Generator:** Natively produces standardized, auditable Markdown wave reports across 8 mandatory dimensions at `reports/seo-waves/<domain>/wave-<N>-<domain>-changelog.md`. |
+| [`scripts/validate_wave_close.py`](./scripts/validate_wave_close.py) | **Automated Wave-Close Verification Gate:** Enforces that an SEO wave cannot be closed until its Markdown report exists, reconciles with the Git diff and backlog cursor in `fleet_state.db`, honors Invariant P6, and passes all contract checks. |
 | [`schemas/seo-action.schema.json`](./schemas/seo-action.schema.json) | Standardized JSON Schema for prioritized, auditable SEO and CRO action cards. |
 | [`schemas/data-source-manifest.schema.json`](./schemas/data-source-manifest.schema.json) | Declares connection status, freshness watermarks, and capabilities across all 7 telemetry platforms. |
 | [`references/page_level_decision_engine.md`](./references/page_level_decision_engine.md) | Exhaustive guide on the 8-state diagnostic decision tree, 7 typed action contracts, URL ownership model, and 4 recipes. |
@@ -646,4 +648,40 @@ Reports MUST separate engineering delivery from measured business outcomes:
    - **MANDATORY INVARIANT:** When tasks are inside the 28-day observation window or awaiting Googlebot recrawl, the engine MUST strictly output:
      `**SEO Effectiveness Grade:** **NOT YET MEASURED (Awaiting GSC Recrawl & 28-Day Observation Window)**`
    - **Never manufacture 10/10 SEO effectiveness grades from passing test suites or clean deployments.**
+
+### 12.9 P7: Mandatory Wave Changelog Contract & Automated Wave-Close Gate
+
+No autonomous SEO wave may be marked complete without an authoritative, auditable Markdown report committed to the repository:
+
+1. **Canonical Report Path:**
+   `reports/seo-waves/<domain>/wave-<N>-<domain>-changelog.md`  
+   *(e.g. `reports/seo-waves/incomecanvas.com/wave-15-incomecanvas-changelog.md`)*
+
+2. **Automated Wave-Close Verification Gate (`scripts/validate_wave_close.py`):**
+   ```bash
+   python scripts/validate_wave_close.py \
+     --report reports/seo-waves/<domain>/wave-<N>-<domain>-changelog.md \
+     --domain <domain> \
+     --wave <N> \
+     --db-path ~/.seo_fleet/fleet_state.db \
+     --commit-sha <sha>
+   ```
+   Wave completion is blocked if:
+   - The report file is missing or $< 500$ bytes.
+   - Any of the 8 mandatory sections are omitted:
+     1. Executive Summary & Authoritative Two-Part Scorecard (Part 1 Engineering Execution + Part 2 Measured SEO)
+     2. Reconciled Task Inventory & Ledger Alignment
+     3. Strategic Deep-Dive & Intent Analysis (Query ownership, vertical alignment, and factual claim provenance)
+     4. Exhaustive File & Configuration Changes (File-by-file diffs and lines modified)
+     5. Standardized Test Classification & Quality Verification (Skill Engine vs Wave TDD vs Regression vs Preflight vs Edge Rewarm)
+     6. Deployment, Edge Cache & Invariant Compliance (Zone purge, 28-day title locks, pixel geometry, 1440px grid)
+     7. Rollback Runbook & Disaster Recovery
+     8. Actionable Recommendations for Subsequent Wave
+   - **Invariant P6 Breach:** Part 2 claims a numerical score when inside the 28-day recrawl window instead of `NOT YET MEASURED`.
+   - **Task Reconciliation Failure:** Shipped tasks in `fleet_state.db` do not appear in the report table.
+   - **Rule 32 Violation:** Prohibited unicode emojis are detected anywhere in the report.
+
+3. **Standardized Evidence & Rigor Standard:**
+   Different websites produce different technical and content tasks, but **never different standards of evidence or completeness**. Every wave across all fleet domains (`incomecanvas.com`, `openfileconverter.com`, `smsriver.com`, `figiva.com`) must produce reports meeting this identical contract.
+
 

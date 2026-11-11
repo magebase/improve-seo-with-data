@@ -122,6 +122,10 @@ CREATE TABLE IF NOT EXISTS experiment_ledger (
     baseline_impressions_28d REAL NOT NULL DEFAULT 0.0,
     baseline_ctr            REAL NOT NULL DEFAULT 0.0,
     baseline_position       REAL NOT NULL DEFAULT 0.0,
+    exposure_detected_at    TEXT,
+    recrawl_confirmed_at    TEXT,
+    recrawl_evidence_type   TEXT,
+    recrawl_evidence_detail TEXT,
     recrawl_detected_at     TEXT,
     indexation_status       TEXT DEFAULT 'UNKNOWN',
     post_7d_clicks          REAL,
@@ -143,13 +147,18 @@ CREATE TABLE IF NOT EXISTS experiment_ledger (
     conversions_baseline    REAL DEFAULT 0.0,
     conversions_post        REAL,
     control_cohort_page     TEXT,
+    control_cohort_pages_json TEXT NOT NULL DEFAULT '[]',
     control_baseline_clicks REAL DEFAULT 0.0,
     control_post_clicks     REAL,
+    pre_trend_divergence    REAL DEFAULT 0.0,
+    did_ci_lower            REAL,
+    did_ci_upper            REAL,
+    did_outcome_class       TEXT DEFAULT 'INSUFFICIENT_EVIDENCE',
     incremental_clicks_est  REAL,
     incremental_impressions_est REAL,
     attribution_confidence  REAL DEFAULT 0.0,
     attribution_limitations TEXT,
-    status                  TEXT NOT NULL DEFAULT 'PENDING_RECRAWL',
+    status                  TEXT NOT NULL DEFAULT 'CRAWL_PENDING',
     updated_at              TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS experiment_domain_status
@@ -163,6 +172,9 @@ CREATE TABLE IF NOT EXISTS query_ownership_map (
     primary_query           TEXT NOT NULL,
     secondary_queries_json  TEXT NOT NULL DEFAULT '[]',
     intent_category         TEXT NOT NULL DEFAULT 'informational',
+    ownership_risk_classification TEXT NOT NULL DEFAULT 'OWNED',
+    serp_overlap_score      REAL DEFAULT 0.0,
+    historical_traffic_share REAL DEFAULT 1.0,
     created_at              TEXT NOT NULL,
     updated_at              TEXT NOT NULL,
     PRIMARY KEY (domain, query_cluster)
@@ -178,6 +190,10 @@ CREATE TABLE IF NOT EXISTS action_effectiveness_stats (
     avg_click_lift          REAL NOT NULL DEFAULT 0.0,
     avg_impression_lift     REAL NOT NULL DEFAULT 0.0,
     avg_rank_delta          REAL NOT NULL DEFAULT 0.0,
+    alpha_prior             REAL NOT NULL DEFAULT 1.5,
+    beta_prior              REAL NOT NULL DEFAULT 3.5,
+    smoothed_win_rate       REAL NOT NULL DEFAULT 0.30,
+    confidence_weight       REAL NOT NULL DEFAULT 0.0,
     updated_at              TEXT NOT NULL,
     PRIMARY KEY (domain, action_code, route_family)
 );
@@ -239,6 +255,55 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             conn.commit()
         except sqlite3.OperationalError:
             pass  # concurrent migration already applied it
+
+    # experiment_ledger v2.1 migrations
+    exp_columns = {row[1] for row in conn.execute("PRAGMA table_info(experiment_ledger)")}
+    for col, col_def in [
+        ("exposure_detected_at", "TEXT"),
+        ("recrawl_confirmed_at", "TEXT"),
+        ("recrawl_evidence_type", "TEXT"),
+        ("recrawl_evidence_detail", "TEXT"),
+        ("control_cohort_pages_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("pre_trend_divergence", "REAL DEFAULT 0.0"),
+        ("did_ci_lower", "REAL"),
+        ("did_ci_upper", "REAL"),
+        ("did_outcome_class", "TEXT DEFAULT 'INSUFFICIENT_EVIDENCE'"),
+    ]:
+        if col not in exp_columns:
+            try:
+                conn.execute(f"ALTER TABLE experiment_ledger ADD COLUMN {col} {col_def}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
+
+    # query_ownership_map v2.1 migrations
+    q_columns = {row[1] for row in conn.execute("PRAGMA table_info(query_ownership_map)")}
+    for col, col_def in [
+        ("ownership_risk_classification", "TEXT NOT NULL DEFAULT 'OWNED'"),
+        ("serp_overlap_score", "REAL DEFAULT 0.0"),
+        ("historical_traffic_share", "REAL DEFAULT 1.0"),
+    ]:
+        if col not in q_columns:
+            try:
+                conn.execute(f"ALTER TABLE query_ownership_map ADD COLUMN {col} {col_def}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
+
+    # action_effectiveness_stats v2.1 migrations
+    eff_columns = {row[1] for row in conn.execute("PRAGMA table_info(action_effectiveness_stats)")}
+    for col, col_def in [
+        ("alpha_prior", "REAL NOT NULL DEFAULT 1.5"),
+        ("beta_prior", "REAL NOT NULL DEFAULT 3.5"),
+        ("smoothed_win_rate", "REAL NOT NULL DEFAULT 0.30"),
+        ("confidence_weight", "REAL NOT NULL DEFAULT 0.0"),
+    ]:
+        if col not in eff_columns:
+            try:
+                conn.execute(f"ALTER TABLE action_effectiveness_stats ADD COLUMN {col} {col_def}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
     # One-time backfill: legacy rows predate route tagging. Converges to a
     # no-op after the first successful pass (everything gets tagged).
     stale = conn.execute(
