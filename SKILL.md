@@ -761,5 +761,81 @@ Replaces naive win ratios ($4/5 = 80\%$) with Beta-Binomial Bayesian smoothing:
 - Reconciles Git diffs (`git show --name-status`, `git show --stat`), task backlog cursor (`fleet_state.db`), and edge re-warm receipts (`improve_seo_rewarm.py`).
 - Embeds all 20 required audit dimensions cleanly across the 8 mandatory top-level headings checked by `scripts/validate_wave_close.py`.
 
+---
+
+## 14. Outcome-Driven SEO Engine v2.2: Statistical and Operational Maturity
+
+The Outcome-Driven SEO Engine v2.2 upgrades the empirical scoring, causal inference, and verification gates from v2.1 to full mathematical and operational maturity.
+
+### 14.1 P0 — Calibrated Bayesian Expected Value & Holdout Evaluation (`score_backlog.py`)
+1. **Statistical Decomposition:**
+   Opportunities return explicit decomposition:
+   - `posterior_success_prob` ($\hat{p}$): Bayesian posterior probability incorporating position band and action effectiveness.
+   - `is_cold_start`: Boolean flag indicating whether the action is operating on prior mean vs empirical trials.
+   - `credible_interval_95`: Exact $[ci_{\text{lower}}, ci_{\text{upper}}]$ interval.
+   - `evidence_weight`: $\min(1.0, \sqrt{\text{sample\_size} / 25})$.
+   - `model_type`: `"BAYESIAN_HIERARCHICAL"` vs `"COLD_START_PRIOR"`.
+   - `calibration_status`: `"CALIBRATED"` vs `"UNMEASURED"`.
+2. **Configurable Economic Parameters (`EconomicConfig`):**
+   - `labor_hourly_rate`: Default \$50.0/hr (customizable per team).
+   - `value_per_conversion`: Default \$10.0 (customizable per business model).
+   - `currency`: Default `"USD"`.
+   - `time_horizon_days`: Default 90 days.
+   - `success_click_growth_threshold`: Default 0.10 (+10% relative click growth).
+3. **Temporal Holdout Probability Calibration (`evaluate_temporal_holdout_calibration`):**
+   Across matured, graded experiments ($\ge 28$ days post-deployment), computes:
+   - **Brier Score:** $\frac{1}{N}\sum (\hat{p}_i - y_i)^2$. Brier score $\le 0.25$ indicates strong calibration.
+   - **Log Loss:** $-\frac{1}{N}\sum [y_i \ln(\hat{p}_i) + (1-y_i) \ln(1-\hat{p}_i)]$.
+   - **5-Bin Reliability Diagram:** Binned into $[0, 0.2)$, $[0.2, 0.4)$, $[0.4, 0.6)$, $[0.6, 0.8)$, $[0.8, 1.0]$ tracking mean predicted vs observed win rates and absolute calibration error.
+
+### 14.2 P0 — Small-Sample Student's $t$ DiD & Commercial Negligibility (`fleet_state.py`)
+1. **Pre-Treatment Parallel Trends Divergence:**
+   $$\text{PreTrendDivergence} = \left| \frac{T_{P2} - T_{P1}}{\max(T_{P1}, 1.0)} - \frac{C_{P2} - C_{P1}}{\max(C_{P1}, 1.0)} \right|$$
+   where $P1=[-56d, -28d]$ and $P2=[-28d, 0d]$. If divergence $> 0.30$, flags `PARALLEL_TRENDS_VIOLATION` limitation and caps attribution confidence ($\le 0.35$).
+2. **Degrees of Freedom Small-Sample Correction:**
+   When control cohort size $N_c < 5$, standard normal $1.96$ is replaced with exact Student's $t$ two-tailed 95% critical values ($N_c=4 \implies 2.776$, $N_c=3 \implies 3.182$, $N_c \le 2 \implies 4.303$) to prevent small-sample overconfidence.
+3. **Commercial vs. Statistical Significance:**
+   - **`STATISTICALLY_SIGNIFICANT_LIFT`:** $ci_{\text{lower}} > 0.05$ AND incremental clicks $\ge 2.0$.
+   - **`COMMERCIALLY_NEGLIGIBLE_LIFT`:** $ci_{\text{lower}} > 0.05$ BUT incremental clicks $< 2.0$. Distinguishes minor mathematical variance from actionable business lift, excluding negligible changes from biasing future action effectiveness.
+   - **`INSUFFICIENT_EVIDENCE`:** Assigned when $N_c < 3$, parallel trends violate ($>0.30$), or observations have not completed 28 days.
+
+### 14.3 P0 — Real Functional Product Verification (`verify_product_functionality.py` & Gate 10)
+Replaces superficial tag sniffing with real domain-specific functional proofs:
+1. **OpenFileConverter:** WebAssembly/Worker client-side conversion pipelines (`FileReader`, `readAsArrayBuffer`, `Uint8Array`, `wasm`, `Worker`), interactive dropzone/file-inputs, and format pair integrity.
+2. **IncomeCanvas (Financial & Tax Calculators):**
+   - **2026 Excess APTC 100% Repayment Rule:** Under IRC § 36B, statutory repayment limitation caps sunset for Tax Year 2026; taxpayers must repay 100% of excess advance payments regardless of household income percentage.
+   - **Statutory Hour Definitions:** 130 hours/month full-time classification threshold (IRC § 4980H(c)(4)) vs. 120 hours/month divisor for Full-Time Equivalent (FTE) aggregate hours (IRC § 4980H(c)(2)(E)).
+   - **Section 179 Depreciation:** $1,250,000 maximum deduction cap and $3,130,000 phaseout ceiling for Tax Year 2026, with dollar-for-dollar reduction logic.
+   - **WACC Formulation:** Equity weighting, debt weighting, and after-tax interest tax shield $(1 - T_c)$.
+3. **SMSRiver:** Active virtual number table and polling event stream listeners.
+4. **Directories:** Structured links ($\ge 3$) and search/filter mechanisms.
+5. **Gate 10 in `verify_technical_seo.py`:** Dispatches to `verify_product_functionality.py` and treats functional failure as a fatal `ERROR` on tool/calculator/converter archetypes.
+
+### 14.4 P1 — Multi-Dimensional Query Ownership & SERP Jaccard Overlap
+1. **Exact SERP Jaccard Overlap:**
+   $$J(\text{Top10}_A, \text{Top10}_B) = \frac{|\text{Top10}_A \cap \text{Top10}_B|}{|\text{Top10}_A \cup \text{Top10}_B|}$$
+   Overlap $\ge 0.50$ confirms identical search intent in Google's index.
+2. **Operational Invariants:** 90-day observation window, segmented by device and country, with minimum thresholds ($\ge 100$ impressions, $\ge 5$ clicks).
+3. **Harmless Dual-Ranking vs Harmful Cannibalization:**
+   - **`HARMLESS_DUAL_RANKING`:** Both URLs rank in top 5 positions with stable combined CTR $\ge$ benchmark (risk $0.05$). Search footprint is expanded without self-competition.
+   - **`CONFIRMED_COMPETITION`:** URLs oscillate / rank-bounce, or combined CTR drops $> 25\%$ below expected benchmark (risk $0.85$).
+   - **`CONSOLIDATION_CANDIDATE`:** Performance evidence confirms sustained traffic degradation ($> 40\%$ CTR drop), requiring 301-redirect or canonical consolidation (risk $0.90$).
+
+### 14.5 P1 — 3-Tier Hierarchical Bayesian Fleet Learning
+1. **Tier 1 (Global Fleet Prior):** $\text{Beta}(1.5, 3.5)$ with prior mean $0.30$.
+2. **Tier 2 (Property-Specific Prior):** Aggregated across all route families for the domain.
+3. **Tier 3 (Position-Stratified Prior):** Stratified by baseline ranking band:
+   - `top_3` ($0 < \text{pos} \le 3.0$)
+   - `striking_4_15` ($3.0 < \text{pos} \le 15.0$)
+   - `tail_15_30` ($15.0 < \text{pos} \le 30.0$)
+   - `deep_tail_30_plus` ($\text{pos} > 30.0$ or unranked)
+4. **Immature & Inconclusive Exclusions:** Experiments $< 28$ days elapsed and unmeasured/inconclusive outcomes (`INSUFFICIENT_EVIDENCE`) are strictly excluded from updating action effectiveness.
+
+### 14.6 P0 — Changelog Gate & Negative Validation (`validate_wave_close.py` v2.2.0)
+- Enforces `--version` reporting `validate_wave_close.py v2.2.0`.
+- Dirty worktree rejection: `git status --porcelain` must be clean before wave sign-off unless explicitly overridden with `--allow-dirty`.
+- Negative validation against missing task IDs, non-existent Git commit SHAs, omitted modified files, missing test run evidence in Section 5, and Rule 32 emojis.
+
+
 
 

@@ -27,8 +27,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -102,16 +104,35 @@ def _train_on_the_fly(rows: list[dict[str, Any]], models_dir: str) -> dict[str, 
     return {"label_mode": label_meta["label_mode"]}
 
 
+@dataclass
+class EconomicConfig:
+    """Configurable economic and Bayesian calibration parameters (v2.2)."""
+    labor_hourly_rate: float = 50.0           # Normalized labor cost $/hour
+    value_per_conversion: float = 10.0        # Expected dollar value per conversion
+    currency: str = "USD"
+    time_horizon_days: int = 90               # Economic time horizon for payback (days)
+    cold_start_alpha: float = 1.5             # Prior alpha for Beta(1.5, 3.5) -> mean 0.30
+    cold_start_beta: float = 3.5              # Prior beta
+    success_click_growth_threshold: float = 0.10  # Minimum 10% lift for organic intervention success
+
+
 def compute_opportunity_intelligence(
     row: dict[str, Any],
     conn: Any = None,
     domain: str | None = None,
+    config: EconomicConfig | None = None,
 ) -> dict[str, Any]:
     """Computes calibrated economic expected value (EV), cannibalization risk, confidence, and decision class.
 
+    Mathematical Architecture (v2.2):
+    1. Distinguishes empirical posterior probabilities from cold-start priors.
+    2. Computes 95% Bayesian credible intervals via Beta distribution variance.
+    3. Separates evidence weight from decision confidence and economic value.
+    4. Explicitly discounts implementation labor costs and expected cannibalization risk.
+
     EV(a) = P(success) * IncrementalBusinessValue - ImplementationCost - ExpectedRiskCost
-    Priority Score = (max(0.01, EV(a)) * Confidence) / ImplementationCost
     """
+    cfg = config or EconomicConfig()
     feats = row.get("features") or {}
     cur_pos = float(feats.get("current_pos", 100.0) or 100.0)
     impr = float(row.get("impressions", 0.0) or feats.get("impressions", 0.0) or 0.0)
@@ -121,9 +142,13 @@ def compute_opportunity_intelligence(
     action = str(row.get("prescribed_action") or "INJECT_SECONDARY_H2_ONLY")
     route_family = str(row.get("route_family") or "root")
 
-    # 1. P(success) calibrated from empirical Bayesian stats or fleet prior
+    # 1. Distinguish Empirical Posterior from Cold-Start Priors
     p_success = 0.30
     conf_stat = 0.0
+    is_cold_start = True
+    alpha_post = cfg.cold_start_alpha
+    beta_post = cfg.cold_start_beta
+
     if conn and domain:
         try:
             from fleet_state import get_action_effectiveness
@@ -131,26 +156,42 @@ def compute_opportunity_intelligence(
             if eff.get("has_empirical_evidence"):
                 p_success = float(eff.get("smoothed_win_rate", 0.30))
                 conf_stat = float(eff.get("confidence_weight", 0.0))
+                is_cold_start = False
+                alpha_post = float(eff.get("alpha_prior", cfg.cold_start_alpha)) + float(eff.get("success_count", 0.0))
+                beta_post = float(eff.get("beta_prior", cfg.cold_start_beta)) + float(eff.get("failure_count", 0.0))
             else:
-                # Fall back to cross-fleet prior
+                # Cross-fleet prior pooling
                 from fleet_state import get_fleet_action_effectiveness
                 fleet_eff = get_fleet_action_effectiveness(conn, action, route_family)
-                p_success = float(fleet_eff.get("smoothed_win_rate", 0.30))
+                if fleet_eff.get("total_experiments", 0) > 0:
+                    p_success = float(fleet_eff.get("smoothed_win_rate", 0.30))
+                    conf_stat = float(fleet_eff.get("confidence_weight", 0.0)) * 0.70
+                    is_cold_start = False
+                    alpha_post = float(fleet_eff.get("alpha_prior", cfg.cold_start_alpha)) + float(fleet_eff.get("success_count", 0.0))
+                    beta_post = float(fleet_eff.get("beta_prior", cfg.cold_start_beta)) + float(fleet_eff.get("failure_count", 0.0))
         except Exception:
             pass
 
-    # Position-adjusted calibration if no empirical history exists
-    if conf_stat == 0.0:
+    # Position-adjusted cold-start prior when no empirical trials exist
+    if is_cold_start:
         if 4.0 <= cur_pos <= 15.0:
-            p_success = 0.45  # striking distance benchmark
+            p_success = 0.45  # Striking distance benchmark prior
         elif cur_pos < 4.0:
-            p_success = 0.35  # CTR optimization
+            p_success = 0.35  # Top-3 protected CTR prior
         elif 15.0 < cur_pos <= 30.0:
-            p_success = 0.25
+            p_success = 0.25  # Mid-tail prior
         else:
-            p_success = 0.15
+            p_success = 0.15  # Deep tail prior
 
-    # 2. Incremental Clicks estimation via mathematical CTR curve
+    # 2. Uncertainty: 95% Bayesian Credible Interval
+    beta_total = max(alpha_post + beta_post, 1.0)
+    mean_p = alpha_post / beta_total
+    var_p = (alpha_post * beta_post) / ((beta_total ** 2) * max(beta_total + 1.0, 1.0))
+    sigma_p = math.sqrt(max(var_p, 1e-6))
+    ci_lower = max(0.0, mean_p - 1.96 * sigma_p)
+    ci_upper = min(1.0, mean_p + 1.96 * sigma_p)
+
+    # 3. Incremental Clicks estimation via mathematical CTR curve
     cur_ctr = clicks / max(impr, 1.0)
     if cur_pos < 4.0:
         target_ctr = min(0.35, cur_ctr * 1.4 + 0.05)
@@ -162,7 +203,7 @@ def compute_opportunity_intelligence(
         target_ctr = 0.02
     delta_clicks = max(0.2, impr * max(0.005, target_ctr - cur_ctr))
 
-    # 3. Conversion Probability & Value distinction
+    # 4. Intent-specific Conversion Probability
     q_lower = query.lower()
     if any(tok in q_lower for tok in ("convert", "viewer", "calculator", "tool")):
         p_conv = 0.05
@@ -173,20 +214,22 @@ def compute_opportunity_intelligence(
     else:
         p_conv = 0.015
 
-    value_per_conversion = 10.0  # standard conversion value prior ($)
-    incremental_business_value = delta_clicks * p_conv * value_per_conversion
+    # Incremental business value over configurable economic time horizon
+    time_factor = cfg.time_horizon_days / 90.0
+    incremental_business_value = delta_clicks * p_conv * cfg.value_per_conversion * time_factor
 
-    # 4. Implementation Cost in resource value ($)
+    # 5. Implementation Cost in resource value ($)
+    labor_rate = cfg.labor_hourly_rate
     if "CREATE" in action or "LAUNCH" in action:
-        implementation_cost = 125.0  # 2.5 hours @ $50/hr
+        implementation_cost = 2.5 * labor_rate   # 2.5 hours
     elif "ADD_D1_SPEC" in action:
-        implementation_cost = 62.5   # 1.25 hours
+        implementation_cost = 1.25 * labor_rate  # 1.25 hours
     elif "INJECT" in action:
-        implementation_cost = 25.0   # 0.5 hours
+        implementation_cost = 0.5 * labor_rate   # 0.5 hours
     else:
-        implementation_cost = 12.5   # 0.25 hours
+        implementation_cost = 0.25 * labor_rate  # 0.25 hours
 
-    # 5. Multi-dimensional Query Ownership & Cannibalization Risk
+    # 6. Multi-dimensional Query Ownership & Cannibalization Risk
     cann_risk = 0.0
     if conn and domain:
         try:
@@ -200,32 +243,30 @@ def compute_opportunity_intelligence(
     # Expected Risk Cost ($)
     expected_risk_cost = cann_risk * (clicks * 1.0)
 
-    # 6. Economic Expected Value EV(a)
+    # 7. Economic Expected Value EV(a)
     ev = (p_success * incremental_business_value) - implementation_cost - expected_risk_cost
 
-    # 7. Confidence Score in Available Telemetry
-    confidence = 0.50
+    # 8. Telemetry Confidence and Decision Confidence
+    telemetry_conf = 0.50
     if impr >= 100:
-        confidence += 0.20
+        telemetry_conf += 0.20
     elif impr >= 20:
-        confidence += 0.10
+        telemetry_conf += 0.10
     if clicks >= 3:
-        confidence += 0.15
-    if conf_stat > 0.0:
-        confidence += 0.15 * conf_stat
-    confidence = min(1.0, confidence)
+        telemetry_conf += 0.15
+    decision_confidence = min(1.0, telemetry_conf + 0.15 * conf_stat)
 
-    # 8. Priority Score
-    priority_score = (max(0.01, ev if ev > 0 else (delta_clicks * p_success)) * (1.0 - cann_risk) * confidence) / (implementation_cost / 50.0)
+    # 9. Priority Score
+    priority_score = (max(0.01, ev if ev > 0 else (delta_clicks * p_success)) * (1.0 - cann_risk) * decision_confidence) / (implementation_cost / 50.0)
 
-    # 9. Explicit Decision Classes: SHIP, EXPERIMENT, OBSERVE, NO_ACTION
+    # 10. Explicit Decision Classes: SHIP, EXPERIMENT, OBSERVE, NO_ACTION
     if cann_risk >= 0.75:
         decision_class = "NO_ACTION"
     elif cur_pos <= 3.0 and cur_ctr >= target_ctr:
         decision_class = "NO_ACTION"  # Protect winners
     elif impr < 10 and cur_pos > 30.0:
         decision_class = "OBSERVE"
-    elif priority_score >= 1.5 and cann_risk < 0.40 and confidence >= 0.40:
+    elif priority_score >= 1.5 and cann_risk < 0.40 and decision_confidence >= 0.40:
         decision_class = "SHIP"
     elif priority_score >= 0.4:
         decision_class = "EXPERIMENT"
@@ -235,9 +276,128 @@ def compute_opportunity_intelligence(
     return {
         "expected_value": round(ev, 4),
         "cannibalization_risk": round(cann_risk, 4),
-        "confidence": round(confidence, 4),
+        "confidence": round(decision_confidence, 4),
         "priority_score": round(priority_score, 4),
         "decision_class": decision_class,
+        # Statistical Decomposition (v2.2):
+        "posterior_success_prob": round(p_success, 4),
+        "is_cold_start": is_cold_start,
+        "credible_interval_95": [round(ci_lower, 4), round(ci_upper, 4)],
+        "evidence_weight": round(conf_stat, 4),
+        "model_type": "bayesian_smoothed_empirical" if not is_cold_start else "bayesian_cold_start_prior",
+        "calibration_status": "EMPIRICALLY_ESTIMATED" if not is_cold_start else "AWAITING_HOLDOUT_TEST",
+        "currency": cfg.currency,
+    }
+
+
+def evaluate_temporal_holdout_calibration(
+    conn: Any,
+    domain: str | None = None,
+    config: EconomicConfig | None = None,
+) -> dict[str, Any]:
+    """Evaluates probability calibration on matured experiments using temporal holdout validation.
+
+    Computes Brier Score, Log Loss, and reliability diagram bins across matured trials.
+    """
+    cfg = config or EconomicConfig()
+    query = """
+        SELECT id, domain, page, target_query, action_code, deployed_at,
+               baseline_clicks_28d, post_28d_clicks, did_outcome_class
+        FROM experiment_ledger
+        WHERE status IN ('GRADED', 'EVALUATED_28D', 'EVALUATED_56D', 'TERMINAL_EVALUATED')
+    """
+    params: list[Any] = []
+    if domain:
+        query += " AND domain = ?"
+        params.append(domain)
+    query += " ORDER BY deployed_at ASC"
+
+    try:
+        cur = conn.execute(query, tuple(params))
+        rows = cur.fetchall()
+    except Exception:
+        rows = []
+
+    if not rows:
+        return {
+            "status": "INSUFFICIENT_MATURED_EXPERIMENTS",
+            "sample_size": 0,
+            "brier_score": None,
+            "log_loss": None,
+            "reliability_bins": [],
+            "verdict": "AWAITING_MATURED_EXPERIMENTS: Minimum matured experiments required for calibration.",
+        }
+
+    y_true: list[int] = []
+    p_pred: list[float] = []
+
+    for r in rows:
+        exp_id, dom, pg, t_query, act, dep_str, base_clicks, post_clicks, did_class = r
+        base_c = float(base_clicks or 0.0)
+        post_c = float(post_clicks or 0.0)
+
+        # Success definition: statistically significant lift OR >= 10% relative growth with net gain
+        is_success = (
+            did_class == "STATISTICALLY_SIGNIFICANT_LIFT"
+            or (post_c > base_c and (post_c - base_c) / max(base_c, 1.0) >= cfg.success_click_growth_threshold)
+        )
+        y_true.append(1 if is_success else 0)
+
+        # Compute model probability
+        opp = compute_opportunity_intelligence(
+            {
+                "page": pg,
+                "query": t_query,
+                "prescribed_action": act,
+                "clicks_30d": base_c,
+                "impressions": 100.0,
+            },
+            conn=conn,
+            domain=dom,
+            config=cfg,
+        )
+        p_pred.append(float(opp.get("posterior_success_prob", 0.30)))
+
+    n = len(y_true)
+    brier_score = sum((p - y) ** 2 for p, y in zip(p_pred, y_true)) / max(n, 1)
+
+    eps = 1e-15
+    log_loss = -sum(
+        y * math.log(max(p, eps)) + (1 - y) * math.log(max(1.0 - p, eps))
+        for p, y in zip(p_pred, y_true)
+    ) / max(n, 1)
+
+    # Reliability diagram bins: [0, 0.2), [0.2, 0.4), [0.4, 0.6), [0.6, 0.8), [0.8, 1.0]
+    bins_def = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0)]
+    reliability_bins = []
+    for low, high in bins_def:
+        bin_indices = [i for i, p in enumerate(p_pred) if (low <= p < high) or (high == 1.0 and p == 1.0)]
+        if bin_indices:
+            mean_p = sum(p_pred[i] for i in bin_indices) / len(bin_indices)
+            obs_win = sum(y_true[i] for i in bin_indices) / len(bin_indices)
+            cal_err = abs(mean_p - obs_win)
+        else:
+            mean_p = (low + high) / 2.0
+            obs_win = 0.0
+            cal_err = 0.0
+        reliability_bins.append({
+            "bin_range": [low, high],
+            "count": len(bin_indices),
+            "mean_predicted": round(mean_p, 4),
+            "observed_win_rate": round(obs_win, 4),
+            "calibration_error": round(cal_err, 4),
+        })
+
+    verdict = "WELL_CALIBRATED" if brier_score <= 0.25 else "NEEDS_CALIBRATION"
+    return {
+        "status": "EVALUATED",
+        "sample_size": n,
+        "total_matured_experiments": n,
+        "brier_score": round(brier_score, 4),
+        "log_loss": round(log_loss, 4),
+        "reliability_bins": reliability_bins,
+        "reliability_diagram_bins": reliability_bins,
+        "verdict": verdict,
     }
 
 

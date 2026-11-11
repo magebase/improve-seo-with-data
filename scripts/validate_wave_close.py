@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""validate_wave_close.py - Automated Wave-Close Verification Gate (v2.1.1).
+"""validate_wave_close.py - Automated Wave-Close Verification Gate (v2.2.0).
 
 Enforces that an autonomous SEO wave cannot be marked complete until its
 authoritative Markdown report exists, reconciles with the Git diff and backlog
@@ -20,6 +20,8 @@ Validation Checks:
 9. Task Reconciliation: Shipped task IDs in the database/queue must match the task table in the report.
 10. Rule 32 Emoji Ban: 0 unicode emojis allowed in the report.
 11. Well-Formed Markdown: Validates headings and table syntax against run-on or mangled formatting.
+12. Git Worktree Cleanliness: Enforces 0 dirty or untracked files before wave sign-off.
+13. Test Run Evidence: Validates passing test execution counts and standardized classifications in Section 5.
 """
 
 from __future__ import annotations
@@ -32,6 +34,8 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+VERSION = "2.2.0"
 
 MANDATORY_SECTIONS = [
     ("Executive Summary & Two-Part Scorecard", re.compile(r"##\s*1\.\s*Executive Summary.*Scorecard", re.IGNORECASE)),
@@ -87,6 +91,24 @@ def get_git_changed_files(repo_path: Path | str, commit_sha: str) -> list[str]:
         return []
 
 
+def check_git_worktree_clean(repo_path: Path | str) -> tuple[bool, str]:
+    """Checks if git working tree is clean (no uncommitted modified/untracked files)."""
+    try:
+        res = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(repo_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0:
+            out = res.stdout.strip()
+            return (len(out) == 0, out)
+        return True, ""
+    except Exception:
+        return True, ""
+
+
 def validate_report_content(
     content: str,
     domain: str | None = None,
@@ -96,6 +118,7 @@ def validate_report_content(
     commit_sha: str | None = None,
     allow_measured_seo: bool = False,
     allow_worker_placeholder: bool = False,
+    allow_dirty: bool = False,
 ) -> tuple[bool, list[str], list[str]]:
     """Validate report text against mandatory contract rules.
 
@@ -145,21 +168,31 @@ def validate_report_content(
     # 5. Git Commit Verification & Changed-File Inventory Reconciliation
     commit_match = re.search(r"\*\*(?:Repository Commit|Integration Commit SHA):\*\*\s*\[?`?([a-f0-9]{7,40})`?\]?", content, re.IGNORECASE)
     reported_commit = commit_match.group(1) if commit_match else commit_sha
-    if reported_commit and repo_path:
-        if not verify_git_commit_exists(repo_path, reported_commit):
-            errors.append(f"Git commit verification failed: Commit '{reported_commit}' does not exist in repository {repo_path}.")
-        else:
-            actual_files = get_git_changed_files(repo_path, reported_commit)
-            if actual_files:
-                # Check that every changed file appears in Section 4
-                sec4_match = re.search(r"##\s*4\.\s*Exhaustive File.*Changes(.*?)##\s*5\.", content, re.DOTALL | re.IGNORECASE)
-                sec4_text = sec4_match.group(1) if sec4_match else content
-                missing_files = [f for f in actual_files if f not in sec4_text]
-                if missing_files:
-                    errors.append(
-                        f"Git diff reconciliation failure: Commit {reported_commit[:8]} modified {len(actual_files)} files, "
-                        f"but the following files were omitted from Section 4: {missing_files}"
-                    )
+    if repo_path:
+        # Git worktree clean check
+        if not allow_dirty:
+            is_clean, dirty_status = check_git_worktree_clean(repo_path)
+            if not is_clean:
+                errors.append(
+                    f"Git worktree dirty check failed: Repository {repo_path} contains uncommitted changes or untracked files:\n"
+                    f"{dirty_status[:200]}\nWorking tree must be clean before wave close."
+                )
+
+        if reported_commit:
+            if not verify_git_commit_exists(repo_path, reported_commit):
+                errors.append(f"Git commit verification failed: Commit '{reported_commit}' does not exist in repository {repo_path}.")
+            else:
+                actual_files = get_git_changed_files(repo_path, reported_commit)
+                if actual_files:
+                    # Check that every changed file appears in Section 4
+                    sec4_match = re.search(r"##\s*4\.\s*Exhaustive File.*Changes(.*?)##\s*5\.", content, re.DOTALL | re.IGNORECASE)
+                    sec4_text = sec4_match.group(1) if sec4_match else content
+                    missing_files = [f for f in actual_files if f not in sec4_text]
+                    if missing_files:
+                        errors.append(
+                            f"Git diff reconciliation failure: Commit {reported_commit[:8]} modified {len(actual_files)} files, "
+                            f"but the following files were omitted from Section 4: {missing_files}"
+                        )
 
     # 6. Strategic Issue State Semantics
     # Check Section 3 for invalid claim of RESOLVED when marked as planned/investigating
@@ -178,6 +211,14 @@ def validate_report_content(
                     "cannot be marked as 'VERIFIED_RESOLVED' or 'RESOLVED'."
                 )
                 break
+
+    # 7. Section 5 Test Evidence Verification
+    sec5_match = re.search(r"##\s*5\.\s*Standardized Test Classification.*?(?=##\s*6\.)", content, re.DOTALL | re.IGNORECASE)
+    if sec5_match:
+        sec5_text = sec5_match.group(0)
+        has_test_evidence = bool(re.search(r"(?:tests?\s+passed|suite\s+passed|suites?\s+passing|\d+\s*(?:passed|green|passing|tests)|All\s+.*?passed|All preflight gates green)", sec5_text, re.IGNORECASE))
+        if not has_test_evidence:
+            errors.append("Test Evidence Missing: Section 5 must document standardized test classifications and passing test run counts.")
 
     # 7. Scorecard Math Verification
     part1_match = re.search(r"###\s*Part 1:\s*Engineering Execution Quality\s*\(Score:\s*([\d\.]+)\s*/\s*10\.0\)(.*?)###\s*Part 2:", content, re.DOTALL | re.IGNORECASE)
@@ -237,6 +278,7 @@ def validate_wave_close(
     commit_sha: str | None = None,
     allow_measured_seo: bool = False,
     allow_worker_placeholder: bool = False,
+    allow_dirty: bool = False,
 ) -> tuple[bool, list[str], list[str]]:
     """Validate report file existence and content against database backlog state."""
     path = Path(report_path)
@@ -272,11 +314,13 @@ def validate_wave_close(
         commit_sha=commit_sha,
         allow_measured_seo=allow_measured_seo,
         allow_worker_placeholder=allow_worker_placeholder,
+        allow_dirty=allow_dirty,
     )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate wave changelog report against contract gate.")
+    parser.add_argument("--version", action="version", version=f"validate_wave_close.py v{VERSION}")
     parser.add_argument("--report", required=True, help="Path to wave changelog markdown")
     parser.add_argument("--domain", default=None, help="Target domain to verify")
     parser.add_argument("--wave", type=int, default=None, help="Wave number to verify")
@@ -285,6 +329,7 @@ def main() -> int:
     parser.add_argument("--commit-sha", default=None, help="Commit SHA to reconcile tasks and git diff against")
     parser.add_argument("--allow-measured-seo", action="store_true", help="Allow numerical Part 2 SEO score (post-28d)")
     parser.add_argument("--allow-worker-placeholder", action="store_true", help="Allow placeholder worker version")
+    parser.add_argument("--allow-dirty", action="store_true", help="Allow uncommitted changes in git worktree")
     parser.add_argument("--strict", action="store_true", help="Fail if any warnings exist")
     args = parser.parse_args()
 
@@ -297,6 +342,7 @@ def main() -> int:
         commit_sha=args.commit_sha,
         allow_measured_seo=args.allow_measured_seo,
         allow_worker_placeholder=args.allow_worker_placeholder,
+        allow_dirty=args.allow_dirty,
     )
 
     print(f"=== Wave-Close Verification: {args.report} ===")

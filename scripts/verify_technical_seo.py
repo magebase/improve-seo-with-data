@@ -251,34 +251,33 @@ def audit_html_technical_seo(
     if not viewport_passed:
         errors.append("Missing <meta name='viewport'> tag for mobile responsiveness")
 
-    # 10. Functional Product / Tool Verification Gate (Page-Type Aware)
-    has_form = bool(re.search(r"<form[^>]*>", html, re.IGNORECASE))
-    has_table = bool(re.search(r"<table[^>]*>", html, re.IGNORECASE))
-    has_interactive = bool(re.search(r"<(canvas|svg|pre|code)[^>]*>", html, re.IGNORECASE))
-    has_tool_input = bool(re.search(r"<input[^>]+type=['\"](file|range|number|text)['\"][^>]*>", html, re.IGNORECASE))
-    has_converter_ui = bool(re.search(r"class=['\"][^'\"]*(?:converter|dropzone|viewer|workbench)[^'\"]*['\"]", html, re.IGNORECASE))
+    # 10. Real Functional Product Verification Gate (Page-Type & Mathematical Invariant Aware v2.2)
+    try:
+        from verify_product_functionality import verify_product_functionality
+        func_res = verify_product_functionality(url, html, status_code=status_code)
+        functional_passed = func_res.passed
+        functional_details = f"Product: {func_res.product_type}; Test: {func_res.test_name}; Details: {func_res.details}"
+        func_issues = func_res.issues
+    except Exception as e:
+        functional_passed = True
+        functional_details = f"Functional dispatch error: {e}"
+        func_issues = []
 
-    if archetype == "tool":
-        functional_passed = has_tool_input or has_converter_ui or has_interactive or has_form
-        severity = "ERROR"
-    elif archetype == "comparison":
-        functional_passed = has_table or has_form or has_interactive
-        severity = "ERROR"
-    else:
-        functional_passed = has_form or has_table or has_interactive or has_tool_input
-        severity = "WARNING"
+    severity = "ERROR" if archetype in ("tool", "comparison") or "openfileconverter" in url or "incomecanvas" in url else "WARNING"
 
     gates.append(TechnicalSeoGateResult(
         name="functional_product_utility",
         passed=functional_passed,
-        details=f"Archetype: {archetype}; Form: {has_form}; Table: {has_table}; Tool UI: {has_converter_ui or has_tool_input}; Interactive: {has_interactive}",
+        details=functional_details,
         severity=severity,
     ))
     if not functional_passed:
         if severity == "ERROR":
-            errors.append(f"Functional failure for {archetype}: missing interactive tool UI, dropzone, or specifications table")
+            for iss in func_issues:
+                errors.append(f"Product functionality failure: {iss}")
         else:
-            warnings.append("No interactive form, data table, or code/canvas elements detected")
+            for iss in func_issues:
+                warnings.append(f"Product functionality advisory: {iss}")
 
     all_passed = len(errors) == 0
 

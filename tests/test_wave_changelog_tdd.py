@@ -263,3 +263,74 @@ def test_validate_wave_close_file_not_found(tmp_path):
     passed, errors, warnings = validate_wave_close(non_existent)
     assert passed is False
     assert any("Report file not found" in e for e in errors)
+
+
+def test_validate_wave_close_rejects_missing_test_evidence(valid_report_markdown):
+    """Negative test: Section 5 missing passing test execution counts is rejected."""
+    corrupted_md = re.sub(
+        r"## 5\. Standardized Test Classification.*?(?=## 6\.)",
+        "## 5. Standardized Test Classification & Quality Verification\n\nAll tests were supposedly run offline.\n\n",
+        valid_report_markdown,
+        flags=re.DOTALL,
+    )
+    passed, errors, warnings = validate_report_content(
+        content=corrupted_md,
+        domain="incomecanvas.com",
+        wave=15,
+    )
+    assert passed is False
+    assert any("Test Evidence Missing" in e for e in errors)
+
+
+def test_validate_wave_close_rejects_nonexistent_git_commit(valid_report_markdown, monkeypatch):
+    """Negative test: Commit SHA not found in repo is rejected."""
+    monkeypatch.setattr(
+        "validate_wave_close.verify_git_commit_exists",
+        lambda repo, sha: False,
+    )
+    passed, errors, warnings = validate_report_content(
+        content=valid_report_markdown,
+        domain="incomecanvas.com",
+        wave=15,
+        repo_path=Path("/fake/repo"),
+        commit_sha="badc0ffee",
+    )
+    assert passed is False
+    assert any("Git commit verification failed" in e for e in errors)
+
+
+def test_validate_wave_close_rejects_dirty_worktree(valid_report_markdown, monkeypatch):
+    """Negative test: Uncommitted changes in git worktree block wave sign-off."""
+    monkeypatch.setattr(
+        "validate_wave_close.check_git_worktree_clean",
+        lambda repo: (False, " M apps/seo_alpha_site/views.py\n?? untracked.py"),
+    )
+    passed, errors, warnings = validate_report_content(
+        content=valid_report_markdown,
+        domain="incomecanvas.com",
+        wave=15,
+        repo_path=Path("/fake/repo"),
+        allow_dirty=False,
+    )
+    assert passed is False
+    assert any("Git worktree dirty check failed" in e for e in errors)
+
+
+def test_validate_wave_close_rejects_missing_task_ids(valid_report_markdown):
+    """Negative test: Expected task IDs not documented in task table are rejected."""
+    passed, errors, warnings = validate_report_content(
+        content=valid_report_markdown,
+        domain="incomecanvas.com",
+        wave=15,
+        expected_task_ids=[543, 987, 88888],  # 88888 is missing
+    )
+    assert passed is False
+    assert any("Task reconciliation failure" in e and "88888" in e for e in errors)
+
+
+def test_validate_wave_close_cli_version():
+    """Verifies validate_wave_close.py reports v2.2.0 via CLI."""
+    import subprocess
+    cmd = [sys.executable, str(SCRIPTS_DIR / "validate_wave_close.py"), "--version"]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert "validate_wave_close.py v2.2.0" in res.stdout

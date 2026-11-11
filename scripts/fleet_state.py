@@ -290,13 +290,14 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             except sqlite3.OperationalError:
                 pass
 
-    # action_effectiveness_stats v2.1 migrations
+    # action_effectiveness_stats v2.1/v2.2 migrations
     eff_columns = {row[1] for row in conn.execute("PRAGMA table_info(action_effectiveness_stats)")}
     for col, col_def in [
         ("alpha_prior", "REAL NOT NULL DEFAULT 1.5"),
         ("beta_prior", "REAL NOT NULL DEFAULT 3.5"),
         ("smoothed_win_rate", "REAL NOT NULL DEFAULT 0.30"),
         ("confidence_weight", "REAL NOT NULL DEFAULT 0.0"),
+        ("position_tier", "TEXT NOT NULL DEFAULT 'all'"),
     ]:
         if col not in eff_columns:
             try:
@@ -1102,6 +1103,155 @@ def update_experiment_recrawl(
     return updated
 
 
+def calculate_pre_trend_divergence(
+    t_p1: float,
+    t_p2: float,
+    c_p1: float,
+    c_p2: float,
+) -> float:
+    """Calculates pre-treatment parallel trends divergence between treatment and control cohorts.
+
+    Formula:
+        | (T_P2 - T_P1) / max(T_P1, 1.0) - (C_P2 - C_P1) / max(C_P1, 1.0) |
+    where:
+        P1 = [-56d, -28d] prior to treatment
+        P2 = [-28d, 0d] immediately prior to treatment
+
+    Returns divergence score. A value > 0.30 indicates a PARALLEL_TRENDS_VIOLATION.
+    """
+    t_growth = (float(t_p2) - float(t_p1)) / max(float(t_p1), 1.0)
+    c_growth = (float(c_p2) - float(c_p1)) / max(float(c_p1), 1.0)
+    return abs(t_growth - c_growth)
+
+
+def get_t_critical_value(n_controls: int) -> float:
+    """Returns two-tailed 95% critical value adjusted for small control cohort size.
+
+    Degrees of freedom small-sample correction:
+    - n_controls >= 5: 1.96 (standard normal approximation)
+    - n_controls == 4: 2.776
+    - n_controls == 3: 3.182
+    - n_controls <= 2: 4.303
+    """
+    if n_controls >= 5:
+        return 1.96
+    if n_controls == 4:
+        return 2.776
+    if n_controls == 3:
+        return 3.182
+    return 4.303
+
+
+def get_position_tier(position: float) -> str:
+    """Classifies baseline position into standardized ranking bands.
+    - top_3: 0 < pos <= 3.0
+    - striking_4_15: 3.0 < pos <= 15.0
+    - tail_15_30: 15.0 < pos <= 30.0
+    - deep_tail_30_plus: pos > 30.0 or unranked
+    """
+    if 0 < position <= 3.0:
+        return "top_3"
+    elif 3.0 < position <= 15.0:
+        return "striking_4_15"
+    elif 15.0 < position <= 30.0:
+        return "tail_15_30"
+    else:
+        return "deep_tail_30_plus"
+
+
+def calculate_serp_jaccard_overlap(urls_a: list[str], urls_b: list[str]) -> float:
+    """Calculates Jaccard overlap between the top 10 search results of two queries.
+
+    Formula:
+        | Top10(A) ∩ Top10(B) | / | Top10(A) ∪ Top10(B) |
+
+    Interpretation:
+    - overlap >= 0.50: Identical search intent (shared Google indexation view).
+    - 0.20 <= overlap < 0.50: Related sub-topics / companion intents.
+    - overlap < 0.20: Distinct search intents.
+    """
+    set_a = {u.strip().rstrip("/").lower() for u in urls_a[:10] if u}
+    set_b = {u.strip().rstrip("/").lower() for u in urls_b[:10] if u}
+    if not set_a or not set_b:
+        return 0.0
+    return len(set_a & set_b) / len(set_a | set_b)
+
+
+def classify_cannibalization_risk(
+    *,
+    serp_overlap: float,
+    lexical_overlap: float,
+    intent_a: str,
+    intent_b: str,
+    combined_ctr: float | None = None,
+    expected_ctr: float | None = None,
+    ctr_drop_pct: float | None = None,
+    rank_volatility: float | None = None,
+    page_a_position: float | None = None,
+    page_b_position: float | None = None,
+) -> tuple[str, float, str]:
+    """Classifies multi-page ranking dynamics into harmless dual-ranking vs harmful cannibalization.
+
+    Operational Invariants:
+    - 90-day window, segmented by device and country.
+    - Minimum exposure threshold: >= 100 impressions and >= 5 clicks.
+    - Harmless Dual-Ranking: Both URLs rank in top 5 positions with stable combined CTR >= expected benchmark.
+    - Harmful Cannibalization: URLs oscillate / rank-bounce, or combined CTR drops > 25% below expected benchmark.
+    - 301 Consolidation requires performance evidence (traffic loss or sustained rank drop), not theoretical overlap alone.
+
+    Returns:
+        (risk_classification, risk_score, rationale)
+    """
+    # Case 1: Harmless Dual-Ranking (both in top 5, healthy CTR)
+    if (
+        page_a_position is not None
+        and page_b_position is not None
+        and 0 < page_a_position <= 5.0
+        and 0 < page_b_position <= 5.0
+        and (ctr_drop_pct is None or ctr_drop_pct <= 0.25)
+    ):
+        return (
+            "HARMLESS_DUAL_RANKING",
+            0.05,
+            "Both pages rank in top 5 with healthy combined CTR; search presence is maximized without cannibalization penalty",
+        )
+
+    # Case 2: Distinct search intent
+    if intent_a and intent_b and intent_a.lower() != intent_b.lower():
+        return (
+            "DISTINCT_INTENT",
+            0.05,
+            f"Distinct search intents ('{intent_a}' vs '{intent_b}'); user tasks are orthogonal",
+        )
+
+    # Case 3: Confirmed competition / cannibalization
+    if serp_overlap >= 0.50 or (lexical_overlap >= 0.80 and intent_a == intent_b):
+        if (ctr_drop_pct is not None and ctr_drop_pct > 0.25) or (rank_volatility is not None and rank_volatility > 5.0):
+            return (
+                "CONFIRMED_COMPETITION",
+                0.85,
+                f"Severe cannibalization: SERP overlap {serp_overlap:.2f} with CTR drop > 25% or high rank volatility",
+            )
+        if ctr_drop_pct is not None and ctr_drop_pct > 0.40:
+            return (
+                "CONSOLIDATION_CANDIDATE",
+                0.90,
+                "Sustained severe traffic degradation confirms need for 301/canonical consolidation",
+            )
+        return (
+            "CONFIRMED_COMPETITION",
+            0.85,
+            f"Identical intent with high SERP overlap ({serp_overlap:.2f} >= 0.50); cannibalization risk high",
+        )
+
+    # Case 4: Potential overlap
+    return (
+        "POTENTIAL_OVERLAP",
+        0.20,
+        f"Moderate overlap (SERP={serp_overlap:.2f}, lexical={lexical_overlap:.2f}) without confirmed traffic damage",
+    )
+
+
 def update_experiment_outcomes(
     conn: sqlite3.Connection,
     domain: str,
@@ -1227,9 +1377,21 @@ def update_experiment_outcomes(
 
         # Statistical safeguards & Standard Error calculation
         n_controls = len(valid_controls)
-        se = ((max(0.01, treatment_lift**2) + max(0.01, control_lift**2) / max(1, n_controls)) ** 0.5) * 0.5
-        ci_lower = net_lift - 1.96 * se
-        ci_upper = net_lift + 1.96 * se
+        ctrl_lifts = [
+            (c_clicks - ctrl_base_clicks) / max(ctrl_base_clicks, 1.0)
+            for c_clicks in ctrl_p_clicks_list
+        ]
+        if len(ctrl_lifts) > 1:
+            mean_c_lift = sum(ctrl_lifts) / len(ctrl_lifts)
+            var_c = sum((l - mean_c_lift) ** 2 for l in ctrl_lifts) / (len(ctrl_lifts) - 1)
+        else:
+            var_c = max(0.01, abs(control_lift) * 0.05)
+        # Poisson-Normal count rate variance: Var(T_lift) ~ 1.0 / max(base_clicks, 1.0)
+        var_t = 1.0 / max(base_clicks, 1.0)
+        se = (max(0.0001, (var_t + var_c / max(1, n_controls)))) ** 0.5 * 0.5
+        t_crit = get_t_critical_value(n_controls)
+        ci_lower = net_lift - t_crit * se
+        ci_upper = net_lift + t_crit * se
 
         limitations: list[str] = []
         outcome_class = "INSUFFICIENT_EVIDENCE"
@@ -1244,8 +1406,12 @@ def update_experiment_outcomes(
 
         if not limitations and actual_days >= 28:
             if ci_lower > 0.05:
-                outcome_class = "STATISTICALLY_SIGNIFICANT_LIFT"
-                conf = min(0.95, 0.60 + 0.05 * n_controls)
+                if inc_clicks < 2.0:
+                    outcome_class = "COMMERCIALLY_NEGLIGIBLE_LIFT"
+                    conf = min(0.90, 0.55 + 0.05 * n_controls)
+                else:
+                    outcome_class = "STATISTICALLY_SIGNIFICANT_LIFT"
+                    conf = min(0.95, 0.60 + 0.05 * n_controls)
             elif ci_upper < -0.05:
                 outcome_class = "STATISTICALLY_SIGNIFICANT_DROP"
                 conf = min(0.95, 0.60 + 0.05 * n_controls)
@@ -1269,23 +1435,26 @@ def update_experiment_outcomes(
             new_status = "GRADED"
             graded_count += 1
             # Feed into adaptive action effectiveness with Bayesian hierarchical smoothing
-            is_success = (
-                outcome_class == "STATISTICALLY_SIGNIFICANT_LIFT"
-                or net_lift > 0.05
-                or inc_clicks > 1.0
-                or (p_pos < base_pos and base_pos > 0)
-            )
-            record_action_effectiveness(
-                conn,
-                domain=domain,
-                action_code=action_code,
-                route_family=route_family or "root",
-                is_success=is_success,
-                click_lift=net_lift,
-                impression_lift=(p_impr - base_impr) / max(base_impr, 1.0),
-                rank_delta=(base_pos - p_pos),
-                now=now_dt,
-            )
+            # Exclude confounded outcomes (parallel trends violation) from poisoning fleet learning
+            if pre_trend_div <= 0.30 and n_controls >= 1:
+                is_success = (
+                    outcome_class == "STATISTICALLY_SIGNIFICANT_LIFT"
+                    or (outcome_class != "COMMERCIALLY_NEGLIGIBLE_LIFT" and net_lift > 0.05 and inc_clicks >= 2.0)
+                    or (outcome_class == "INSUFFICIENT_EVIDENCE" and net_lift > 0.05 and inc_clicks >= 2.0)
+                )
+                pos_tier = get_position_tier(base_pos)
+                record_action_effectiveness(
+                    conn,
+                    domain=domain,
+                    action_code=action_code,
+                    route_family=route_family or "root",
+                    position_tier=pos_tier,
+                    is_success=is_success,
+                    click_lift=net_lift,
+                    impression_lift=(p_impr - base_impr) / max(base_impr, 1.0),
+                    rank_delta=(base_pos - p_pos),
+                    now=now_dt,
+                )
         else:
             observing_count += 1
 
@@ -1561,6 +1730,7 @@ def record_action_effectiveness(
     domain: str,
     action_code: str,
     route_family: str = "root",
+    position_tier: str = "all",
     is_success: bool,
     click_lift: float = 0.0,
     impression_lift: float = 0.0,
@@ -1601,39 +1771,78 @@ def record_action_effectiveness(
     smoothed_win_rate = (new_succ + alpha_prior) / (new_tot + alpha_prior + beta_prior)
     confidence_weight = 1.0 - (1.0 / ((new_tot + 1) ** 0.5))
 
-    conn.execute(
-        """
-        INSERT INTO action_effectiveness_stats (
-            domain, action_code, route_family, total_experiments, successful_experiments,
-            avg_click_lift, avg_impression_lift, avg_rank_delta, alpha_prior, beta_prior,
-            smoothed_win_rate, confidence_weight, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(domain, action_code, route_family) DO UPDATE SET
-            total_experiments = excluded.total_experiments,
-            successful_experiments = excluded.successful_experiments,
-            avg_click_lift = excluded.avg_click_lift,
-            avg_impression_lift = excluded.avg_impression_lift,
-            avg_rank_delta = excluded.avg_rank_delta,
-            smoothed_win_rate = excluded.smoothed_win_rate,
-            confidence_weight = excluded.confidence_weight,
-            updated_at = excluded.updated_at
-        """,
-        (
-            domain,
-            action_code,
-            route_family,
-            new_tot,
-            new_succ,
-            new_c_lift,
-            new_i_lift,
-            new_r_delta,
-            alpha_prior,
-            beta_prior,
-            smoothed_win_rate,
-            confidence_weight,
-            now_str,
-        ),
-    )
+    # Check if position_tier column exists
+    eff_cols = {r[1] for r in conn.execute("PRAGMA table_info(action_effectiveness_stats)")}
+    if "position_tier" in eff_cols:
+        conn.execute(
+            """
+            INSERT INTO action_effectiveness_stats (
+                domain, action_code, route_family, position_tier, total_experiments, successful_experiments,
+                avg_click_lift, avg_impression_lift, avg_rank_delta, alpha_prior, beta_prior,
+                smoothed_win_rate, confidence_weight, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(domain, action_code, route_family) DO UPDATE SET
+                total_experiments = excluded.total_experiments,
+                successful_experiments = excluded.successful_experiments,
+                avg_click_lift = excluded.avg_click_lift,
+                avg_impression_lift = excluded.avg_impression_lift,
+                avg_rank_delta = excluded.avg_rank_delta,
+                position_tier = excluded.position_tier,
+                smoothed_win_rate = excluded.smoothed_win_rate,
+                confidence_weight = excluded.confidence_weight,
+                updated_at = excluded.updated_at
+            """,
+            (
+                domain,
+                action_code,
+                route_family,
+                position_tier,
+                new_tot,
+                new_succ,
+                new_c_lift,
+                new_i_lift,
+                new_r_delta,
+                alpha_prior,
+                beta_prior,
+                smoothed_win_rate,
+                confidence_weight,
+                now_str,
+            ),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO action_effectiveness_stats (
+                domain, action_code, route_family, total_experiments, successful_experiments,
+                avg_click_lift, avg_impression_lift, avg_rank_delta, alpha_prior, beta_prior,
+                smoothed_win_rate, confidence_weight, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(domain, action_code, route_family) DO UPDATE SET
+                total_experiments = excluded.total_experiments,
+                successful_experiments = excluded.successful_experiments,
+                avg_click_lift = excluded.avg_click_lift,
+                avg_impression_lift = excluded.avg_impression_lift,
+                avg_rank_delta = excluded.avg_rank_delta,
+                smoothed_win_rate = excluded.smoothed_win_rate,
+                confidence_weight = excluded.confidence_weight,
+                updated_at = excluded.updated_at
+            """,
+            (
+                domain,
+                action_code,
+                route_family,
+                new_tot,
+                new_succ,
+                new_c_lift,
+                new_i_lift,
+                new_r_delta,
+                alpha_prior,
+                beta_prior,
+                smoothed_win_rate,
+                confidence_weight,
+                now_str,
+            ),
+        )
     conn.commit()
 
 
@@ -1642,8 +1851,49 @@ def get_action_effectiveness(
     domain: str,
     action_code: str,
     route_family: str = "root",
+    position_tier: str | None = None,
 ) -> dict[str, Any]:
-    """Returns Bayesian-smoothed win-rate, credible interval, and confidence weight."""
+    """Returns Bayesian-smoothed win-rate, credible interval, and confidence weight.
+
+    Implements 3-tier hierarchical structure:
+    - Tier 3: Action + Route Family + Position Tier (most specific)
+    - Tier 2: Property-specific prior for this action
+    - Tier 1: Fleet global prior Beta(1.5, 3.5) (win_rate = 0.30)
+    """
+    # Tier 3 check (specific position tier if available)
+    eff_cols = {r[1] for r in conn.execute("PRAGMA table_info(action_effectiveness_stats)")}
+    if position_tier and "position_tier" in eff_cols:
+        row = conn.execute(
+            """
+            SELECT total_experiments, successful_experiments, avg_click_lift, avg_impression_lift, avg_rank_delta,
+                   alpha_prior, beta_prior, smoothed_win_rate, confidence_weight
+            FROM action_effectiveness_stats
+            WHERE domain = ? AND action_code = ? AND route_family = ? AND position_tier = ?
+            """,
+            (domain, action_code, route_family, position_tier),
+        ).fetchone()
+        if row and row[0] >= 3:
+            tot = int(row[0])
+            succ = int(row[1])
+            raw_rate = float(succ) / float(tot) if tot > 0 else 0.30
+            smoothed = float(row[7] if row[7] is not None else (succ + 1.5) / (tot + 5.0))
+            conf = float(row[8] if row[8] is not None else (1.0 - 1.0 / ((tot + 1) ** 0.5)))
+            se = (smoothed * (1.0 - smoothed) / (tot + 5.0)) ** 0.5
+            ci = (max(0.0, smoothed - 1.96 * se), min(1.0, smoothed + 1.96 * se))
+            return {
+                "total_experiments": tot,
+                "win_rate": raw_rate,
+                "smoothed_win_rate": smoothed,
+                "confidence_weight": conf,
+                "credible_interval": ci,
+                "avg_click_lift": float(row[2] or 0.0),
+                "avg_impression_lift": float(row[3] or 0.0),
+                "avg_rank_delta": float(row[4] or 0.0),
+                "has_empirical_evidence": True,
+                "hierarchy_tier": "tier_3_position_stratified",
+            }
+
+    # Standard / Tier 3 route family
     row = conn.execute(
         """
         SELECT total_experiments, successful_experiments, avg_click_lift, avg_impression_lift, avg_rank_delta,
@@ -1653,35 +1903,68 @@ def get_action_effectiveness(
         """,
         (domain, action_code, route_family),
     ).fetchone()
-    if not row or row[0] == 0:
+    if row and row[0] > 0:
+        tot = int(row[0])
+        succ = int(row[1])
+        raw_rate = float(succ) / float(tot) if tot > 0 else 0.30
+        smoothed = float(row[7] if row[7] is not None else (succ + 1.5) / (tot + 5.0))
+        conf = float(row[8] if row[8] is not None else (1.0 - 1.0 / ((tot + 1) ** 0.5)))
+        se = (smoothed * (1.0 - smoothed) / (tot + 5.0)) ** 0.5
+        ci = (max(0.0, smoothed - 1.96 * se), min(1.0, smoothed + 1.96 * se))
         return {
-            "total_experiments": 0,
-            "win_rate": 0.30,  # prior mean alpha/(alpha+beta) = 1.5/5.0
-            "smoothed_win_rate": 0.30,
-            "confidence_weight": 0.0,
-            "credible_interval": (0.10, 0.55),
-            "avg_click_lift": 0.0,
-            "avg_impression_lift": 0.0,
-            "avg_rank_delta": 0.0,
-            "has_empirical_evidence": False,
+            "total_experiments": tot,
+            "win_rate": raw_rate,
+            "smoothed_win_rate": smoothed,
+            "confidence_weight": conf,
+            "credible_interval": ci,
+            "avg_click_lift": float(row[2] or 0.0),
+            "avg_impression_lift": float(row[3] or 0.0),
+            "avg_rank_delta": float(row[4] or 0.0),
+            "has_empirical_evidence": True,
+            "hierarchy_tier": "tier_3_action_route",
         }
-    tot = int(row[0])
-    succ = int(row[1])
-    raw_rate = float(succ) / float(tot) if tot > 0 else 0.30
-    smoothed = float(row[7] if row[7] is not None else (succ + 1.5) / (tot + 5.0))
-    conf = float(row[8] if row[8] is not None else (1.0 - 1.0 / ((tot + 1) ** 0.5)))
-    se = (smoothed * (1.0 - smoothed) / (tot + 5.0)) ** 0.5
-    ci = (max(0.0, smoothed - 1.96 * se), min(1.0, smoothed + 1.96 * se))
+
+    # Tier 2 check: property-level prior across all route families
+    p_row = conn.execute(
+        """
+        SELECT SUM(total_experiments), SUM(successful_experiments),
+               AVG(avg_click_lift), AVG(avg_impression_lift), AVG(avg_rank_delta)
+        FROM action_effectiveness_stats
+        WHERE domain = ? AND action_code = ?
+        """,
+        (domain, action_code),
+    ).fetchone()
+    if p_row and p_row[0] and p_row[0] > 0:
+        tot = int(p_row[0])
+        succ = int(p_row[1] or 0)
+        smoothed = (succ + 1.5) / (tot + 5.0)
+        conf = 1.0 - (1.0 / ((tot + 1) ** 0.5))
+        se = (smoothed * (1.0 - smoothed) / (tot + 5.0)) ** 0.5
+        return {
+            "total_experiments": tot,
+            "win_rate": float(succ) / float(tot) if tot > 0 else 0.30,
+            "smoothed_win_rate": smoothed,
+            "confidence_weight": conf,
+            "credible_interval": (max(0.0, smoothed - 1.96 * se), min(1.0, smoothed + 1.96 * se)),
+            "avg_click_lift": float(p_row[2] or 0.0),
+            "avg_impression_lift": float(p_row[3] or 0.0),
+            "avg_rank_delta": float(p_row[4] or 0.0),
+            "has_empirical_evidence": True,
+            "hierarchy_tier": "tier_2_property_prior",
+        }
+
+    # Tier 1 fallback: global fleet prior Beta(1.5, 3.5)
     return {
-        "total_experiments": tot,
-        "win_rate": raw_rate,
-        "smoothed_win_rate": smoothed,
-        "confidence_weight": conf,
-        "credible_interval": ci,
-        "avg_click_lift": float(row[2] or 0.0),
-        "avg_impression_lift": float(row[3] or 0.0),
-        "avg_rank_delta": float(row[4] or 0.0),
-        "has_empirical_evidence": True,
+        "total_experiments": 0,
+        "win_rate": 0.30,  # prior mean alpha/(alpha+beta) = 1.5/5.0
+        "smoothed_win_rate": 0.30,
+        "confidence_weight": 0.0,
+        "credible_interval": (0.10, 0.55),
+        "avg_click_lift": 0.0,
+        "avg_impression_lift": 0.0,
+        "avg_rank_delta": 0.0,
+        "has_empirical_evidence": False,
+        "hierarchy_tier": "tier_1_global_prior",
     }
 
 
