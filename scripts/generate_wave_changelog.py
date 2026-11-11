@@ -50,21 +50,56 @@ def _utc_now_timestamp() -> str:
 
 
 def get_git_commit_files(repo_path: Path | str, commit_or_range: str) -> list[str]:
-    """Get list of files changed in a git commit, multiple commits, or a commit range (e.g. A..B)."""
+    """Get list of files changed in a git commit, multiple commits, or an inclusive commit range (e.g. A..B)."""
     target = str(commit_or_range).strip()
     files: set[str] = set()
     try:
         if ".." in target:
-            res = subprocess.run(
-                ["git", "diff", "--name-only", target],
+            start_sha, end_sha = target.split("..", 1)
+            start_sha = start_sha.strip()
+            end_sha = end_sha.strip()
+
+            # Make commit range inclusive of start_sha
+            parent_check = subprocess.run(
+                ["git", "rev-parse", "--verify", f"{start_sha}^"],
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
-                check=True,
+                check=False,
             )
-            for line in res.stdout.strip().splitlines():
-                if line.strip():
-                    files.add(line.strip())
+            if parent_check.returncode == 0:
+                diff_ref = f"{start_sha}^..{end_sha}"
+                res = subprocess.run(
+                    ["git", "diff", "--name-only", diff_ref],
+                    cwd=str(repo_path),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                for line in res.stdout.strip().splitlines():
+                    if line.strip():
+                        files.add(line.strip())
+            else:
+                res_root = subprocess.run(
+                    ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", start_sha],
+                    cwd=str(repo_path),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                for line in res_root.stdout.strip().splitlines():
+                    if line.strip():
+                        files.add(line.strip())
+                res = subprocess.run(
+                    ["git", "diff", "--name-only", f"{start_sha}..{end_sha}"],
+                    cwd=str(repo_path),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                for line in res.stdout.strip().splitlines():
+                    if line.strip():
+                        files.add(line.strip())
         elif "," in target or (" " in target and not target.startswith("-")):
             parts = [p.strip() for p in re.split(r"[, ]+", target) if p.strip()]
             for p in parts:
@@ -95,10 +130,22 @@ def get_git_commit_files(repo_path: Path | str, commit_or_range: str) -> list[st
 
 
 def get_git_commit_diff(repo_path: Path | str, commit_or_range: str, max_chars: int = 15000) -> str:
-    """Get the git diff for a commit or range."""
+    """Get the git diff for a commit or inclusive range."""
     target = str(commit_or_range).strip()
     try:
-        cmd = ["git", "diff", "--stat", target] if ".." in target else ["git", "show", "--stat", target]
+        if ".." in target:
+            start_sha, end_sha = target.split("..", 1)
+            parent_check = subprocess.run(
+                ["git", "rev-parse", "--verify", f"{start_sha.strip()}^"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            diff_spec = f"{start_sha.strip()}^..{end_sha.strip()}" if parent_check.returncode == 0 else target
+            cmd = ["git", "diff", "--stat", diff_spec]
+        else:
+            cmd = ["git", "show", "--stat", target]
         res = subprocess.run(
             cmd,
             cwd=str(repo_path),

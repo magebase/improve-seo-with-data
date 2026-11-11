@@ -649,7 +649,7 @@ def test_section_179_mathematical_engine_2025_vs_2026():
 
 
 def test_aca_excess_aptc_repayment_statutory_engine():
-    """Validates 2020 ARPA exemption, 2021/2025 statutory limitation caps, and 2026 full repayment."""
+    """Validates 2020 ARPA exemption, 2021-2025 statutory limitation caps, and 2026 cliff/permanent cap split."""
     from verify_product_functionality import calculate_aca_excess_aptc_repayment
 
     # 1. 2020 Invariant: American Rescue Plan Act suspended repayment entirely ($0 due)
@@ -659,24 +659,35 @@ def test_aca_excess_aptc_repayment_statutory_engine():
     assert r2020["repayment_cap"] == 0.0
     assert "American Rescue Plan Act" in r2020["rule"]
 
-    # 2. 2021 Statutory caps: 250% FPL single has $950 cap
+    # 2. 2021 Statutory caps: 250% FPL single has $800 cap (Rev. Proc. 2020-36)
     r2021 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2021, filing_status="single")
     assert r2021["tax_year"] == 2021
-    assert r2021["repayment_cap"] == 950.0
-    assert r2021["repayment_amount"] == 950.0
+    assert r2021["repayment_cap"] == 800.0
+    assert r2021["repayment_amount"] == 800.0
+    assert "Rev. Proc. 2020-36" in r2021["rule"]
 
-    # 3. 2025 Statutory caps: 250% FPL single has $950 cap
+    # 3. 2025 Statutory caps: 250% FPL single has $975 cap (Rev. Proc. 2024-35)
     r2025 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2025, filing_status="single")
     assert r2025["tax_year"] == 2025
-    assert r2025["repayment_cap"] == 950.0
-    assert r2025["repayment_amount"] == 950.0
+    assert r2025["repayment_cap"] == 975.0
+    assert r2025["repayment_amount"] == 975.0
+    assert "Rev. Proc. 2024-35" in r2025["rule"]
 
-    # 4. 2026 Invariant: 100% full repayment regardless of FPL percent (statutory cap sunset)
-    r2026 = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2026)
-    assert r2026["tax_year"] == 2026
-    assert r2026["repayment_amount"] == 3500.0
-    assert r2026["repayment_cap"] is None
-    assert "Repayment Cap Sunset" in r2026["rule"]
+    # 4. 2026 Invariant:
+    # 4a. >= 400% FPL: 100% full repayment (statutory cliff reinstated, cap is None)
+    r2026_cliff = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=420.0, tax_year=2026)
+    assert r2026_cliff["tax_year"] == 2026
+    assert r2026_cliff["repayment_amount"] == 3500.0
+    assert r2026_cliff["repayment_cap"] is None
+    assert "Subsidy Cliff Sunset" in r2026_cliff["rule"]
+
+    # 4b. < 400% FPL: statutory cap remains active ($1,000 single for 250% FPL under Rev. Proc. 2025-32)
+    r2026_capped = calculate_aca_excess_aptc_repayment(excess_aptc=3500.0, household_income_fpl_pct=250.0, tax_year=2026, filing_status="single")
+    assert r2026_capped["tax_year"] == 2026
+    assert r2026_capped["repayment_cap"] == 1000.0
+    assert r2026_capped["repayment_amount"] == 1000.0
+    assert "Rev. Proc. 2025-32" in r2026_capped["rule"]
+    assert "Statutory Cap" in r2026_capped["rule"]
 
 
 def test_corporate_wacc_formula_engine():
@@ -962,5 +973,153 @@ Recommendations.
     passed2, errors2, warnings2 = validate_report_content(report, repo_path=repo, allow_dirty=True, waiver_reason="Waiver for ongoing TDD tests")
     assert passed2
     assert any("Worktree waiver applied" in w for w in warnings2)
+
+
+def test_verify_dom_structural_integrity():
+    """Validates DOM structural integrity gate against unparsed Markdown leakage."""
+    from verify_product_functionality import verify_dom_structural_integrity
+
+    # Valid semantic HTML
+    clean_html = """
+    <div class="prose">
+      <h2>Section Header</h2>
+      <p>Clean introductory paragraph.</p>
+      <div class="overflow-x-auto"><table class="w-full"><thead><tr><th>Col</th></tr></thead><tbody><tr><td>Val</td></tr></tbody></table></div>
+      <blockquote class="p-4 my-4 border-l-4">Important note</blockquote>
+      <p>Prose with <strong>bold</strong> text and regular content.</p>
+    </div>
+    """
+    clean_passed, clean_issues = verify_dom_structural_integrity(clean_html)
+    assert clean_passed is True
+    assert len(clean_issues) == 0
+
+    # Unparsed markdown table inside <p>
+    broken_table_html = """
+    <p class="leading-relaxed">| Header 1 | Header 2 |</p>
+    <p>| --- | --- |</p>
+    """
+    broken_table_passed, broken_table_issues = verify_dom_structural_integrity(broken_table_html)
+    assert broken_table_passed is False
+    assert any("pipe-delimited Markdown table" in err for err in broken_table_issues)
+
+    # Literal escaped blockquote (&gt;) inside <p>
+    broken_quote_html = """
+    <p class="leading-relaxed">&gt; <strong class="font-semibold">Illustrative disclaimer...</strong></p>
+    """
+    broken_quote_passed, broken_quote_issues = verify_dom_structural_integrity(broken_quote_html)
+    assert broken_quote_passed is False
+    assert any("literal blockquote syntax" in err for err in broken_quote_issues)
+
+
+
+def test_commit_range_inclusive_start_commit(tmp_path: Path):
+    """Verifies that commit ranges (A..B) inclusively capture files committed in start_sha (P1 fix)."""
+    import subprocess
+    from validate_wave_close import get_git_changed_files
+    from generate_wave_changelog import get_git_commit_files
+
+    repo = tmp_path / "git_range_repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Tester"], cwd=repo, capture_output=True)
+
+    # Initial root commit: root.txt
+    (repo / "root.txt").write_text("root")
+    subprocess.run(["git", "add", "root.txt"], cwd=repo, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "root commit"], cwd=repo, capture_output=True)
+
+    # Commit A: file_a.txt
+    (repo / "file_a.txt").write_text("alpha")
+    subprocess.run(["git", "add", "file_a.txt"], cwd=repo, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "commit A"], cwd=repo, capture_output=True)
+    sha_a = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
+
+    # Commit B: file_b.txt
+    (repo / "file_b.txt").write_text("beta")
+    subprocess.run(["git", "add", "file_b.txt"], cwd=repo, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "commit B"], cwd=repo, capture_output=True)
+
+    # Commit C: file_c.txt
+    (repo / "file_c.txt").write_text("gamma")
+    subprocess.run(["git", "add", "file_c.txt"], cwd=repo, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "commit C"], cwd=repo, capture_output=True)
+    sha_c = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
+
+    # In standard `git diff sha_a..sha_c`, file_a.txt would be OMITTED because diff compares sha_a tree to sha_c tree.
+    # Our inclusive implementation must include file_a.txt, file_b.txt, and file_c.txt.
+    changed_files = get_git_changed_files(repo, f"{sha_a}..{sha_c}")
+    assert "file_a.txt" in changed_files
+    assert "file_b.txt" in changed_files
+    assert "file_c.txt" in changed_files
+    assert "root.txt" not in changed_files
+
+    # Same check for generate_wave_changelog get_git_commit_files
+    changelog_files = get_git_commit_files(repo, f"{sha_a}..{sha_c}")
+    assert "file_a.txt" in changelog_files
+    assert "file_b.txt" in changelog_files
+    assert "file_c.txt" in changelog_files
+
+
+def test_verify_dom_structural_integrity_gate():
+    """Verifies that DOM structural integrity gate detects and rejects unparsed Markdown leaks."""
+    from verify_product_functionality import verify_dom_structural_integrity
+
+    # 1. Clean semantic HTML passes
+    clean_html = """
+    <html>
+    <body>
+        <h1>Title</h1>
+        <p class="leading-relaxed">This is a valid paragraph of text.</p>
+        <table>
+            <thead><tr><th>Header 1</th><th>Header 2</th></tr></thead>
+            <tbody><tr><td>Data 1</td><td>Data 2</td></tr></tbody>
+        </table>
+        <blockquote class="italic text-slate-300">This is a quoted callout.</blockquote>
+    </body>
+    </html>
+    """
+    passed, issues = verify_dom_structural_integrity(clean_html)
+    assert passed is True
+    assert len(issues) == 0
+
+    # 2. Unparsed pipe-delimited table inside <p> fails
+    bad_table_html = """
+    <html>
+    <body>
+        <p class="leading-relaxed">| Header 1 | Header 2 |</p>
+        <p class="leading-relaxed">|:---|---:|</p>
+        <p class="leading-relaxed">| Value 1 | Value 2 |</p>
+    </body>
+    </html>
+    """
+    passed_tbl, issues_tbl = verify_dom_structural_integrity(bad_table_html)
+    assert passed_tbl is False
+    assert any("pipe-delimited Markdown table" in err for err in issues_tbl)
+
+    # 3. Literal &gt; inside <p> fails
+    bad_quote_html = """
+    <html>
+    <body>
+        <p class="leading-relaxed">&gt; <strong>Disclaimer:</strong> This is an unparsed blockquote.</p>
+    </body>
+    </html>
+    """
+    passed_quote, issues_quote = verify_dom_structural_integrity(bad_quote_html)
+    assert passed_quote is False
+    assert any("&gt;" in err for err in issues_quote)
+
+    # 4. Raw unparsed markdown bold inside <p> fails
+    bad_bold_html = """
+    <html>
+    <body>
+        <p>This paragraph contains **raw unparsed markdown bold** syntax.</p>
+    </body>
+    </html>
+    """
+    passed_bold, issues_bold = verify_dom_structural_integrity(bad_bold_html)
+    assert passed_bold is False
+    assert any("raw bold syntax" in err for err in issues_bold)
+
 
 

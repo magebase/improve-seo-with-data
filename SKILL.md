@@ -967,6 +967,49 @@ All ACA shared responsibility computations and advisory materials must cite exac
    `validate_wave_close.py` and `generate_wave_changelog.py` support `--commit-range <start_sha>..<end_sha>` (as well as comma-separated commit SHAs). The reconciliation engine parses `git diff --name-only <start_sha>..<end_sha>` across the entire commit sequence, guaranteeing zero omitted file modifications in Section 4.
 3. **Execution Gate Enforcement:** Wave-close fails if any file modified across the multi-commit delivery range is missing from Section 4.
 
+---
+
+## 17. Outcome-Driven SEO Engine v2.2.3: DOM Structural Integrity, Annual Statutory Indexing & Pre-Flight Gate Architecture
+
+The Outcome-Driven SEO Engine v2.2.3 enforces semantic HTML rendering integrity, exact annual statutory inflation indexing, inclusive Git commit-range reconciliation, and consolidated pre-flight verification gates across all production properties.
+
+### 17.1 P0.1 — DOM Structural Integrity Gate & Markdown Sanitization (`verify_dom_structural_integrity` & `validate_rendered_articles_dom_integrity`)
+1. **Semantic HTML Invariants (Zero Raw Markdown Leakage):**
+   - **Markdown Pipe-Tables:** Raw pipe-delimited tables (`| col1 | col2 |`) MUST never be wrapped inside `<p>` tags. They must compile to semantic `<div class="overflow-x-auto"><table class="..."><thead>...<tbody>...</table></div>`.
+   - **Blockquote Entities:** Leading markdown blockquote characters (`>`) MUST never be entity-escaped to literal `&gt;` inside `<p>` prose tags. They must compile to semantic, accessible `<blockquote class="...">` styled callout containers.
+   - **Boundary Hygiene:** Paragraph text immediately preceding or following pipe tables and blockquotes must maintain double newline (`\n\n`) boundaries during parsing and template compilation.
+2. **Pre-Deploy Structural Lint Enforcement:**
+   `scripts/deploy_seo_alpha_worker.py` and `scripts/verify_product_functionality.py` execute `validate_rendered_articles_dom_integrity` and `verify_dom_structural_integrity` across all catalog and programmatic articles. Any unparsed table (`<p>|`), literal blockquote (`<p>&gt;`), raw bold (`<p>**...**</p>`), or orphan table separator (`| --- |`) constitutes a fatal pre-flight build failure.
+
+### 17.2 P0.2 — Annual Statutory Inflation Indexing for ACA Excess APTC Repayment (2021–2026+)
+Replaces static repayment caps with the exact annual IRS Revenue Procedure indexing schedules under IRC § 36B(f)(2)(B)(i):
+1. **IRS Annual Revenue Procedures:**
+   - **Tax Year 2020 (ARPA § 9662):** $0.00 repayment required (statutory suspension).
+   - **Tax Year 2021 (Rev. Proc. 2020-36):** <200% FPL: $325 (Single) / $650 (Other); 200–300% FPL: $800 (Single) / $1,600 (Other); 300–400% FPL: $1,350 (Single) / $2,700 (Other).
+   - **Tax Year 2022 (Rev. Proc. 2021-36):** <200% FPL: $325 (Single) / $650 (Other); 200–300% FPL: $825 (Single) / $1,650 (Other); 300–400% FPL: $1,400 (Single) / $2,800 (Other).
+   - **Tax Year 2023 (Rev. Proc. 2022-34):** <200% FPL: $350 (Single) / $700 (Other); 200–300% FPL: $900 (Single) / $1,800 (Other); 300–400% FPL: $1,500 (Single) / $3,000 (Other).
+   - **Tax Year 2024 (Rev. Proc. 2023-29):** <200% FPL: $375 (Single) / $750 (Other); 200–300% FPL: $950 (Single) / $1,900 (Other); 300–400% FPL: $1,575 (Single) / $3,150 (Other).
+   - **Tax Year 2025 (Rev. Proc. 2024-35):** <200% FPL: $375 (Single) / $750 (Other); 200–300% FPL: $975 (Single) / $1,950 (Other); 300–400% FPL: $1,625 (Single) / $3,250 (Other).
+   - **Tax Year 2026 Onward (Permanent IRC § 36B Split):**
+     * **$\ge 400\%$ FPL (Subsidy Cliff Expiration):** Temporary IRA expansion sunsets under permanent IRC § 36B(c)(1)(A). Taxpayers exceeding 400% FPL are ineligible for credits and must repay 100% of excess APTC with NO statutory limitation cap.
+     * **$< 400\%$ FPL (Permanent Statutory Limitation Schedule):** Statutory limitation schedule remains permanent under IRC § 36B(f)(2)(B)(i) as indexed by Rev. Proc. 2025-32: <200% FPL: $400 (Single) / $800 (Other); 200–300% FPL: $1,000 (Single) / $2,000 (Other); 300–400% FPL: $1,675 (Single) / $3,350 (Other).
+
+### 17.3 P1.1 — Section 179 Statutory Authority Citations by Tax Year
+`financial_methodology_registry.py` strictly disaggregates statutory citations by tax year:
+- **Tax Year 2024:** IRS Revenue Procedure 2023-34 ($1,220,000 cap; $3,050,000 phaseout).
+- **Tax Year 2025:** IRS Revenue Procedure 2024-40 ($1,250,000 cap; $3,130,000 phaseout).
+- **Tax Year 2026:** Public Law 119-21 / IRS Revenue Procedure 2025-32 ($2,560,000 cap; $4,090,000 phaseout).
+
+### 17.4 P1.2 — Inclusive Commit-Range Resolution (`<start_sha>^..<end_sha>`)
+Git range notation `A..B` by definition computes changes between tree `A` and tree `B`, omitting files modified in commit `A` itself. Both `validate_wave_close.py` (v2.2.3) and `generate_wave_changelog.py` implement inclusive parent-range normalization:
+$$\text{commit\_range} = A\text{..}B \implies A\text{^\;..}B$$
+For root commits (commits without a parent), the diff automatically resolves against git's empty tree hash `4b825dc642cb6eb9a060e54bf8d69288fbee4904` or root commit fallback. This guarantees that all files modified in the initial commit of a delivery wave are captured in Section 4.
+
+### 17.5 P2.1 — Synchronous Git Operations & Execution Hygiene
+- **No Backgrounding Git Operations:** All `git commit`, `git add`, `git diff`, and `git push` operations MUST execute synchronously with explicit wait timeouts and status checks. Backgrounding git mutations introduces dirty worktree races, index lock contention (`.git/index.lock`), and partial commit hazards.
+- **Unified Wave Gate (`scripts/run_wave_gate.py`):** Consolidates TDD suites, DOM structural linting, statutory engine verification, and wave-close report auditing into a single pre-flight executable, ensuring zero fragmented verification cycles.
+
+
 
 
 

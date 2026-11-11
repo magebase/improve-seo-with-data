@@ -160,6 +160,79 @@ def calculate_section_179_deduction(
     }
 
 
+ACA_REPAYMENT_CAPS_BY_YEAR: dict[int, dict[str, dict[str, float]]] = {
+    # 2021: Rev. Proc. 2020-36
+    2021: {
+        "under_200": {"single": 325.0, "other": 650.0},
+        "200_to_300": {"single": 800.0, "other": 1600.0},
+        "300_to_400": {"single": 1350.0, "other": 2700.0},
+    },
+    # 2022: Rev. Proc. 2021-36
+    2022: {
+        "under_200": {"single": 325.0, "other": 650.0},
+        "200_to_300": {"single": 825.0, "other": 1650.0},
+        "300_to_400": {"single": 1400.0, "other": 2800.0},
+    },
+    # 2023: Rev. Proc. 2022-34
+    2023: {
+        "under_200": {"single": 350.0, "other": 700.0},
+        "200_to_300": {"single": 900.0, "other": 1800.0},
+        "300_to_400": {"single": 1500.0, "other": 3000.0},
+    },
+    # 2024: Rev. Proc. 2023-29
+    2024: {
+        "under_200": {"single": 375.0, "other": 750.0},
+        "200_to_300": {"single": 950.0, "other": 1900.0},
+        "300_to_400": {"single": 1575.0, "other": 3150.0},
+    },
+    # 2025: Rev. Proc. 2024-35
+    2025: {
+        "under_200": {"single": 375.0, "other": 750.0},
+        "200_to_300": {"single": 975.0, "other": 1950.0},
+        "300_to_400": {"single": 1625.0, "other": 3250.0},
+    },
+    # 2026+: Rev. Proc. 2025-32 / statutory inflation indexed under IRC § 36B(f)(2)(B)(ii)
+    2026: {
+        "under_200": {"single": 400.0, "other": 800.0},
+        "200_to_300": {"single": 1000.0, "other": 2000.0},
+        "300_to_400": {"single": 1675.0, "other": 3350.0},
+    },
+}
+
+ACA_REV_PROC_CITATIONS: dict[int, str] = {
+    2020: "ARPA § 9662 / IRC § 36B(f)(2)(B)(iii)",
+    2021: "IRS Rev. Proc. 2020-36",
+    2022: "IRS Rev. Proc. 2021-36",
+    2023: "IRS Rev. Proc. 2022-34",
+    2024: "IRS Rev. Proc. 2023-29",
+    2025: "IRS Rev. Proc. 2024-35",
+    2026: "IRS Rev. Proc. 2025-32 / IRC § 36B(f)(2)(B)(ii)",
+}
+
+
+def verify_dom_structural_integrity(html_content: str) -> tuple[bool, list[str]]:
+    """Verifies rendered HTML DOM structure does not contain unparsed Markdown or raw syntax leaks."""
+    issues: list[str] = []
+
+    # 1. Check for unparsed pipe tables wrapped inside <p> tags
+    if re.search(r"<p[^>]*>\s*\|.*?\|", html_content, re.DOTALL):
+        issues.append("DOM Structural Violation: Raw pipe-delimited Markdown table detected inside a <p> tag.")
+
+    # 2. Check for literal entity-escaped blockquote syntax (&gt;) inside <p> tags
+    if re.search(r"<p[^>]*>\s*&gt;\s*", html_content):
+        issues.append("DOM Structural Violation: Unparsed literal blockquote syntax (&gt;) detected inside a <p> tag.")
+
+    # 3. Check for raw unparsed markdown bold syntax (**text**) inside paragraph text
+    if re.search(r"<p[^>]*>[^<]*\*\*[^*]+\*\*[^<]*</p>", html_content):
+        issues.append("DOM Structural Violation: Unparsed raw bold syntax (**...**) detected inside a <p> tag.")
+
+    # 4. Check for table divider rows (|:---| or |--:|) leaking into paragraph text
+    if re.search(r"<p[^>]*>.*?\|\s*:?-+:?\s*\|.*?</p>", html_content, re.DOTALL):
+        issues.append("DOM Structural Violation: Unparsed table separator syntax detected inside a <p> tag.")
+
+    return len(issues) == 0, issues
+
+
 def calculate_aca_excess_aptc_repayment(
     excess_aptc: float,
     household_income_fpl_pct: float,
@@ -168,40 +241,60 @@ def calculate_aca_excess_aptc_repayment(
 ) -> dict[str, Any]:
     """Calculates excess Advance Premium Tax Credit (APTC) repayment under IRC § 36B.
 
-    Statutory Distinction by Tax Year (IRS Form 8962 Instructions):
-    - Tax Year 2020: American Rescue Plan Act of 2021 (ARPA § 9662) suspended excess APTC
-      repayment requirement entirely ($0.00 repayment liability regardless of income).
-    - Tax Years 2021–2025: IRC § 36B(f)(2)(B) statutory repayment limitation caps apply
-      based on household income percentage of the Federal Poverty Line (FPL).
-    - Tax Years 2026 onward: Under current statutory instructions, repayment caps do not apply
-      for tax years after 2025; full excess advance premium tax credits must be repaid (100% liability; Form 8962 Lines 28-29 reserved).
+    Statutory Distinction by Tax Year & Income Tier (IRS Form 8962 Instructions & Revenue Procedures):
+    - Tax Year 2020: American Rescue Plan Act of 2021 (ARPA § 9662 / IRC § 36B(f)(2)(B)(iii))
+      suspended excess APTC repayment requirement entirely ($0.00 repayment liability regardless of income).
+    - Tax Years 2021–2025: IRC § 36B(f)(2)(B)(i) statutory limitation caps indexed annually for inflation
+      via IRS Revenue Procedures (2021: Rev. Proc. 2020-36; 2022: Rev. Proc. 2021-36; 2023: Rev. Proc. 2022-34;
+      2024: Rev. Proc. 2023-29; 2025: Rev. Proc. 2024-35).
+    - Tax Years 2026 onward:
+      * For households >= 400% FPL: Temporary IRA subsidy enhancements (IRC § 36B(b)(3)(A)(iii)) expire,
+        reinstating the 400% FPL eligibility cliff under permanent IRC § 36B(c)(1)(A). Households >= 400% FPL
+        must repay 100% of excess APTC (full uncapped repayment).
+      * For households < 400% FPL: Permanent statutory limitation caps under IRC § 36B(f)(2)(B)(i) remain active
+        and indexed for inflation (Rev. Proc. 2025-32).
     """
     excess = max(0.0, float(excess_aptc))
     fpl = max(0.0, float(household_income_fpl_pct))
+    is_single = filing_status.lower() in ("single", "married_filing_separately")
+    status_key = "single" if is_single else "other"
+    rev_proc = ACA_REV_PROC_CITATIONS.get(tax_year, f"IRS Guidance for TY {tax_year}")
 
     if tax_year == 2020:
         # American Rescue Plan Act of 2021 § 9662 suspended excess APTC repayment entirely
         repayment = 0.0
         cap = 0.0
-        rule = "American Rescue Plan Act of 2021 (Excess APTC repayment requirement suspended entirely; $0 repayment)"
+        rule = "American Rescue Plan Act of 2021 § 9662 (Excess APTC repayment requirement suspended entirely; $0 due)"
     elif tax_year >= 2026:
-        # Statutory sunset of repayment limitations
-        repayment = excess
-        cap = None
-        rule = "IRC § 36B Repayment Cap Sunset (100% full repayment required)"
-    else:
-        is_single = filing_status.lower() in ("single", "married_filing_separately")
-        if fpl < 200.0:
-            cap = 375.0 if is_single else 750.0
-        elif fpl < 300.0:
-            cap = 950.0 if is_single else 1900.0
-        elif fpl < 400.0:
-            cap = 1500.0 if is_single else 3000.0
-        else:
+        if fpl >= 400.0:
+            repayment = excess
             cap = None
-
-        repayment = min(excess, cap) if cap is not None else excess
-        rule = f"IRC § 36B(f)(2)(B) Limitation Cap ({cap if cap is not None else 'No Cap'})"
+            rule = "IRC § 36B(c)(1)(A) Subsidy Cliff Sunset (>= 400% FPL 100% full repayment required)"
+        else:
+            caps_2026 = ACA_REPAYMENT_CAPS_BY_YEAR.get(2026, ACA_REPAYMENT_CAPS_BY_YEAR[2025])
+            if fpl < 200.0:
+                cap = caps_2026["under_200"][status_key]
+            elif fpl < 300.0:
+                cap = caps_2026["200_to_300"][status_key]
+            else:
+                cap = caps_2026["300_to_400"][status_key]
+            repayment = min(excess, cap)
+            rule = f"Permanent IRC § 36B(f)(2)(B)(i) / Rev. Proc. 2025-32 Statutory Cap (${cap:,.2f})"
+    else:
+        if fpl >= 400.0:
+            repayment = excess
+            cap = None
+            rule = f"IRC § 36B(f)(2)(B) (>= 400% FPL No Statutory Cap; Full Repayment Due)"
+        else:
+            schedule = ACA_REPAYMENT_CAPS_BY_YEAR.get(tax_year, ACA_REPAYMENT_CAPS_BY_YEAR[2025])
+            if fpl < 200.0:
+                cap = schedule["under_200"][status_key]
+            elif fpl < 300.0:
+                cap = schedule["200_to_300"][status_key]
+            else:
+                cap = schedule["300_to_400"][status_key]
+            repayment = min(excess, cap)
+            rule = f"{rev_proc} / IRC § 36B(f)(2)(B) Limitation Cap (${cap:,.2f})"
 
     return {
         "tax_year": tax_year,
@@ -705,18 +798,20 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
             status_label="VERIFICATION_FAILED",
         )
 
+    dom_ok, dom_issues = verify_dom_structural_integrity(html)
+
     if "openfileconverter.com" in host or "/convert/" in path or "/studio/" in path:
-        return verify_converter_functionality(url, html)
+        res = verify_converter_functionality(url, html)
     elif "incomecanvas.com" in host or "/calculator" in path or "/article/wacc" in path:
-        return verify_calculator_functionality(url, html)
+        res = verify_calculator_functionality(url, html)
     elif "smsriver.com" in host or "/number" in path or "/sms" in path:
-        return verify_smsriver_functionality(url, html)
+        res = verify_smsriver_functionality(url, html)
     elif "figiva.com" in host or "/gpa" in path:
-        return verify_calculator_functionality(url, html)
+        res = verify_calculator_functionality(url, html)
     elif "/directory/" in path or "/niche/" in path or "/formats/" in path:
-        return verify_directory_functionality(url, html)
+        res = verify_directory_functionality(url, html)
     else:
-        return FunctionalTestResult(
+        res = FunctionalTestResult(
             url=url,
             product_type="editorial",
             passed=True,
@@ -724,6 +819,13 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
             details="Standard editorial page; element existence verified",
             status_label="IMPLEMENTATION_PRESENT",
         )
+
+    if not dom_ok:
+        res.passed = False
+        res.issues.extend(dom_issues)
+        res.status_label = "VERIFICATION_FAILED"
+
+    return res
 
 
 def main(argv: list[str] | None = None) -> int:
