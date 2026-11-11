@@ -46,7 +46,7 @@ from typing import Any
 # coins-audits/', '/privacytools-vpn-comparison/') eligible.
 NON_SEO_PATH_RE = re.compile(
     r"^/(privacy|terms|tos|cookie|disclaimer|legal|contact|about|login|logout"
-    r"|signup|register|reset|account|billing|admin|api|health|static|media)"
+    r"|signup|register|reset|account|billing|admin|api|health|status|static|media)"
     r"(/|$|-)",
     re.IGNORECASE,
 )
