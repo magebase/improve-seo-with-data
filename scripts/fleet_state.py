@@ -1168,7 +1168,7 @@ def check_event_study_parallel_trends(
 
 
 def get_t_critical_value(n_controls: int) -> float:
-    """Returns two-tailed 95% critical value adjusted for small control cohort size (v2.2.1 P0.3).
+    """Returns two-tailed 95% critical value adjusted for small control cohort size (v2.2.2 P0).
 
     Degrees of freedom small-sample correction: df = max(1, n_controls - 1)
     - df == 1 (n_controls <= 2): 12.706
@@ -1176,31 +1176,40 @@ def get_t_critical_value(n_controls: int) -> float:
     - df == 3 (n_controls == 4): 3.182
     - df == 4 (n_controls == 5): 2.776
     - df == 5 (n_controls == 6): 2.571
-    - df in 6..9 (n_controls in 7..10): 2.447 to 2.262
-    - df in 10..29: 2.228 to 2.064
-    - df >= 30 (n_controls >= 31): 1.960 (standard normal approximation)
+    - df == 10 (n_controls == 11): 2.228
+    - df == 15 (n_controls == 16): 2.131
+    - df == 20 (n_controls == 21): 2.086
+    - df == 25 (n_controls == 26): 2.060
+    - df == 30 (n_controls == 31): 2.042 (exact Student's t; NOT standard normal 1.960)
+    - df == 40 (n_controls == 41): 2.021
+    - df == 60 (n_controls == 61): 2.000
+    - df == 120: 1.980
+    - df >= 1000: 1.962 -> 1.960 asymptotic
     """
-    df = max(1, n_controls - 1)
+    df = max(1, int(n_controls) - 1)
+    try:
+        from scipy.stats import t as student_t
+        return round(float(student_t.ppf(0.975, df)), 3)
+    except Exception:
+        pass
+
+    # Exact standard 2-sided 95% Student-t critical values
     t_table = {
-        1: 12.706,
-        2: 4.303,
-        3: 3.182,
-        4: 2.776,
-        5: 2.571,
-        6: 2.447,
-        7: 2.365,
-        8: 2.306,
-        9: 2.262,
-        10: 2.228,
+        1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
+        6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
+        11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
+        16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
+        21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060,
+        26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042,
     }
     if df in t_table:
         return t_table[df]
-    if df < 15:
-        return 2.160
-    if df < 20:
-        return 2.101
-    if df < 30:
-        return 2.064
+    if df <= 40:
+        return 2.021
+    if df <= 60:
+        return 2.000
+    if df <= 120:
+        return 1.980
     return 1.960
 
 

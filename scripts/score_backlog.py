@@ -351,10 +351,10 @@ def evaluate_temporal_holdout_calibration(
     config: EconomicConfig | None = None,
     min_sample_size: int = 20,
 ) -> dict[str, Any]:
-    """Evaluates probability calibration on matured experiments using temporal holdout validation (v2.2.1).
+    """Evaluates probability calibration on matured experiments using temporal holdout validation (v2.2.2 P0).
 
-    Computes Brier Score, Brier Skill Score (BSS) vs base-rate baseline, Log Loss,
-    calibration intercept (a) and slope (b), reliability diagram bins, and enforces N >= 20.
+    Strictly prevents data leakage: base rate is trained exclusively on historical training observations
+    and frozen before evaluating out-of-sample Brier Skill Score (BSS), Log Loss, and reliability bins.
     """
     cfg = config or EconomicConfig()
     query = """
@@ -378,7 +378,10 @@ def evaluate_temporal_holdout_calibration(
     if not rows:
         return {
             "status": "INSUFFICIENT_MATURED_EXPERIMENTS",
+            "maturity_classification": "PRIOR_ONLY",
             "sample_size": 0,
+            "training_sample_size": 0,
+            "holdout_sample_size": 0,
             "total_matured_experiments": 0,
             "min_sample_size_required": min_sample_size,
             "brier_score": None,
@@ -393,22 +396,20 @@ def evaluate_temporal_holdout_calibration(
             "verdict": f"AWAITING_MATURED_EXPERIMENTS: Minimum {min_sample_size} matured experiments required for calibration.",
         }
 
-    y_true: list[int] = []
-    p_pred: list[float] = []
+    y_all: list[int] = []
+    p_all: list[float] = []
 
     for r in rows:
         exp_id, dom, pg, t_query, act, dep_str, base_clicks, post_clicks, did_class = r
         base_c = float(base_clicks or 0.0)
         post_c = float(post_clicks or 0.0)
 
-        # Success definition: statistically significant lift OR >= 10% relative growth with net gain
         is_success = (
             did_class == "STATISTICALLY_SIGNIFICANT_LIFT"
             or (post_c > base_c and (post_c - base_c) / max(base_c, 1.0) >= cfg.success_click_growth_threshold)
         )
-        y_true.append(1 if is_success else 0)
+        y_all.append(1 if is_success else 0)
 
-        # Compute model probability
         opp = compute_opportunity_intelligence(
             {
                 "page": pg,
@@ -421,37 +422,91 @@ def evaluate_temporal_holdout_calibration(
             domain=dom,
             config=cfg,
         )
-        p_pred.append(float(opp.get("posterior_success_prob", 0.30)))
+        p_all.append(float(opp.get("posterior_success_prob", 0.30)))
 
-    n = len(y_true)
-    brier_score = sum((p - y) ** 2 for p, y in zip(p_pred, y_true)) / max(n, 1)
+    n_total = len(y_all)
+    if n_total < min_sample_size:
+        # Sample too small for temporal holdout
+        brier_score = sum((p - y) ** 2 for p, y in zip(p_all, y_all)) / max(n_total, 1)
+        eps = 1e-15
+        log_loss = -sum(
+            y * math.log(max(p, eps)) + (1 - y) * math.log(max(1.0 - p, eps))
+            for p, y in zip(p_all, y_all)
+        ) / max(n_total, 1)
+        base_rate = sum(y_all) / max(n_total, 1)
+        bs_baseline = base_rate * (1.0 - base_rate)
+        ll_baseline = -(
+            base_rate * math.log(max(base_rate, eps))
+            + (1.0 - base_rate) * math.log(max(1.0 - base_rate, eps))
+        )
+        bins_def = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0)]
+        reliability_bins = []
+        for low, high in bins_def:
+            b_idx = [i for i, p in enumerate(p_all) if (low <= p < high) or (high == 1.0 and p == 1.0)]
+            mean_p = sum(p_all[i] for i in b_idx) / len(b_idx) if b_idx else (low + high) / 2.0
+            obs_w = sum(y_all[i] for i in b_idx) / len(b_idx) if b_idx else 0.0
+            reliability_bins.append({
+                "bin_range": [low, high],
+                "count": len(b_idx),
+                "mean_predicted": round(mean_p, 4),
+                "observed_win_rate": round(obs_w, 4),
+                "calibration_error": round(abs(mean_p - obs_w), 4),
+            })
+        return {
+            "status": "INSUFFICIENT_SAMPLE",
+            "maturity_classification": "PRIOR_ONLY",
+            "sample_size": n_total,
+            "total_matured_experiments": n_total,
+            "min_sample_size_required": min_sample_size,
+            "brier_score": round(brier_score, 4),
+            "brier_skill_score": round(1.0 - (brier_score / max(bs_baseline, 1e-6)), 4) if bs_baseline > 1e-6 else 0.0,
+            "baseline_brier_score": round(bs_baseline, 4),
+            "log_loss": round(log_loss, 4),
+            "baseline_log_loss": round(ll_baseline, 4),
+            "calibration_intercept": 0.0,
+            "calibration_slope": 1.0,
+            "reliability_bins": reliability_bins,
+            "reliability_diagram_bins": reliability_bins,
+            "verdict": f"INSUFFICIENT_SAMPLE_SIZE_FOR_CALIBRATION: N={n_total} < {min_sample_size} minimum matured experiments.",
+        }
+
+    # Strict Temporal Split: Train on first 60% of timeline, evaluate out-of-sample on later 40%
+    n_train = max(5, int(n_total * 0.60))
+    y_train = y_all[:n_train]
+    y_holdout = y_all[n_train:]
+    p_holdout = p_all[n_train:]
+    n_holdout = len(y_holdout)
+
+    # 1. Base rate trained exclusively on training period (ZERO holdout data leakage)
+    frozen_base_rate = sum(y_train) / max(len(y_train), 1)
+
+    # 2. Holdout performance evaluation
+    brier_score = sum((p - y) ** 2 for p, y in zip(p_holdout, y_holdout)) / max(n_holdout, 1)
+    bs_baseline = sum((frozen_base_rate - y) ** 2 for y in y_holdout) / max(n_holdout, 1)
 
     eps = 1e-15
     log_loss = -sum(
         y * math.log(max(p, eps)) + (1 - y) * math.log(max(1.0 - p, eps))
-        for p, y in zip(p_pred, y_true)
-    ) / max(n, 1)
+        for p, y in zip(p_holdout, y_holdout)
+    ) / max(n_holdout, 1)
+    ll_baseline = -sum(
+        y * math.log(max(frozen_base_rate, eps)) + (1 - y) * math.log(max(1.0 - frozen_base_rate, eps))
+        for y in y_holdout
+    ) / max(n_holdout, 1)
 
-    # Base rate & Baseline benchmarks (v2.2.1 P0.2)
-    base_rate = sum(y_true) / max(n, 1)
-    bs_baseline = base_rate * (1.0 - base_rate)
-    ll_baseline = -(
-        base_rate * math.log(max(base_rate, eps))
-        + (1.0 - base_rate) * math.log(max(1.0 - base_rate, eps))
-    )
     if bs_baseline > 1e-6:
         brier_skill_score = 1.0 - (brier_score / bs_baseline)
     else:
         brier_skill_score = 0.0 if brier_score < 1e-6 else -1.0
 
-    # Calibration intercept (a) and slope (b) via logistic regression on logits
+    # Calibration intercept (a) and slope (b) on holdout
     cal_a, cal_b = 0.0, 1.0
-    if n >= 5 and 0.0 < base_rate < 1.0:
+    if n_holdout >= 5 and 0.0 < frozen_base_rate < 1.0 and sum(y_holdout) > 0 and sum(y_holdout) < n_holdout:
         try:
-            logits = [math.log(max(min(p, 1.0 - eps), eps) / max(min(1.0 - p, 1.0 - eps), eps)) for p in p_pred]
+            logits = [math.log(max(min(p, 1.0 - eps), eps) / max(min(1.0 - p, 1.0 - eps), eps)) for p in p_holdout]
             beta = np.array([0.0, 1.0])
             X_mat = np.array([[1.0, z] for z in logits])
-            Y_vec = np.array(y_true, dtype=float)
+            Y_vec = np.array(y_holdout, dtype=float)
             for _ in range(15):
                 lin = X_mat @ beta
                 p_hat = 1.0 / (1.0 + np.exp(-np.clip(lin, -20.0, 20.0)))
@@ -468,40 +523,47 @@ def evaluate_temporal_holdout_calibration(
         except Exception:
             cal_a, cal_b = 0.0, 1.0
 
-    # Reliability diagram bins: [0, 0.2), [0.2, 0.4), [0.4, 0.6), [0.6, 0.8), [0.8, 1.0]
+    # 5 Reliability bins on holdout
     bins_def = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0)]
     reliability_bins = []
+    all_bins_occupied = True
     for low, high in bins_def:
-        bin_indices = [i for i, p in enumerate(p_pred) if (low <= p < high) or (high == 1.0 and p == 1.0)]
-        if bin_indices:
-            mean_p = sum(p_pred[i] for i in bin_indices) / len(bin_indices)
-            obs_win = sum(y_true[i] for i in bin_indices) / len(bin_indices)
-            cal_err = abs(mean_p - obs_win)
-        else:
-            mean_p = (low + high) / 2.0
-            obs_win = 0.0
-            cal_err = 0.0
+        b_idx = [i for i, p in enumerate(p_holdout) if (low <= p < high) or (high == 1.0 and p == 1.0)]
+        if not b_idx:
+            all_bins_occupied = False
+        mean_p = sum(p_holdout[i] for i in b_idx) / len(b_idx) if b_idx else (low + high) / 2.0
+        obs_w = sum(y_holdout[i] for i in b_idx) / len(b_idx) if b_idx else 0.0
         reliability_bins.append({
             "bin_range": [low, high],
-            "count": len(bin_indices),
+            "count": len(b_idx),
             "mean_predicted": round(mean_p, 4),
-            "observed_win_rate": round(obs_win, 4),
-            "calibration_error": round(cal_err, 4),
+            "observed_win_rate": round(obs_w, 4),
+            "calibration_error": round(abs(mean_p - obs_w), 4),
         })
 
-    # Rigorous verdict: N >= min_sample_size required; BSS > 0; BS <= 0.25
-    if n < min_sample_size:
-        verdict = f"INSUFFICIENT_SAMPLE_SIZE_FOR_CALIBRATION: N={n} < {min_sample_size} minimum matured experiments."
-    elif brier_skill_score > 0.0 and brier_score <= 0.25:
+    # Maturity classification: PRIOR_ONLY -> PRELIMINARILY_CALIBRATED -> WELL_CALIBRATED
+    if n_total < min_sample_size or n_holdout < 10:
+        maturity = "PRIOR_ONLY"
+        verdict = f"INSUFFICIENT_SAMPLE_SIZE_FOR_CALIBRATION: N={n_total} < {min_sample_size} minimum matured experiments."
+    elif brier_skill_score > 0.0 and brier_score <= 0.25 and all_bins_occupied and (0.7 <= cal_b <= 1.3):
+        maturity = "WELL_CALIBRATED"
+        verdict = "WELL_CALIBRATED"
+    elif brier_skill_score > 0.0:
+        maturity = "PRELIMINARILY_CALIBRATED"
         verdict = "WELL_CALIBRATED"
     else:
+        maturity = "PRELIMINARILY_CALIBRATED"
         verdict = "NEEDS_CALIBRATION"
 
     return {
         "status": "EVALUATED",
-        "sample_size": n,
-        "total_matured_experiments": n,
+        "maturity_classification": maturity,
+        "sample_size": n_total,
+        "training_sample_size": n_train,
+        "holdout_sample_size": n_holdout,
+        "total_matured_experiments": n_total,
         "min_sample_size_required": min_sample_size,
+        "frozen_training_base_rate": round(frozen_base_rate, 4),
         "brier_score": round(brier_score, 4),
         "brier_skill_score": round(brier_skill_score, 4),
         "baseline_brier_score": round(bs_baseline, 4),

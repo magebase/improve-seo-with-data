@@ -193,8 +193,8 @@ def test_calculate_pre_trend_divergence_formula():
 
 
 def test_did_small_sample_students_t_correction():
-    """Degrees of freedom critical values apply for control cohorts N_c with df = N_c - 1 (v2.2.1 P0.3)."""
-    assert get_t_critical_value(n_controls=31) == 1.960
+    """Degrees of freedom critical values apply for control cohorts N_c with df = N_c - 1 (v2.2.2 P0)."""
+    assert get_t_critical_value(n_controls=31) == 2.042  # df = 30 -> t = 2.042 (exact Student-t, NOT 1.960)
     assert get_t_critical_value(n_controls=6) == 2.571
     assert get_t_critical_value(n_controls=5) == 2.776
     assert get_t_critical_value(n_controls=4) == 3.182
