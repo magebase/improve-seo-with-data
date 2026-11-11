@@ -106,6 +106,81 @@ CREATE TABLE IF NOT EXISTS url_inspection_budget (
     spent       INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (day)
 );
+CREATE TABLE IF NOT EXISTS experiment_ledger (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id                 INTEGER,
+    domain                  TEXT NOT NULL,
+    page                    TEXT NOT NULL,
+    target_query            TEXT NOT NULL,
+    query_cluster           TEXT,
+    action_code             TEXT NOT NULL,
+    decision_class          TEXT NOT NULL DEFAULT 'SHIP',
+    implementation_details  TEXT,
+    commit_sha              TEXT,
+    deployed_at             TEXT NOT NULL,
+    baseline_clicks_28d     REAL NOT NULL DEFAULT 0.0,
+    baseline_impressions_28d REAL NOT NULL DEFAULT 0.0,
+    baseline_ctr            REAL NOT NULL DEFAULT 0.0,
+    baseline_position       REAL NOT NULL DEFAULT 0.0,
+    recrawl_detected_at     TEXT,
+    indexation_status       TEXT DEFAULT 'UNKNOWN',
+    post_7d_clicks          REAL,
+    post_7d_impressions     REAL,
+    post_7d_position        REAL,
+    post_7d_ctr             REAL,
+    post_14d_clicks         REAL,
+    post_14d_impressions    REAL,
+    post_14d_position       REAL,
+    post_14d_ctr            REAL,
+    post_28d_clicks         REAL,
+    post_28d_impressions    REAL,
+    post_28d_position       REAL,
+    post_28d_ctr            REAL,
+    post_56d_clicks         REAL,
+    post_56d_impressions    REAL,
+    post_56d_position       REAL,
+    post_56d_ctr            REAL,
+    conversions_baseline    REAL DEFAULT 0.0,
+    conversions_post        REAL,
+    control_cohort_page     TEXT,
+    control_baseline_clicks REAL DEFAULT 0.0,
+    control_post_clicks     REAL,
+    incremental_clicks_est  REAL,
+    incremental_impressions_est REAL,
+    attribution_confidence  REAL DEFAULT 0.0,
+    attribution_limitations TEXT,
+    status                  TEXT NOT NULL DEFAULT 'PENDING_RECRAWL',
+    updated_at              TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS experiment_domain_status
+    ON experiment_ledger (domain, status);
+CREATE INDEX IF NOT EXISTS experiment_page
+    ON experiment_ledger (page);
+CREATE TABLE IF NOT EXISTS query_ownership_map (
+    domain                  TEXT NOT NULL,
+    query_cluster           TEXT NOT NULL,
+    canonical_url           TEXT NOT NULL,
+    primary_query           TEXT NOT NULL,
+    secondary_queries_json  TEXT NOT NULL DEFAULT '[]',
+    intent_category         TEXT NOT NULL DEFAULT 'informational',
+    created_at              TEXT NOT NULL,
+    updated_at              TEXT NOT NULL,
+    PRIMARY KEY (domain, query_cluster)
+);
+CREATE INDEX IF NOT EXISTS query_ownership_url
+    ON query_ownership_map (domain, canonical_url);
+CREATE TABLE IF NOT EXISTS action_effectiveness_stats (
+    domain                  TEXT NOT NULL,
+    action_code             TEXT NOT NULL,
+    route_family            TEXT NOT NULL DEFAULT 'root',
+    total_experiments       INTEGER NOT NULL DEFAULT 0,
+    successful_experiments  INTEGER NOT NULL DEFAULT 0,
+    avg_click_lift          REAL NOT NULL DEFAULT 0.0,
+    avg_impression_lift     REAL NOT NULL DEFAULT 0.0,
+    avg_rank_delta          REAL NOT NULL DEFAULT 0.0,
+    updated_at              TEXT NOT NULL,
+    PRIMARY KEY (domain, action_code, route_family)
+);
 """
 
 
@@ -133,6 +208,30 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             conn.commit()
         except sqlite3.OperationalError:
             pass  # concurrent migration already applied it
+    if "decision_class" not in columns:
+        try:
+            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN decision_class TEXT NOT NULL DEFAULT 'SHIP'")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+    if "expected_value" not in columns:
+        try:
+            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN expected_value REAL NOT NULL DEFAULT 0.0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+    if "cannibalization_risk" not in columns:
+        try:
+            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN cannibalization_risk REAL NOT NULL DEFAULT 0.0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+    if "confidence" not in columns:
+        try:
+            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
     serp_columns = {row[1] for row in conn.execute("PRAGMA table_info(dfs_serp_cache)")}
     if "search_volume" not in serp_columns:
         try:
@@ -430,11 +529,16 @@ def enqueue_tasks(
             ).fetchone()
             if already_rejected:
                 continue
+            dec_class = str(task.get("decision_class") or "SHIP").upper()
+            ev = float(task.get("expected_value") or task.get("ev") or 0.0)
+            cann_risk = float(task.get("cannibalization_risk") or 0.0)
+            conf = float(task.get("confidence") or 1.0)
             conn.execute(
                 "INSERT INTO atomic_task_backlog "
                 "(domain, page, query, action_code, target_component, file_target, "
-                " tdd_assertion, lgbm_score, priority_score, route_family, status, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)",
+                " tdd_assertion, lgbm_score, priority_score, route_family, "
+                " decision_class, expected_value, cannibalization_risk, confidence, status, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)",
                 (
                     domain,
                     page,
@@ -446,6 +550,10 @@ def enqueue_tasks(
                     float(task.get("lgbm_score") or 0.0),
                     float(task.get("priority_score") or task.get("rank_score") or 0.0),
                     extract_route_family(page),
+                    dec_class,
+                    ev,
+                    cann_risk,
+                    conf,
                     stamp,
                 ),
             )
@@ -594,7 +702,8 @@ def lease_tasks(
         "UPDATE atomic_task_backlog SET status = 'LEASED', leased_at = ? "
         f"WHERE id IN ({', '.join('?' * len(wave_ids))}) AND status = 'PENDING' "
         "RETURNING id, domain, page, query, action_code, target_component, "
-        "file_target, tdd_assertion, lgbm_score, priority_score, route_family"
+        "file_target, tdd_assertion, lgbm_score, priority_score, route_family, "
+        "decision_class, expected_value, cannibalization_risk, confidence"
     )
     cursor = conn.execute(update_sql, (stamp, *wave_ids))
     leased = [
@@ -610,6 +719,10 @@ def lease_tasks(
             "lgbm_score": row[8],
             "priority_score": row[9],
             "route_family": row[10],
+            "decision_class": row[11] if len(row) > 11 else "SHIP",
+            "expected_value": row[12] if len(row) > 12 else 0.0,
+            "cannibalization_risk": row[13] if len(row) > 13 else 0.0,
+            "confidence": row[14] if len(row) > 14 else 1.0,
             "status": "LEASED",
         }
         for row in cursor.fetchall()
@@ -679,6 +792,620 @@ def pending_count(conn: sqlite3.Connection, domain: str | None = None) -> int:
     else:
         row = conn.execute("SELECT COUNT(*) FROM atomic_task_backlog WHERE status = 'PENDING'").fetchone()
     return int(row[0])
+
+
+# ------------------------------------------------------------- Outcome Engine v2: Experiment Ledger & Evaluation
+
+
+def record_experiment(
+    conn: sqlite3.Connection,
+    *,
+    task_id: int | None = None,
+    domain: str,
+    page: str,
+    target_query: str,
+    action_code: str,
+    decision_class: str = "SHIP",
+    implementation_details: str | None = None,
+    commit_sha: str | None = None,
+    deployed_at: datetime | None = None,
+    baseline_clicks_28d: float = 0.0,
+    baseline_impressions_28d: float = 0.0,
+    baseline_ctr: float = 0.0,
+    baseline_position: float = 0.0,
+    control_cohort_page: str | None = None,
+    control_baseline_clicks: float = 0.0,
+    attribution_limitations: str | None = None,
+) -> int:
+    """Records an executed SEO change into the persistent experiment ledger."""
+    now_str = _iso(_utc_now(deployed_at))
+    cur = conn.execute(
+        """
+        INSERT INTO experiment_ledger (
+            task_id, domain, page, target_query, query_cluster, action_code,
+            decision_class, implementation_details, commit_sha, deployed_at,
+            baseline_clicks_28d, baseline_impressions_28d, baseline_ctr, baseline_position,
+            control_cohort_page, control_baseline_clicks, attribution_limitations,
+            status, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_RECRAWL', ?)
+        """,
+        (
+            task_id,
+            domain,
+            page,
+            target_query,
+            target_query.lower().strip(),
+            action_code,
+            decision_class,
+            implementation_details,
+            commit_sha,
+            now_str,
+            float(baseline_clicks_28d),
+            float(baseline_impressions_28d),
+            float(baseline_ctr),
+            float(baseline_position),
+            control_cohort_page,
+            float(control_baseline_clicks),
+            attribution_limitations,
+            now_str,
+        ),
+    )
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def record_shipped_experiments(
+    conn: sqlite3.Connection,
+    task_ids: list[int],
+    commit_sha: str | None = None,
+    baseline_gsc: dict[str, dict[str, Any]] | None = None,
+    control_pages: dict[str, str] | None = None,
+    now: datetime | None = None,
+) -> int:
+    """Auto-enqueues experiment rows for tasks being marked SHIPPED.
+
+    Matches baseline metrics from baseline_gsc or gsc_snapshots if available,
+    and assigns a matched control page from the same domain/route family.
+    """
+    now_dt = _utc_now(now)
+    recorded = 0
+    for tid in task_ids:
+        row = conn.execute(
+            """
+            SELECT id, domain, page, query, action_code, route_family
+            FROM atomic_task_backlog WHERE id = ?
+            """,
+            (tid,),
+        ).fetchone()
+        if not row:
+            continue
+        _id, domain, page, query, action_code, route_family = row
+
+        base_clicks = 0.0
+        base_impr = 0.0
+        base_ctr = 0.0
+        base_pos = 0.0
+        if baseline_gsc:
+            key = f"{query.strip().lower()}\n{page.strip().lower()}"
+            gsc_row = baseline_gsc.get(key)
+            if gsc_row:
+                base_clicks = float(gsc_row.get("clicks", 0.0) or 0.0)
+                base_impr = float(gsc_row.get("impressions", 0.0) or 0.0)
+                base_ctr = float(gsc_row.get("ctr", 0.0) or 0.0)
+                base_pos = float(gsc_row.get("position", 0.0) or 0.0)
+
+        ctrl_page = None
+        if control_pages and page in control_pages:
+            ctrl_page = control_pages[page]
+        elif domain:
+            ctrl_candidate = conn.execute(
+                """
+                SELECT DISTINCT page FROM atomic_task_backlog
+                WHERE domain = ? AND page != ? AND route_family = ? AND status = 'SHIPPED'
+                LIMIT 1
+                """,
+                (domain, page, route_family),
+            ).fetchone()
+            if ctrl_candidate:
+                ctrl_page = ctrl_candidate[0]
+
+        record_experiment(
+            conn,
+            task_id=_id,
+            domain=domain,
+            page=page,
+            target_query=query,
+            action_code=action_code,
+            commit_sha=commit_sha,
+            deployed_at=now_dt,
+            baseline_clicks_28d=base_clicks,
+            baseline_impressions_28d=base_impr,
+            baseline_ctr=base_ctr,
+            baseline_position=base_pos,
+            control_cohort_page=ctrl_page,
+        )
+        recorded += 1
+    return recorded
+
+
+def update_experiment_recrawl(
+    conn: sqlite3.Connection,
+    domain: str,
+    recrawled_pages: set[str],
+    now: datetime | None = None,
+) -> int:
+    """Updates recrawl status for experiments whose target pages show recrawl evidence."""
+    now_str = _iso(_utc_now(now))
+    updated = 0
+    for page in recrawled_pages:
+        cur = conn.execute(
+            """
+            UPDATE experiment_ledger
+            SET recrawl_detected_at = ?,
+                indexation_status = 'INDEXED',
+                status = CASE WHEN status = 'PENDING_RECRAWL' THEN 'OBSERVING' ELSE status END,
+                updated_at = ?
+            WHERE domain = ? AND page = ? AND recrawl_detected_at IS NULL
+            """,
+            (now_str, now_str, domain, page),
+        )
+        updated += cur.rowcount
+    conn.commit()
+    return updated
+
+
+def update_experiment_outcomes(
+    conn: sqlite3.Connection,
+    domain: str,
+    fresh_gsc_rows: dict[str, dict[str, Any]],
+    days_elapsed: int = 28,
+    now: datetime | None = None,
+) -> dict[str, int]:
+    """Evaluates pending experiments with post-deployment GSC metrics and Difference-in-Differences.
+
+    Computes:
+    - Treatment lift against baseline
+    - Matched control cohort lift
+    - Net incremental clicks
+    - Updates action_effectiveness_stats
+    """
+    now_dt = _utc_now(now)
+    now_str = _iso(now_dt)
+    graded_count = 0
+    observing_count = 0
+
+    # Read pending and observing experiments for this domain
+    cur = conn.execute(
+        """
+        SELECT experiment_ledger.id, experiment_ledger.page, experiment_ledger.target_query,
+               experiment_ledger.action_code,
+               COALESCE(atomic_task_backlog.route_family, 'root') AS route_family,
+               experiment_ledger.deployed_at,
+               experiment_ledger.baseline_clicks_28d, experiment_ledger.baseline_impressions_28d,
+               experiment_ledger.baseline_position, experiment_ledger.baseline_ctr,
+               experiment_ledger.control_cohort_page, experiment_ledger.control_baseline_clicks,
+               experiment_ledger.status
+        FROM experiment_ledger
+        LEFT JOIN atomic_task_backlog ON experiment_ledger.task_id = atomic_task_backlog.id
+        WHERE experiment_ledger.domain = ? AND experiment_ledger.status IN ('PENDING_RECRAWL', 'OBSERVING')
+        """,
+        (domain,),
+    )
+    experiments = cur.fetchall()
+
+    for exp in experiments:
+        (
+            exp_id, page, query, action_code, route_family, deployed_at_str,
+            base_clicks, base_impr, base_pos, base_ctr,
+            ctrl_page, ctrl_base_clicks, status
+        ) = exp
+
+        # Calculate actual days elapsed since deployment
+        try:
+            dep_dt = datetime.fromisoformat(deployed_at_str)
+            actual_days = max(1, (now_dt - dep_dt).days)
+        except Exception:
+            actual_days = days_elapsed
+
+        # Match fresh GSC data
+        key = f"{query.strip().lower()}\n{page.strip().lower()}"
+        post_gsc = fresh_gsc_rows.get(key)
+
+        # Fallback to page-level aggregate if query is not broken down
+        if not post_gsc:
+            page_matches = [
+                v for k, v in fresh_gsc_rows.items()
+                if v.get("page", "").strip().lower() == page.strip().lower()
+            ]
+            if page_matches:
+                post_gsc = {
+                    "clicks": sum(float(m.get("clicks", 0.0) or 0.0) for m in page_matches),
+                    "impressions": sum(float(m.get("impressions", 0.0) or 0.0) for m in page_matches),
+                    "position": (
+                        sum(float(m.get("position", 0.0) or 0.0) * float(m.get("impressions", 0.0) or 1.0) for m in page_matches)
+                        / max(sum(float(m.get("impressions", 0.0) or 1.0) for m in page_matches), 1.0)
+                    ),
+                    "ctr": sum(float(m.get("clicks", 0.0) or 0.0) for m in page_matches) / max(sum(float(m.get("impressions", 0.0) or 1.0) for m in page_matches), 1.0),
+                }
+
+        if not post_gsc:
+            continue
+
+        p_clicks = float(post_gsc.get("clicks", 0.0) or 0.0)
+        p_impr = float(post_gsc.get("impressions", 0.0) or 0.0)
+        p_pos = float(post_gsc.get("position", 0.0) or 0.0)
+        p_ctr = float(post_gsc.get("ctr", 0.0) or (p_clicks / max(p_impr, 1.0)))
+
+        # Control cohort performance
+        ctrl_p_clicks = ctrl_base_clicks
+        if ctrl_page:
+            ctrl_matches = [
+                v for k, v in fresh_gsc_rows.items()
+                if v.get("page", "").strip().lower() == ctrl_page.strip().lower()
+            ]
+            if ctrl_matches:
+                ctrl_p_clicks = sum(float(m.get("clicks", 0.0) or 0.0) for m in ctrl_matches)
+
+        # Difference-in-Differences calculation
+        treatment_lift = (p_clicks - base_clicks) / max(base_clicks, 1.0)
+        control_lift = (ctrl_p_clicks - ctrl_base_clicks) / max(ctrl_base_clicks, 1.0)
+        net_lift = treatment_lift - control_lift
+        inc_clicks = max(0.0, p_clicks - (base_clicks * (1.0 + max(-0.9, control_lift))))
+        inc_impr = max(0.0, p_impr - base_impr)
+
+        # Attribution confidence
+        # Requires: recrawl detected, minimum baseline impressions, >= 14 days
+        conf = 0.50
+        if p_impr >= 50:
+            conf += 0.20
+        if actual_days >= 28:
+            conf += 0.20
+        if ctrl_page and ctrl_base_clicks > 0:
+            conf += 0.10
+        conf = min(1.0, conf)
+
+        # Determine target interval column to populate
+        col_prefix = "post_28d"
+        if actual_days < 10:
+            col_prefix = "post_7d"
+        elif actual_days < 20:
+            col_prefix = "post_14d"
+        elif actual_days >= 45:
+            col_prefix = "post_56d"
+
+        new_status = "OBSERVING"
+        if actual_days >= 28 and p_impr > 0:
+            new_status = "GRADED"
+            graded_count += 1
+            # Feed into adaptive action effectiveness
+            is_success = net_lift > 0.05 or inc_clicks > 1.0 or (p_pos < base_pos and base_pos > 0)
+            record_action_effectiveness(
+                conn,
+                domain=domain,
+                action_code=action_code,
+                route_family=route_family or "root",
+                is_success=is_success,
+                click_lift=net_lift,
+                impression_lift=(p_impr - base_impr) / max(base_impr, 1.0),
+                rank_delta=(base_pos - p_pos),
+                now=now_dt,
+            )
+        else:
+            observing_count += 1
+
+        conn.execute(
+            f"""
+            UPDATE experiment_ledger
+            SET {col_prefix}_clicks = ?,
+                {col_prefix}_impressions = ?,
+                {col_prefix}_position = ?,
+                {col_prefix}_ctr = ?,
+                control_post_clicks = ?,
+                incremental_clicks_est = ?,
+                incremental_impressions_est = ?,
+                attribution_confidence = ?,
+                status = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                p_clicks, p_impr, p_pos, p_ctr,
+                ctrl_p_clicks, inc_clicks, inc_impr, conf,
+                new_status, now_str, exp_id,
+            ),
+        )
+
+    conn.commit()
+    return {"graded": graded_count, "observing": observing_count}
+
+
+def get_experiment_summary(conn: sqlite3.Connection, domain: str) -> dict[str, Any]:
+    """Generates an honest outcome summary: separates verified outcomes from pending ones."""
+    total = conn.execute(
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ?", (domain,)
+    ).fetchone()[0]
+    pending = conn.execute(
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status = 'PENDING_RECRAWL'", (domain,)
+    ).fetchone()[0]
+    observing = conn.execute(
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status = 'OBSERVING'", (domain,)
+    ).fetchone()[0]
+    graded = conn.execute(
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status = 'GRADED'", (domain,)
+    ).fetchone()[0]
+
+    graded_stats = conn.execute(
+        """
+        SELECT SUM(incremental_clicks_est), SUM(incremental_impressions_est),
+               AVG(attribution_confidence)
+        FROM experiment_ledger
+        WHERE domain = ? AND status = 'GRADED'
+        """,
+        (domain,),
+    ).fetchone()
+
+    total_inc_clicks = float(graded_stats[0] or 0.0)
+    total_inc_impr = float(graded_stats[1] or 0.0)
+    avg_conf = float(graded_stats[2] or 0.0)
+
+    return {
+        "domain": domain,
+        "total_experiments": total,
+        "pending_recrawl": pending,
+        "observing": observing,
+        "graded": graded,
+        "total_incremental_clicks": total_inc_clicks,
+        "total_incremental_impressions": total_inc_impr,
+        "avg_confidence": avg_conf,
+        "has_measured_outcomes": graded > 0,
+    }
+
+
+# ------------------------------------------------------------- Query Ownership & Cannibalization Prevention
+
+
+def upsert_query_ownership(
+    conn: sqlite3.Connection,
+    *,
+    domain: str,
+    query_cluster: str,
+    canonical_url: str,
+    primary_query: str,
+    secondary_queries: list[str] | None = None,
+    intent_category: str = "tool",
+    now: datetime | None = None,
+) -> None:
+    now_str = _iso(_utc_now(now))
+    sec_json = json.dumps(sorted(set(secondary_queries or [])))
+    conn.execute(
+        """
+        INSERT INTO query_ownership_map (
+            domain, query_cluster, canonical_url, primary_query,
+            secondary_queries_json, intent_category, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(domain, query_cluster) DO UPDATE SET
+            canonical_url = excluded.canonical_url,
+            primary_query = excluded.primary_query,
+            secondary_queries_json = excluded.secondary_queries_json,
+            intent_category = excluded.intent_category,
+            updated_at = excluded.updated_at
+        """,
+        (
+            domain,
+            query_cluster.strip().lower(),
+            canonical_url.strip(),
+            primary_query.strip(),
+            sec_json,
+            intent_category.strip().lower(),
+            now_str,
+            now_str,
+        ),
+    )
+    conn.commit()
+
+
+def get_query_owner(
+    conn: sqlite3.Connection,
+    domain: str,
+    query: str,
+) -> dict[str, Any] | None:
+    """Finds the primary owner URL for a query or query cluster on a domain."""
+    q_norm = query.strip().lower()
+    row = conn.execute(
+        """
+        SELECT query_cluster, canonical_url, primary_query, secondary_queries_json, intent_category
+        FROM query_ownership_map
+        WHERE domain = ? AND (query_cluster = ? OR primary_query = ?)
+        LIMIT 1
+        """,
+        (domain, q_norm, q_norm),
+    ).fetchone()
+    if row:
+        return {
+            "query_cluster": row[0],
+            "canonical_url": row[1],
+            "primary_query": row[2],
+            "secondary_queries": json.loads(row[3]),
+            "intent_category": row[4],
+            "fuzzy_match": False,
+        }
+    q_tokens = set(q_norm.split())
+    if not q_tokens:
+        return None
+    for r in conn.execute(
+        "SELECT query_cluster, canonical_url, primary_query, secondary_queries_json, intent_category "
+        "FROM query_ownership_map WHERE domain = ?",
+        (domain,),
+    ):
+        sec_queries = json.loads(r[3])
+        if any(q_norm == sq.strip().lower() or sq.strip().lower() in q_norm for sq in sec_queries):
+            return {
+                "query_cluster": r[0],
+                "canonical_url": r[1],
+                "primary_query": r[2],
+                "secondary_queries": sec_queries,
+                "intent_category": r[4],
+                "fuzzy_match": True,
+            }
+        cluster_tokens = set(r[0].split())
+        overlap = len(q_tokens & cluster_tokens) / max(len(q_tokens | cluster_tokens), 1)
+        cluster_contained = len(cluster_tokens) > 0 and len(q_tokens & cluster_tokens) / len(cluster_tokens) >= 0.75
+        if overlap >= 0.70 or cluster_contained:
+            return {
+                "query_cluster": r[0],
+                "canonical_url": r[1],
+                "primary_query": r[2],
+                "secondary_queries": sec_queries,
+                "intent_category": r[4],
+                "fuzzy_match": True,
+            }
+    return None
+
+
+# ------------------------------------------------------------- Adaptive Action Effectiveness Learning
+
+
+def record_action_effectiveness(
+    conn: sqlite3.Connection,
+    *,
+    domain: str,
+    action_code: str,
+    route_family: str = "root",
+    is_success: bool,
+    click_lift: float = 0.0,
+    impression_lift: float = 0.0,
+    rank_delta: float = 0.0,
+    now: datetime | None = None,
+) -> None:
+    """Updates empirical win-rate and lift tracking for an action type."""
+    now_str = _iso(_utc_now(now))
+    row = conn.execute(
+        """
+        SELECT total_experiments, successful_experiments, avg_click_lift, avg_impression_lift, avg_rank_delta
+        FROM action_effectiveness_stats
+        WHERE domain = ? AND action_code = ? AND route_family = ?
+        """,
+        (domain, action_code, route_family),
+    ).fetchone()
+
+    if not row:
+        conn.execute(
+            """
+            INSERT INTO action_effectiveness_stats (
+                domain, action_code, route_family, total_experiments, successful_experiments,
+                avg_click_lift, avg_impression_lift, avg_rank_delta, updated_at
+            ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)
+            """,
+            (
+                domain,
+                action_code,
+                route_family,
+                1 if is_success else 0,
+                click_lift,
+                impression_lift,
+                rank_delta,
+                now_str,
+            ),
+        )
+    else:
+        tot, succ, old_c_lift, old_i_lift, old_r_delta = row
+        new_tot = tot + 1
+        new_succ = succ + (1 if is_success else 0)
+        new_c_lift = (old_c_lift * tot + click_lift) / new_tot
+        new_i_lift = (old_i_lift * tot + impression_lift) / new_tot
+        new_r_delta = (old_r_delta * tot + rank_delta) / new_tot
+        conn.execute(
+            """
+            UPDATE action_effectiveness_stats
+            SET total_experiments = ?, successful_experiments = ?,
+                avg_click_lift = ?, avg_impression_lift = ?, avg_rank_delta = ?,
+                updated_at = ?
+            WHERE domain = ? AND action_code = ? AND route_family = ?
+            """,
+            (new_tot, new_succ, new_c_lift, new_i_lift, new_r_delta, now_str, domain, action_code, route_family),
+        )
+    conn.commit()
+
+
+def get_action_effectiveness(
+    conn: sqlite3.Connection,
+    domain: str,
+    action_code: str,
+    route_family: str = "root",
+) -> dict[str, Any]:
+    """Returns empirical win-rate and average lift for an action type."""
+    row = conn.execute(
+        """
+        SELECT total_experiments, successful_experiments, avg_click_lift, avg_impression_lift, avg_rank_delta
+        FROM action_effectiveness_stats
+        WHERE domain = ? AND action_code = ? AND route_family = ?
+        """,
+        (domain, action_code, route_family),
+    ).fetchone()
+    if not row or row[0] == 0:
+        return {
+            "total_experiments": 0,
+            "win_rate": 0.50,  # uninformative prior
+            "avg_click_lift": 0.0,
+            "avg_impression_lift": 0.0,
+            "avg_rank_delta": 0.0,
+            "has_empirical_evidence": False,
+        }
+    return {
+        "total_experiments": row[0],
+        "win_rate": float(row[1]) / float(row[0]),
+        "avg_click_lift": float(row[2]),
+        "avg_impression_lift": float(row[3]),
+        "avg_rank_delta": float(row[4]),
+        "has_empirical_evidence": True,
+    }
+
+
+def get_fleet_action_effectiveness(
+    conn: sqlite3.Connection,
+    action_code: str,
+    route_family: str | None = None,
+) -> dict[str, Any]:
+    """Cross-property aggregated effectiveness prior (strict multi-tenant data privacy).
+
+    Only aggregates anonymous totals and win-rates across domains without
+    exposing individual URLs or queries.
+    """
+    if route_family:
+        row = conn.execute(
+            """
+            SELECT SUM(total_experiments), SUM(successful_experiments),
+                   AVG(avg_click_lift), AVG(avg_impression_lift), AVG(avg_rank_delta)
+            FROM action_effectiveness_stats
+            WHERE action_code = ? AND route_family = ?
+            """,
+            (action_code, route_family),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """
+            SELECT SUM(total_experiments), SUM(successful_experiments),
+                   AVG(avg_click_lift), AVG(avg_impression_lift), AVG(avg_rank_delta)
+            FROM action_effectiveness_stats
+            WHERE action_code = ?
+            """,
+            (action_code,),
+        ).fetchone()
+    if not row or not row[0]:
+        return {
+            "total_experiments": 0,
+            "win_rate": 0.50,
+            "avg_click_lift": 0.0,
+            "has_empirical_evidence": False,
+        }
+    tot = int(row[0])
+    succ = int(row[1] or 0)
+    return {
+        "total_experiments": tot,
+        "win_rate": float(succ) / float(tot) if tot > 0 else 0.5,
+        "avg_click_lift": float(row[2] or 0.0),
+        "has_empirical_evidence": True,
+    }
 
 
 # ------------------------------------------------------------- budget gate

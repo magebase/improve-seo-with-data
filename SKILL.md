@@ -377,10 +377,11 @@ proxy timeouts — see Invariants B and E; the render-cost lesson stands.)
 - **Execution Order Invariant (L2 + enrichment waves):** when un-gating content waves alongside an L2 cache fix, verify the L2 pipeline on 1-3 canary URLs FIRST, ship the high-priority DOM enrichment wave SECOND, and run the full sitemap pre-warm sweep AFTER the enriched DOM is live (a pre-enrichment sweep locks thin HTML into KV).
 - Never let humans consult a bot-only prefix, and swallow all KV failures (the global layer must never break rendering).
 
-### Invariant D: Daily Cursor, Pre-Lease Hygiene & 21-Day URL Title Lock
+### Invariant D: Daily Cursor, Pre-Lease Hygiene & 28-Day Title Lock (with Emergency Bypass)
 - All invocations read/write the local SQLite `atomic_task_backlog` cursor (`PENDING -> LEASED -> SHIPPED`) backed by the pooled-fleet LGBMRanker and the offline DataForSEO surrogate, with the daily DFS budget gate consulted before any network call.
 - Pre-lease checks MUST scrub Boolean/operator noise (`site:`, `OR`, `AND`, `-\w+`), auto-graduate tasks already satisfied on the live page, skip paths whose `file_target` is leased elsewhere, and release stale `LEASED` rows back to `PENDING` on closeout.
-- **21-Day URL Title Lock (`enforce_url_title_lock`):** Once a URL's `<title>` tag has been calibrated and shipped in any wave within the last 21 days, that URL's `<title>` is locked. Secondary queries arriving in subsequent waves must NEVER overwrite or degrade the primary calibrated title; they are strictly downgraded to `INJECT_SECONDARY_H2_ONLY` (enriching body `<h2>`/`<h3>` or FAQ `<details>` blocks).
+- **28-Day URL Title Lock (`enforce_url_title_lock`):** Once a URL's `<title>` tag has been calibrated and shipped in any wave within the last 28 days, that URL's `<title>` is locked. Secondary queries arriving in subsequent waves must NEVER overwrite or degrade the primary calibrated title; they are strictly downgraded to `INJECT_SECONDARY_H2_ONLY` (enriching body `<h2>`/`<h3>` or FAQ `<details>` blocks).
+- **Conditional Emergency Bypass:** The 28-day title lock may only be bypassed if an explicit manual regression, critical factual inaccuracy, or layout breakage is detected (`--force-title-recovery` with documented operator rationale). Routine keyword churn across consecutive waves is strictly prohibited.
 - **Strict Canonical Hostname Gate (`is_valid_property_host`):** Rejects legacy or foreign subdomains (e.g. `landscaping.figiva.com` from `sc-domain:` exports) during candidate collection and pre-lease filtering.
 
 ### Invariant F: Anti-Vaporware Copy & Structured Table Consolidation
@@ -394,9 +395,10 @@ proxy timeouts — see Invariants B and E; the render-cost lesson stands.)
 - Deployments for multi-tenant applications (such as `seo-alpha-site-saas`, hosting `incomecanvas.com`, `skrino.com`, and `autopublishai.com`) must only purge the edge cache zone of the domain modified by the current wave (`--zone <domain>`).
 - Indiscriminate multi-zone cache flushes without coordinated re-warm sweeps evict edge KV across sibling brands and cause cold-start latency spikes.
 
-### Invariant H: Rendered Em-Dash Title Pixel Width
-- SERP display title pixel estimation must evaluate the full rendered title string, including brand separators.
-- When using an em-dash (`—`, ~12.5px in Arial/Roboto vs. 4.5px for `|`), pixel modeling must account for its wide footprint so titles stay strictly within Google's 580px desktop cutoff without truncation.
+### Invariant H: Intent-Driven SERP Title Geometry & Pixel Modeling
+- SERP display title pixel estimation must evaluate the full rendered title string, including brand separators, against the desktop ~580px budget.
+- Prioritize high-contrast intent tokens and searcher clarity over arbitrary character-count padding: a concise, punchy 52-character title that frontloads intent is superior to a 64-character title padded with filler words.
+- When using wide glyphs such as an em-dash (`—`, ~12.5px in Arial/Roboto vs. 4.5px for `|`), pixel modeling must account for its wide footprint so titles stay strictly within Google's desktop cutoff without truncation.
 
 ---
 
@@ -419,6 +421,9 @@ proxy timeouts — see Invariants B and E; the render-cost lesson stands.)
 | [`scripts/setup_observability.py`](./scripts/setup_observability.py) | Scans, validates, heals, and exports telemetry manifests (`DataSourceManifest`) and drop-in tracking snippets. |
 | [`scripts/geo_evaluator.py`](./scripts/geo_evaluator.py) | Scores AI agent readiness, evaluates `llms.txt`, and validates Schema.org JSON-LD structured data. |
 | [`scripts/run_audit.py`](./scripts/run_audit.py) | High-speed technical crawler pass for status codes, canonical consistency, and crawl budget parameter defense. |
+| [`scripts/evaluate_experiments.py`](./scripts/evaluate_experiments.py) | **Outcome Evaluation & Two-Part Scorecard:** Tracks 7, 14, 28, 56-day outcomes in `experiment_ledger`, evaluates treatment vs matched-control cohorts (Difference-in-Differences), verifies Googlebot recrawl proof, updates `action_effectiveness_stats`, and renders the two-part scorecard. |
+| [`scripts/content_usefulness_gate.py`](./scripts/content_usefulness_gate.py) | **Content Quality & Claim Provenance Gate:** Enforces anti-doorway distinctiveness, substantive content depth (>= 120 words), query fulfillment in headings, anti-vaporware copy bans, and verifies technical performance claims against code/benchmark evidence. |
+| [`scripts/verify_technical_seo.py`](./scripts/verify_technical_seo.py) | **10-Point Technical SEO & Indexability Verification:** Audits HTTP 200, non-empty HTML, title geometry, single primary H1, canonical URL consistency, robots noindex defense, >= 2 crawlable internal links, JSON-LD schema validity, mobile viewport, and functional tool presence. |
 | [`schemas/seo-action.schema.json`](./schemas/seo-action.schema.json) | Standardized JSON Schema for prioritized, auditable SEO and CRO action cards. |
 | [`schemas/data-source-manifest.schema.json`](./schemas/data-source-manifest.schema.json) | Declares connection status, freshness watermarks, and capabilities across all 7 telemetry platforms. |
 | [`references/page_level_decision_engine.md`](./references/page_level_decision_engine.md) | Exhaustive guide on the 8-state diagnostic decision tree, 7 typed action contracts, URL ownership model, and 4 recipes. |
@@ -479,3 +484,166 @@ Migrated per-domain state DBs are the only record of pre-unification adjudicatio
 ### 11.10 Anti-Inflation Impression Aggregation
 
 `candidate_hygiene.canonicalize_and_dedupe_candidates` never blind-SUMs impressions across redirect variants: rows with a `date`/`day` field are MAX-aggregated per `(date, page, query)` and summed across days; dateless rows (aggregated export windows) MAX across twins (an index transition serves one URL variant per impression, so blind SUM inflates volume and deflates true CTR). Clicks SUM (real events) and `ctr` re-derives from the aggregate. Live redirect probes run with `max_hops=3`, a 2.0s timeout cap, and tracking params (`utm_*`, `fbclid`, `gclid`) stripped before canonical lookup.
+
+---
+
+## 12. Outcome-Driven SEO Engine v2: Architectural Specification & Operating Directives
+
+Transforming automated SEO execution into an evidence-driven, outcome-optimizing system. The objective of this engine is not mere code deployment or passing tests, but measurable incremental organic traffic, durable ranking gains, and business conversions.
+
+### 12.1 The Closed-Loop 5-Stage Lifecycle
+
+Every optimization cycle operates through a verified 5-stage closed loop:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   STAGE 1: INGEST & EVIDENCE EXPANSION                 │
+│  Multi-tenant isolated GSC data · DataForSEO Standard Queue SERP intel  │
+│  Canonical candidate hygiene · Redirect collapse · Zero cross-talk     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                STAGE 2: OPPORTUNITY INTELLIGENCE (EV & LTR)            │
+│  Mathematical Expected Value EV(a) · Query Ownership anti-cannibalism   │
+│  Decision Classes: SHIP | EXPERIMENT | OBSERVE | NO_ACTION             │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+┌───────────────────────────────────▼────────────────────────────────────┐
+│             STAGE 3: CONTENT USEFULNESS & TECHNICAL GATES               │
+│  120+ word substantive depth · Anti-vaporware regex check (Invariant F) │
+│  Factual claim provenance verification · Doorway distinctiveness       │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+┌───────────────────────────────────▼────────────────────────────────────┐
+│           STAGE 4: DEPLOYMENT & 10-POINT TECHNICAL SEO GATE            │
+│  Git origin/main sync · Safe deploy · Signed X-SEO-Verify: 1 re-warm   │
+│  verify_technical_seo.py (HTTP 200, Title, H1, Canonical, Schema, Tool)│
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+┌───────────────────────────────────▼────────────────────────────────────┐
+│            STAGE 5: OUTCOME TRACKING & ADAPTIVE FLEET LEARNING         │
+│  Persistent experiment_ledger · Difference-in-Differences vs Controls   │
+│  Googlebot recrawl verification · Action win-rate stats feedback loop  │
+│  Two-Part Scorecard: Engineering Quality vs Measured SEO Effectiveness │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 12.2 P0: Outcome Measurement Engine & Difference-in-Differences Experiment Ledger
+
+1. **Persistent Experiment Ledger (`experiment_ledger`):**
+   Every deployed task is registered into `experiment_ledger` in `~/.seo_fleet/fleet_state.db` at deployment time (`record_shipped_experiments`). The ledger records:
+   - Task metadata: `id`, `domain`, `page`, `query`, `action_code`, `route_family`, `commit_sha`.
+   - Baseline performance: `baseline_clicks_28d`, `baseline_impressions_28d`, `baseline_position`, `baseline_ctr`.
+   - Deployment timestamps and post-deploy checkpoints (7d, 14d, 28d, 56d).
+   - Recrawl proof: `recrawled_at`, `recrawl_evidence_type` (`gsc_impression` or `url_inspection`).
+   - Post-deployment metrics: `post_clicks_28d`, `post_impressions_28d`, `post_position`, `post_ctr`.
+   - Difference-in-Differences controls: `matched_control_pages` (sibling URLs in the same route family that received no changes).
+   - Lift & Confidence: `incremental_clicks_lift`, `incremental_impressions_lift`, `attribution_confidence`.
+
+2. **Googlebot Recrawl Verification (`update_experiment_recrawl`):**
+   Evaluating SEO impact before Google recrawls a URL trains models on phantom zeros. A task transitions from `PENDING_RECRAWL` to `RECRAWL_DETECTED` only when:
+   - Fresh post-deployment GSC impressions appear on the target URL, or
+   - GSC URL Inspection confirms `lastCrawlTime > deployed_at`.
+
+3. **Difference-in-Differences (DiD) Cohort Evaluation (`update_experiment_outcomes`):**
+   To isolate genuine SEO lift from sitewide seasonality or Google core algorithm updates, the engine pairs treatment pages with matched control pages:
+   $$\Delta_{\text{treatment}} = M_{t,\text{post}} - M_{t,\text{pre}}$$
+   $$\Delta_{\text{control}} = M_{c,\text{post}} - M_{c,\text{pre}}$$
+   $$\text{DiD Lift} = \Delta_{\text{treatment}} - \Delta_{\text{control}}$$
+   Outcomes are evaluated at the end of the 28-day observation window, populating `incremental_clicks_lift` and updating action priors.
+
+### 12.3 P1: Opportunity Intelligence & Economic Expected Value
+
+Instead of raw heuristic ordering, opportunities are scored by mathematical **Economic Expected Value ($EV$)**:
+
+$$EV(a) = P(\text{indexing}) \times P(\text{rank\_improvement}) \times \Delta\text{clicks} \times V(\text{conversion})$$
+
+1. **Parameters & Mathematical Priors:**
+   - $P(\text{indexing})$: $0.95$ for existing active routes, $0.70$ for newly created programmatic routes.
+   - $P(\text{rank\_improvement})$: $0.75$ for striking-distance queries (positions 4.0–15.0); $0.45$ for positions 15.1–30.0; $0.25$ for positions $>30.0$ or $<4.0$ (already top).
+   - $\Delta\text{clicks}$: Estimated from the mathematical position-adjusted CTR curve ($\text{TargetCTR} - \text{CurrentCTR}$) scaled by impression volume.
+   - $V(\text{conversion})$: Conversion multiplier ($1.5\times$ for high-intent actions like `convert`, `viewer`, `tool`, `calculator`; $1.0\times$ for informational/navigational).
+   - $\text{CannibalizationRisk}$: Looked up dynamically against `query_ownership_map`.
+   - $\text{Confidence}$: Derived from sample size (impressions $\ge 100 \implies 0.90$, $\ge 20 \implies 0.75$, $< 20 \implies 0.50$).
+
+2. **Explicit Decision Classes:**
+   - **`SHIP`:** High $EV$, low cannibalization risk, high confidence. Proceed with TDD implementation.
+   - **`EXPERIMENT`:** Moderate $EV$, testing novel intent or schema variations. Monitored closely via DiD.
+   - **`OBSERVE`:** Page was modified within the last 28 days or is currently awaiting recrawl. Zero code changes permitted.
+   - **`NO_ACTION`:** Low $EV$, high cannibalization risk, or page is already a top-decile CTR winner. **`NO_ACTION` is a first-class, high-frequency outcome that protects page equity and prevents harmful title churn.**
+
+3. **Priority Score Formulation:**
+   $$\text{Priority Score} = \frac{EV \times (1 - \text{CannibalizationRisk}) \times \text{Confidence}}{\text{Implementation Effort}}$$
+
+### 12.4 P2: Query Ownership & Anti-Cannibalization Architecture
+
+To eliminate doorway pages and cross-template cannibalization, each property maintains a persistent `query_ownership_map` in `fleet_state.db`:
+
+1. **Mapping Invariant:** Each distinct query cluster is assigned to exactly ONE primary canonical URL (`upsert_query_ownership`).
+2. **Matching Engine (`get_query_owner`):**
+   - Exact query match against existing clusters.
+   - Cluster containment: if $\ge 75\%$ of the cluster's core tokens are contained within the candidate query, it belongs to the same cluster.
+   - Fuzzy Jaccard token similarity ($\ge 0.75$ threshold).
+3. **Cannibalization Enforcement:**
+   - If a candidate query maps to an owner URL that differs from the candidate page, `cannibalization_risk` is set to $0.85$.
+   - Any task on a competing URL with cannibalization risk $\ge 0.80$ is automatically classified as `NO_ACTION` (or converted to `CONSOLIDATE_CANNIBALIZED_URLS` / `INJECT_SECONDARY_H2_ONLY` on the owner page).
+
+### 12.5 P3: Content Usefulness & Factual Claim Provenance Gate
+
+Implemented in `scripts/content_usefulness_gate.py` to ensure user value and E-E-A-T depth:
+
+1. **Anti-Vaporware Regex Ban (Invariant F):** User-facing content must NEVER contain roadmap or status phrases matching `r"(in rollout|coming soon|server-side pipeline|beta pipeline|under construction|placeholder)"`.
+2. **Substantive Depth:** Pages must provide at least 120 words of technical, domain-specific body text explaining file architectures, algorithms, or workflow specifications.
+3. **Query Intent in Headings:** Headings must explicitly address the query tokens with technical authority (e.g. `<h2>STEP to DXF Conversion: ISO 10303 B-Rep to AutoCAD 2D Projection</h2>`).
+4. **Factual Claim Provenance (`claim_evidence_ledger`):**
+   - Concrete performance metrics, model architectures, or throughput benchmarks must trace back to an authorized evidence source:
+     - `source_code`: Implemented in the codebase (e.g. WASM SIMD, local rendering).
+     - `test_suite`: Verified in automated tests.
+     - `official_spec`: Published web/industry standard (ISO, W3C, RFC, ASPRS).
+     - `measured_benchmark`: Documented benchmark artifact.
+   - Unverified speculative marketing hype (`"military-grade"`, `"supercharged quantum"`, `"100x faster than all"`) is rejected.
+5. **Anti-Doorway Distinctiveness:** Sibling pages sharing template families must have pairwise Jaccard shingle similarity $< 0.20$ to prevent Google doorway-page demotions.
+
+### 12.6 P4: 10-Point Technical SEO & Indexability Verification Gate
+
+Superficial HTTP 200 checks are insufficient. `scripts/verify_technical_seo.py` (and `improve_seo_rewarm.py --deep-verify`) audits the fully rendered edge DOM:
+
+| Gate | Check Name | Verification Rule | Failure Severity |
+| :---: | :--- | :--- | :---: |
+| **1** | **HTTP Status** | `status_code == 200`, no redirect hops, no 5xx | `ERROR` |
+| **2** | **Rendered Body** | HTML length $\ge 500$ bytes, non-empty `<body>` | `ERROR` |
+| **3** | **Title Geometry** | Title exists, $30 \le \text{chars} \le 70$, desktop width $\le 580\text{px}$ | `ERROR` |
+| **4** | **Primary H1** | Exactly one `<h1>` tag present representing topic | `ERROR` |
+| **5** | **Canonical URL** | Absolute `rel="canonical"` matching request host and path | `ERROR` |
+| **6** | **Robots Defense** | No accidental `noindex`, no blocking `X-Robots-Tag` | `ERROR` |
+| **7** | **Internal Links** | At least 2 crawlable `<a href="...">` links in content | `ERROR` |
+| **8** | **Structured Data** | Valid JSON-LD parsing with `@context` and `@type` | `WARNING` |
+| **9** | **Mobile Viewport** | Standard `<meta name="viewport" ...>` tag present | `WARNING` |
+| **10** | **Functional Tool** | Interactive tool container, specifications table, or canvas present | `WARNING` |
+
+### 12.7 P5: Adaptive Fleet-Wide Learning & Action Effectiveness
+
+1. **Empirical Action Statistics (`action_effectiveness_stats`):**
+   Records empirical win-rates, neutral-rates, loss-rates, and average click lift across the fleet, keyed by `(domain, action_code, route_family)`.
+2. **Cross-Property Prior Pooling:**
+   Actions that demonstrate high empirical lift on one domain inform the baseline priors of sibling properties.
+3. **Multi-Tenant Isolation Invariant (Rule 16):**
+   Only normalized mathematical metrics (`action_code`, `route_family`, `win_rate`, `avg_lift`) may be pooled. Raw queries, URL paths, customer content, and tenant databases remain strictly isolated.
+
+### 12.8 P6: Authoritative Two-Part Scorecard Contract
+
+Reports MUST separate engineering delivery from measured business outcomes:
+
+1. **Part 1: Engineering Execution Quality (0–10.0):**
+   - Data Integrity & Multi-Tenant Isolation (15%)
+   - Opportunity Quality & Intent Mapping (15%)
+   - Content Uniqueness & Usefulness (20%)
+   - Technical SEO & Indexability (15%)
+   - Deployment Hygiene & Cache Re-warm (15%)
+   - Quality, TDD & Product Functionality (20%)
+2. **Part 2: Measured SEO & Business Effectiveness (0–10.0):**
+   - Evaluates actual post-28d GSC data, incremental organic clicks, impressions, and ranking movement.
+   - **MANDATORY INVARIANT:** When tasks are inside the 28-day observation window or awaiting Googlebot recrawl, the engine MUST strictly output:
+     `**SEO Effectiveness Grade:** **NOT YET MEASURED (Awaiting GSC Recrawl & 28-Day Observation Window)**`
+   - **Never manufacture 10/10 SEO effectiveness grades from passing test suites or clean deployments.**
+

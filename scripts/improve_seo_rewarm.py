@@ -66,10 +66,16 @@ class RewarmResult:
     status: int | None
     attempts: int
     error: str | None
+    technical_audit: Any | None = None
 
     @property
     def ok(self) -> bool:
-        return self.status is not None and 200 <= self.status < 300
+        base_ok = self.status is not None and 200 <= self.status < 300
+        if not base_ok:
+            return False
+        if self.technical_audit is not None and hasattr(self.technical_audit, "all_passed"):
+            return bool(self.technical_audit.all_passed)
+        return True
 
 
 @dataclass(frozen=True)
@@ -101,6 +107,7 @@ def _rewarm_one(
     max_attempts: int,
     retry_backoff_seconds: float,
     sleep: Callable[[float], None],
+    deep_verify: bool = False,
 ) -> RewarmResult:
     last_error: str | None = None
     path = urlparse(url).path or "/"
@@ -115,17 +122,39 @@ def _rewarm_one(
                 },
             )
             response = opener.open(request, timeout=timeout_seconds)
+            body_content: str | None = None
+            resp_headers: dict[str, str] = {}
             if isinstance(response, int):  # test seams may return bare codes
                 status: int | None = response
             else:
                 status = getattr(response, "status", None)
                 if status is None and hasattr(response, "getcode"):
                     status = response.getcode()
+                if deep_verify and hasattr(response, "read"):
+                    try:
+                        raw_bytes = response.read()
+                        body_content = raw_bytes.decode("utf-8", errors="replace")
+                        if hasattr(response, "headers"):
+                            resp_headers = dict(response.headers)
+                    except Exception:
+                        pass
+
+            tech_audit = None
+            if deep_verify and body_content:
+                from verify_technical_seo import audit_html_technical_seo
+                tech_audit = audit_html_technical_seo(
+                    body_content,
+                    url=url,
+                    headers=resp_headers,
+                    status_code=int(status or 200),
+                )
+
             return RewarmResult(
                 path=path,
                 status=int(status or 0) or None,
                 attempts=attempt,
                 error=None,
+                technical_audit=tech_audit,
             )
         except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as exc:
             # transport layer: isolate, retry, report (never a blind except —
@@ -144,6 +173,7 @@ def rewarm_urls(
     max_attempts: int = 3,
     retry_backoff_seconds: float = 2.0,
     sleep: Callable[[float], None] = time.sleep,
+    deep_verify: bool = False,
 ) -> RewarmSummary:
     """Re-warm every mutated URL via X-SEO-Verify GETs. Never raises."""
     real_opener = opener if opener is not None else urllib.request.build_opener()
@@ -155,6 +185,7 @@ def rewarm_urls(
             max_attempts=max_attempts,
             retry_backoff_seconds=retry_backoff_seconds,
             sleep=sleep,
+            deep_verify=deep_verify,
         )
         for path in targets.paths
     ]
@@ -169,6 +200,7 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="figiva.com", help="Target hostname (default: figiva.com)")
     parser.add_argument("--urls", nargs="+", help="Full URLs to re-warm")
     parser.add_argument("--paths", nargs="+", help="Canonical paths to re-warm")
+    parser.add_argument("--deep-verify", action="store_true", help="Run full 10-point technical SEO audit on responses")
     args = parser.parse_args()
 
     paths: list[str] = []
@@ -186,11 +218,14 @@ if __name__ == "__main__":
         print("Usage: improve_seo_rewarm.py --urls <url1> <url2>... or --paths <p1> <p2>...")
         sys.exit(1)
 
-    print(f"Re-warming {len(paths)} paths on {host}...")
-    summary = rewarm_urls(RewarmTargets(host=host, paths=paths))
+    print(f"Re-warming {len(paths)} paths on {host} (deep_verify={args.deep_verify})...")
+    summary = rewarm_urls(RewarmTargets(host=host, paths=paths), deep_verify=args.deep_verify)
     for r in summary.results:
         status_str = f"{r.status}" if r.status else f"ERR: {r.error}"
-        print(f"  [{status_str}] {r.path} (attempts={r.attempts})")
+        audit_note = ""
+        if r.technical_audit is not None:
+            audit_note = f" [SEO: {'PASS' if r.technical_audit.all_passed else 'FAIL'} ({r.technical_audit.score}/10)]"
+        print(f"  [{status_str}] {r.path} (attempts={r.attempts}){audit_note}")
     print(f"Summary: {summary.ok_count}/{len(paths)} OK, {summary.fail_count} failed.")
     sys.exit(0 if summary.all_ok else 1)
 

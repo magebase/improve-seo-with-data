@@ -102,7 +102,122 @@ def _train_on_the_fly(rows: list[dict[str, Any]], models_dir: str) -> dict[str, 
     return {"label_mode": label_meta["label_mode"]}
 
 
-def score_rows(rows: list[dict[str, Any]], models_dir: str) -> dict[str, Any]:
+def compute_opportunity_intelligence(
+    row: dict[str, Any],
+    conn: Any = None,
+    domain: str | None = None,
+) -> dict[str, Any]:
+    """Computes economic expected value (EV), cannibalization risk, confidence, and decision class.
+
+    EV = P(indexing) * P(ranking_improvement) * delta_clicks * V(conversion)
+    Priority Score = (EV * (1 - CannibalizationRisk) * Confidence) / Effort
+    """
+    feats = row.get("features") or {}
+    cur_pos = float(feats.get("current_pos", 100.0) or 100.0)
+    impr = float(row.get("impressions", 0.0) or feats.get("impressions", 0.0) or 0.0)
+    clicks = float(row.get("clicks_30d", 0.0) or feats.get("clicks_30d", 0.0) or 0.0)
+    page = str(row.get("page") or "")
+    query = str(row.get("query") or "")
+
+    # 1. P(indexing)
+    is_existing = cur_pos < 90.0 or not page.endswith("-to-/")
+    p_index = 0.95 if is_existing else 0.70
+
+    # 2. P(ranking_improvement)
+    if 4.0 <= cur_pos <= 15.0:
+        p_rank = 0.75  # striking distance high leverage
+    elif cur_pos < 4.0:
+        p_rank = 0.25  # already top, CTR focus
+    elif 15.0 < cur_pos <= 30.0:
+        p_rank = 0.45
+    else:
+        p_rank = 0.25
+
+    # 3. Delta Clicks estimation via mathematical CTR curve
+    cur_ctr = clicks / max(impr, 1.0)
+    if cur_pos < 4.0:
+        target_ctr = min(0.35, cur_ctr * 1.4 + 0.05)
+    elif cur_pos <= 15.0:
+        target_ctr = 0.12
+    elif cur_pos <= 30.0:
+        target_ctr = 0.05
+    else:
+        target_ctr = 0.02
+    delta_clicks = max(0.2, impr * max(0.005, target_ctr - cur_ctr))
+
+    # 4. Conversion Value
+    q_lower = query.lower()
+    high_intent = ("convert", "viewer", "calculator", "tool", "pricing", "compare", "generator", "format")
+    v_conv = 1.5 if any(tok in q_lower for tok in high_intent) else 1.0
+
+    # 5. Raw Expected Value
+    ev = p_index * p_rank * delta_clicks * v_conv
+
+    # 6. Implementation Effort
+    action = str(row.get("prescribed_action") or "INJECT_SECONDARY_H2_ONLY")
+    if "CONSOLIDATE" in action:
+        effort = 3.0
+    elif "CREATE" in action or "LAUNCH" in action:
+        effort = 2.0
+    else:
+        effort = 1.0
+
+    # 7. Cannibalization Risk from Query Ownership Map
+    cann_risk = 0.0
+    if conn and domain:
+        try:
+            from fleet_state import get_query_owner
+            owner = get_query_owner(conn, domain, query)
+            if owner:
+                owner_url = str(owner.get("canonical_url", "")).rstrip("/")
+                if owner_url and owner_url != page.rstrip("/"):
+                    if owner.get("intent_category") == "tool" and ("convert" in page or "studio" in page):
+                        cann_risk = 0.85
+                    else:
+                        cann_risk = 0.35
+        except Exception:
+            pass
+
+    # 8. Confidence in Available Evidence
+    confidence = 0.60
+    if impr >= 100:
+        confidence += 0.20
+    elif impr >= 20:
+        confidence += 0.10
+    if clicks >= 3:
+        confidence += 0.20
+    confidence = min(1.0, confidence)
+
+    # 9. Priority Score
+    priority_score = (ev * (1.0 - cann_risk) * confidence) / effort
+
+    # 10. Explicit Decision Classes: SHIP, EXPERIMENT, OBSERVE, NO_ACTION
+    if cann_risk >= 0.75:
+        decision_class = "NO_ACTION"
+    elif impr < 10 and cur_pos > 30.0:
+        decision_class = "OBSERVE"
+    elif priority_score >= 2.0:
+        decision_class = "SHIP"
+    elif priority_score >= 0.6:
+        decision_class = "EXPERIMENT"
+    else:
+        decision_class = "OBSERVE"
+
+    return {
+        "expected_value": round(ev, 4),
+        "cannibalization_risk": round(cann_risk, 4),
+        "confidence": round(confidence, 4),
+        "priority_score": round(priority_score, 4),
+        "decision_class": decision_class,
+    }
+
+
+def score_rows(
+    rows: list[dict[str, Any]],
+    models_dir: str,
+    conn: Any = None,
+    domain: str | None = None,
+) -> dict[str, Any]:
     """Scores rows with the bundle when present, else auto-trains one."""
     bundle = None
     if os.path.exists(os.path.join(models_dir, "seo_lgbm_ranker.txt")):
@@ -161,6 +276,11 @@ def score_rows(rows: list[dict[str, Any]], models_dir: str) -> dict[str, Any]:
                 clicks=float(row.get("clicks_30d", 0) or 0),
                 shap=shap,
             )
+
+        # Outcome-Driven Opportunity Intelligence v2
+        row_domain = domain or row.get("domain") or (feats.get("domain") if isinstance(feats, dict) else None)
+        intel = compute_opportunity_intelligence(row, conn=conn, domain=row_domain)
+        row.update(intel)
     return {"mode": "trained_model", "label_mode": label_mode, "rows": rows}
 
 
@@ -347,7 +467,17 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: feature file contains no rows.")
         return 1
 
-    result = score_rows(rows, args.models_dir)
+    state_conn = None
+    if args.state_db:
+        try:
+            state_conn = connect_state_db(args.state_db)
+        except Exception:
+            state_conn = None
+
+    target_domain = args.domain or payload.get("site")
+    result = score_rows(rows, args.models_dir, conn=state_conn, domain=target_domain)
+    if state_conn:
+        state_conn.close()
     all_scored = list(result["rows"])
     scored = list(result["rows"])
 

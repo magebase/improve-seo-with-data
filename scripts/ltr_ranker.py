@@ -987,6 +987,11 @@ def compile_wave_backlog(
                     paa=", ".join(f"'{q}'" for q in paa_questions),
                 ),
                 "rank_score": float(row.get("rank_score", 0.0) or 0.0),
+                "priority_score": float(row.get("priority_score") or row.get("rank_score") or 0.0),
+                "expected_value": float(row.get("expected_value") or 0.0),
+                "cannibalization_risk": float(row.get("cannibalization_risk") or 0.0),
+                "confidence": float(row.get("confidence") or 1.0),
+                "decision_class": str(row.get("decision_class") or "SHIP"),
                 "source": row.get("source", "gsc"),
             }
             if propagation is not None:
