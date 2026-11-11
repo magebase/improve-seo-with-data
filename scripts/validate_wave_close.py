@@ -145,7 +145,7 @@ def validate_report_content(
     # 5. Git Commit Verification & Changed-File Inventory Reconciliation
     commit_match = re.search(r"\*\*(?:Repository Commit|Integration Commit SHA):\*\*\s*\[?`?([a-f0-9]{7,40})`?\]?", content, re.IGNORECASE)
     reported_commit = commit_match.group(1) if commit_match else commit_sha
-    if reported_commit and repo_path and Path(repo_path).exists():
+    if reported_commit and repo_path:
         if not verify_git_commit_exists(repo_path, reported_commit):
             errors.append(f"Git commit verification failed: Commit '{reported_commit}' does not exist in repository {repo_path}.")
         else:
@@ -184,17 +184,16 @@ def validate_report_content(
     if part1_match:
         claimed_score = float(part1_match.group(1))
         table_text = part1_match.group(2)
-        # Extract rows like | **Data Integrity** | 15% | **10.0 / 10** |
         score_rows = re.findall(r"\|\s*\*\*([^\*]+)\*\*\s*\|\s*(\d+)%\s*\|\s*\*\*([\d\.]+)\s*/\s*10\*\*", table_text)
         if len(score_rows) >= 6:
             calc_weighted = sum((float(pct) / 100.0) * float(sc) for _, pct, sc in score_rows)
             rounded_calc = round(calc_weighted, 1)
-            # Allow documented deduction if explained in table_text
-            has_deduction_note = bool(re.search(r"deduction|penalty|math|exact", table_text, re.IGNORECASE))
-            if abs(claimed_score - rounded_calc) > 0.15 and not has_deduction_note:
+            # Allow documented deduction if explicitly stated as a penalty or deduction with value
+            has_explicit_deduction = bool(re.search(r"(?:deduction|penalty)\s*(?:of|:|-)?\s*[\d\.]+", table_text, re.IGNORECASE))
+            if abs(claimed_score - rounded_calc) > 0.05 and not has_explicit_deduction:
                 errors.append(
                     f"Scorecard Math Discrepancy: Claimed engineering score {claimed_score} does not match "
-                    f"calculated weighted score {rounded_calc} (weights: {[(r[0], r[1]+'%', r[2]) for r in score_rows]})."
+                    f"calculated weighted score {rounded_calc}."
                 )
 
     # 8. Domain and Wave Header check
@@ -221,8 +220,7 @@ def validate_report_content(
         errors.append(f"Rule 32 Violation: Prohibited unicode emojis detected in report: {emojis_found[:5]}")
 
     # 11. Well-Formed Markdown Headers Check
-    # Detect run-on headers like ### 3.3 100kPersonalLoanScenario(Task543)
-    mangled_headers = re.findall(r"#{2,4}\s+[A-Za-z0-9]+[A-Z][a-z]+[A-Z][a-z]+\(", content)
+    mangled_headers = re.findall(r"#{2,4}\s+(?:\d+\.\d+\s+)?[A-Za-z0-9]+[A-Z][a-z]+[A-Z][a-z]+\(", content)
     if mangled_headers:
         errors.append(f"Malformed Markdown Header detected: {mangled_headers}. Use spaces and clean formatting.")
 
