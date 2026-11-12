@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 from typing import Any
 import numpy as np
-from scipy import stats
+from scipy import stats  # type: ignore[import-untyped]
 
 
 def apply_benjamini_hochberg(
@@ -34,7 +34,7 @@ def apply_benjamini_hochberg(
 
     # Pair with original indices
     indexed = sorted(enumerate(p_values), key=lambda x: x[1])
-    results = [{} for _ in range(m)]
+    results: list[dict[str, Any]] = [{} for _ in range(m)]
 
     # Calculate BH threshold and critical cutoffs
     max_k = -1
@@ -76,7 +76,7 @@ def apply_holm_bonferroni(
         return []
 
     indexed = sorted(enumerate(p_values), key=lambda x: x[1])
-    results = [{} for _ in range(m)]
+    results: list[dict[str, Any]] = [{} for _ in range(m)]
 
     rejected = True
     for rank, (orig_idx, p_val) in enumerate(indexed, start=1):

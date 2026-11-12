@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from typing import Any
 import numpy as np
-from scipy import stats
+from scipy import stats  # type: ignore[import-untyped]
 
 
 def compute_welch_satterthwaite_df(
@@ -235,13 +235,13 @@ def run_did_monte_carlo_battery(
 
         for _ in range(n_sims):
             trial = simulate_single_did_trial(
-                n_t=params["n_t"],
-                n_c=params["n_c"],
-                base_mu=params["base_mu"],
-                true_tau=params["true_tau"],
-                overdispersion_alpha=params["overdispersion_alpha"],
-                ar1_rho=params["ar1_rho"],
-                domain_shock_std=params["domain_shock_std"],
+                n_t=int(params["n_t"]),
+                n_c=int(params["n_c"]),
+                base_mu=float(params["base_mu"]),
+                true_tau=float(params["true_tau"]),
+                overdispersion_alpha=float(params["overdispersion_alpha"]),
+                ar1_rho=float(params["ar1_rho"]),
+                domain_shock_std=float(params["domain_shock_std"]),
                 rng=rng,
             )
             if trial["covers_ws"]:

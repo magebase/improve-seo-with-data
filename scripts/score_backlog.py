@@ -607,12 +607,12 @@ def compute_prior_sensitivity_analysis(
     3. DOMAIN_INFORMATIVE: Beta(1.5, 3.5) - SEO historical baseline prior (E[p] = 0.30)
     4. EMPIRICAL_HIERARCHICAL: empirical shrinkage prior based on fleet-wide distribution
     """
-    from scipy import stats
+    from scipy import stats  # type: ignore[import-untyped]
 
     k = max(0, int(mature_successes))
     n = max(k, int(mature_trials))
 
-    priors = {
+    priors: dict[str, dict[str, Any]] = {
         "UNIFORM": {"alpha": 1.0, "beta": 1.0, "description": "Flat uninformative prior Beta(1,1)"},
         "JEFFREYS": {"alpha": 0.5, "beta": 0.5, "description": "Jeffreys objective invariant prior Beta(0.5,0.5)"},
         "DOMAIN_INFORMATIVE": {"alpha": 1.5, "beta": 3.5, "description": "Historical SEO industry success prior Beta(1.5,3.5)"},
@@ -622,8 +622,8 @@ def compute_prior_sensitivity_analysis(
     results = {}
     means = []
     for name, p_info in priors.items():
-        a0 = p_info["alpha"]
-        b0 = p_info["beta"]
+        a0 = float(p_info["alpha"])
+        b0 = float(p_info["beta"])
         a_post = a0 + k
         b_post = b0 + (n - k)
         post_mean = a_post / (a_post + b_post)

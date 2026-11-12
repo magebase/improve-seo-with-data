@@ -235,7 +235,7 @@ def validate_report_content(
             errors.append(f"Missing mandatory section: '{name}'.")
 
     # 3. Invariant P6 Verification: Part 2 premature score ban
-    part2_match = re.search(r"###\s*Part 2:\s*Measured SEO.*Effectiveness(.*?)---", content, re.DOTALL | re.IGNORECASE)
+    part2_match = re.search(r"###\s*Part 2:\s*Measured SEO.*?Effectiveness(.*?)\n---", content, re.DOTALL | re.IGNORECASE)
     if part2_match:
         part2_text = part2_match.group(1)
         has_unmeasured_notice = bool(

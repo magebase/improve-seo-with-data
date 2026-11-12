@@ -927,7 +927,7 @@ def record_experiment(
         ),
     )
     conn.commit()
-    return int(cur.lastrowid)
+    return int(cur.lastrowid or 0)
 
 
 def record_shipped_experiments(
@@ -1188,7 +1188,7 @@ def get_t_critical_value(n_controls: int) -> float:
     """
     df = max(1, int(n_controls) - 1)
     try:
-        from scipy.stats import t as student_t
+        from scipy.stats import t as student_t  # type: ignore[import-untyped]
         return round(float(student_t.ppf(0.975, df)), 3)
     except Exception:
         pass

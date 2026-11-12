@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 from typing import Any
-from scipy import stats
+from scipy import stats  # type: ignore[import-untyped]
 
 
 def calculate_minimum_detectable_effect(
