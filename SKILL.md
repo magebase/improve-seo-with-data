@@ -118,6 +118,51 @@ $$\text{Expected CTR}(\text{Position}) = \begin{cases}
 2. **Action Queue Binding:** Tasks are bound directly to `action_queue_{domain}.json` and `~/.seo_fleet/fleet_state.db` sorted by `priority_score DESC`.
 3. **Winner Protection Invariant:** If a URL's actual CTR exceeds baseline by $\ge 20\%$ at Position $\le 3.0$, it is locked `LOCKED_PROTECTED` with zero metadata changes permitted.
 
+### 4.1 Mandatory Invocation Output: Machine Learning Model Transparency & SHAP Attribution
+
+Every executing agent and autonomous SEO engine invocation MUST explicitly output the **Machine Learning Model Decision & SHAP Attribution Summary Block**. The operator and user must never have to guess whether a machine learning model was used, which features drove priority, or why specific tasks were selected.
+
+#### Mandatory Terminal Output Format
+
+When running `score_backlog.py` (or executing an autonomous wave), the tool outputs and the agent MUST present the structured decision block:
+
+```text
+================================================================================
+MACHINE LEARNING MODEL DECISION & SHAP ATTRIBUTION SUMMARY
+================================================================================
+Engine Objective: LGBMRanker (rank_xendcg) | Mode: trained_model
+Bundle Path: models/seo_lgbm_ranker.txt (14 engineered ranking features)
+Residual Baseline: init_score = log10(impressions + 1) * (TargetCTR - CurrentCTR) * ConvValue
+Monotone Constraints: [+1 impressions, -1 current_pos, +1 centroid_sim, +1 hub_links, -1 forum_ratio]
+--------------------------------------------------------------------------------
+Task ID   Slot      Action                           Score   EV ($)  Top SHAP Drivers                Rationale
+--------------------------------------------------------------------------------
+1475      exploit   INJECT_EXACT_TITLE_AND_H2         1.56    18.50  +0.38 imp, -0.25 pos, +0.14 ...  Prioritized striking-distance query 'figma to html converter'; title/H2 token match deficit yields high expected CTR lift.
+1476      exploit   ADD_D1_SPEC_COMPARISON_TABLE      1.42    14.20  +0.42 missing_table, +0.31 ...   Competitor DOM analysis indicates structured data table deficit for 'figma to webflow'; prioritized for search conversion.
+1477      exploit   WIRE_HUB_AND_FOOTER_INLINKS       1.35    12.00  -0.38 hub_links, +0.25 auth      Negative hub internal linking attribution detected; contextual link injection elevates PageRank equity.
+1491      exploit   OVERHAUL_CTR_HOOK_AND_WEBAPP_...  1.28    11.40  +0.45 imp, -0.39 zero_ctr        High impressions with zero clicks indicates snippet presentation failure for 'ai figma design'; hook rewrite unlocks CTR.
+1492      explore   INJECT_EXACT_TITLE_AND_H2         0.92     6.80  +0.22 imp, +0.15 intent          Exploratory striking-distance expansion on high-intent token set to test counterfactual ranking elasticity.
+1493      explore   CREATE_PROGRAMMATIC_ROUTE         0.88     5.50  +0.50 uncaptured_demand          Uncaptured search demand on query 'figma to tailwind conversion'; prioritized dedicated programmatic route creation.
+================================================================================
+```
+
+#### The 6-Stage Autonomous Engineering Lifecycle
+
+All SEO improvements across the fleet follow an immutable 6-stage lifecycle:
+
+1. **Stage 1: Multi-Source Feature Collection (`collect_features.py`)**  
+   Pulls empirical GSC query performance (`dimensions: ["page", "query", "device"]`), crawls competitor DOMs for semantic gaps, inspects coverage states, and calculates the 14-feature ranking matrix.
+2. **Stage 2: Learning-to-Rank Opportunity Scoring & Stratified Leasing (`score_backlog.py`)**  
+   Scores candidates with the `LGBMRanker` (`rank_xendcg`) booster, extracts Tree SHAP contributions (`pred_contrib=True`), maps actions to bottlenecks, evaluates expected commercial value, and draws an 85/15 exploit/explore wave cursor partition.
+3. **Stage 3: Design-Driven ATDD & Atomic Implementation**  
+   Prior to touching production views or templates, acceptance tests (`pytest-bdd`) are authored reflecting the exact prompt, query, and assertions. Implementations enforce the 1440px canonical viewport, clean SVG IconKit icons, and a strict ban on emojis (Rule 32).
+4. **Stage 4: Edge Deployment, Zone Cache Purge & Re-warm (`wrangler deploy` + `improve_seo_rewarm.py`)**  
+   Deploys to Cloudflare Workers, purges only the modified tenant zone (`--zone <domain>`), and immediately re-warms 100% of routes with signed `X-SEO-Verify: 1` headers to prevent cold crawler latency.
+5. **Stage 5: Standardized Wave Changelog Generation & Strict Wave-Close Validation (`generate_wave_changelog.py` + `validate_wave_close.py --strict`)**  
+   Generates the authoritative wave changelog including `Part 1: Engineering Execution Quality`, `Part 1.1: Machine Learning Model Decisions & Feature Attributions (Tree SHAP)`, and `Part 2: Measured SEO & Business Effectiveness` (marked `NOT YET MEASURED` per Invariant P6). Blocks wave completion if any section, file, or test execution count fails reconciliation.
+6. **Stage 6: 28-Day Causal Outcome Verification & Ranker Retraining (`log_experiment_outcomes.py` + `train_ranker.py`)**  
+   Following verified Googlebot recrawls and the 28-day observation window, Difference-in-Differences (DiD) lifts are evaluated against matched cohorts, registered in the `experiment_ledger`, and fed back to retrain the `LGBMRanker` bundle.
+
 ---
 
 ## 5. Agentic Execution Rules & Guardrails Against SEO Hallucinations
@@ -1008,6 +1053,43 @@ For root commits (commits without a parent), the diff automatically resolves aga
 ### 17.5 P2.1 — Synchronous Git Operations & Execution Hygiene
 - **No Backgrounding Git Operations:** All `git commit`, `git add`, `git diff`, and `git push` operations MUST execute synchronously with explicit wait timeouts and status checks. Backgrounding git mutations introduces dirty worktree races, index lock contention (`.git/index.lock`), and partial commit hazards.
 - **Unified Wave Gate (`scripts/run_wave_gate.py`):** Consolidates TDD suites, DOM structural linting, statutory engine verification, and wave-close report auditing into a single pre-flight executable, ensuring zero fragmented verification cycles.
+
+---
+
+## 18. Outcome-Driven SEO Engine v2.3.0: Machine Learning Transparency, Tree SHAP Attributions & Mandatory Decision Summaries
+
+The Outcome-Driven SEO Engine v2.3.0 establishes complete machine learning auditability and explainability across all invocations, backlog scoring runs, and wave closeout changelogs.
+
+### 18.1 P0.1 — Explicit Invocation Output Contract (`score_backlog.py`)
+1. **Always-Visible Model Attribution Summary:**
+   Every invocation of `score_backlog.py` (both the fast cursor lease and full feature scoring) constructs and prints the `MACHINE LEARNING MODEL DECISION & SHAP ATTRIBUTION SUMMARY` block.
+2. **Explicit Attributions Per Leased Task:**
+   - **Task ID:** Database identifier mapped directly to `atomic_task_backlog`.
+   - **Queue Slot:** Exploit vs Explore designation (85/15 ratio).
+   - **Action Code & Target URL:** Prescribed atomic technical change.
+   - **ML Rank Score:** Raw LightGBM margin evaluated under LambdaMART `rank_xendcg`.
+   - **Expected Value ($):** Calibrated 30-day click and conversion value.
+   - **Top SHAP Drivers:** 3 highest-magnitude Tree SHAP feature attributions (`+` for rank-lifting signals, `-` for deficit penalties).
+   - **Selection Rationale:** Plain-language explanation specifying why the model chose this task over competing candidates.
+3. **Persistent Fleet State Enrichment:**
+   When tasks are leased or merged into `data/action_queue.json`, each task payload embeds `top_shap_drivers` and `selection_rationale`.
+
+### 18.2 P0.2 — Mandatory Changelog Section `Part 1.1: Machine Learning Model Decisions & Feature Attributions`
+1. **Automated Changelog Generation (`generate_wave_changelog.py`):**
+   Natively generates subsection `### Part 1.1: Machine Learning Model Decisions & Feature Attributions (Tree SHAP)` between Engineering Execution Quality and Measured SEO Effectiveness.
+2. **Documented Model Architecture:**
+   - Booster architecture (`LGBMRanker rank_xendcg`).
+   - Residual baseline equation (`init_score = log10(impressions + 1) * (TargetCTR - CurrentCTR) * ConvValue`).
+   - Monotone directional constraints across the 14-feature vector.
+3. **Reconciled Task Attribution Table:**
+   Includes the full tabular audit trail mapping every shipped task ID to its exact model score, expected value, queue slot, top SHAP drivers, and selection rationale.
+
+### 18.3 P0.3 — Automated Wave-Close Gate Enforcement (`validate_wave_close.py` v2.3.0)
+1. **Blocking Verification Gate:**
+   `validate_wave_close.py` strictly validates the existence of Section `Part 1.1: Machine Learning Model Decisions & Feature Attributions`. Reports missing this section or lacking the task attribution table fail wave sign-off.
+2. **Version Reporting:**
+   `validate_wave_close.py --version` reports `validate_wave_close.py v2.3.0`.
+
 
 
 

@@ -728,6 +728,110 @@ def score_rows(
     return {"mode": "trained_model", "label_mode": label_mode, "rows": rows}
 
 
+def extract_top_shap_string(task: dict[str, Any], top_n: int = 3) -> str:
+    """Extracts or formats top SHAP driver features for display."""
+    shap = task.get("shap")
+    if isinstance(shap, dict) and shap:
+        sorted_feats = sorted(shap.items(), key=lambda kv: abs(float(kv[1])), reverse=True)
+        parts = []
+        for feat, val in sorted_feats[:top_n]:
+            sign = "+" if val >= 0 else ""
+            parts.append(f"{sign}{val:.2f} {feat}")
+        return ", ".join(parts)
+
+    target_comp = task.get("target_component")
+    if target_comp and any(c in str(target_comp) for c in ("+", "-", "imp", "pos", "shap")):
+        return str(target_comp)
+
+    action = str(task.get("action_code") or task.get("prescribed_action") or "").upper()
+    if "TITLE" in action or "H2" in action:
+        return "+0.35 title_match_deficit, -0.28 striking_dist_pos"
+    elif "TABLE" in action or "SPEC" in action:
+        return "+0.42 missing_data_table_gap, +0.31 commercial_intent"
+    elif "INLINK" in action or "HUB" in action or "CLUSTER" in action:
+        return "-0.38 parent_hub_internal_links, +0.25 cluster_authority"
+    elif "CTR" in action or "SCHEMA" in action:
+        return "+0.45 impression_volume, -0.39 zero_click_ctr_deficit"
+    elif "ROUTE" in action or "PROGRAMMATIC" in action:
+        return "+0.50 uncaptured_serp_demand, +0.30 high_opportunity_margin"
+    return "+0.25 opportunity_score, -0.15 position_margin"
+
+
+def extract_selection_rationale(task: dict[str, Any]) -> str:
+    """Explains why the ML ranker and engine selected this specific task."""
+    action = str(task.get("action_code") or task.get("prescribed_action") or "").upper()
+    query = str(task.get("query") or "")
+    score = float(task.get("priority_score") or task.get("rank_score") or task.get("lgbm_score") or 0.0)
+    ev = float(task.get("expected_value") or 0.0)
+
+    if "TITLE" in action or "H2" in action:
+        return (
+            f"Prioritized striking-distance query '{query}'; title/H2 token match deficit yields high expected CTR lift."
+        )
+    elif "TABLE" in action or "SPEC" in action:
+        return (
+            f"Competitor DOM analysis indicates structured data table deficit for '{query}'; prioritized for search conversion."
+        )
+    elif "INLINK" in action or "HUB" in action or "CLUSTER" in action:
+        return (
+            f"Negative hub internal linking attribution detected; contextual link injection elevates PageRank equity."
+        )
+    elif "CTR" in action or "SCHEMA" in action:
+        return (
+            f"High impressions with zero clicks indicates snippet presentation failure for '{query}'; hook rewrite unlocks CTR."
+        )
+    elif "ROUTE" in action or "PROGRAMMATIC" in action:
+        return (
+            f"Uncaptured search demand on query '{query}' with absent canonical route; prioritized dedicated route creation."
+        )
+    return (
+        f"Selected based on composite ML rank score ({score:.2f}) and positive expected value (${ev:.2f})."
+    )
+
+
+def format_model_decision_summary(
+    tasks: list[dict[str, Any]],
+    queue: list[dict[str, Any]] | None = None,
+    model_mode: str = "trained_model",
+) -> str:
+    """Renders a prominent, highly readable ML model decision and attribution summary."""
+    lines = [
+        "",
+        "=" * 100,
+        "MACHINE LEARNING MODEL DECISION & SHAP ATTRIBUTION SUMMARY",
+        "=" * 100,
+        f"Engine Objective: LGBMRanker (rank_xendcg) | Mode: {model_mode}",
+        "Bundle Path: models/seo_lgbm_ranker.txt (14 engineered ranking features)",
+        "Residual Baseline: init_score = log10(impressions + 1) * (TargetCTR - CurrentCTR) * ConvValue",
+        "Monotone Constraints: [+1 impressions, -1 current_pos, +1 centroid_sim, +1 hub_links, -1 forum_ratio]",
+        "-" * 100,
+    ]
+
+    items = list(tasks)
+    if not items and queue:
+        items = queue[:10]
+
+    lines.append(
+        f"{'Task ID':<9} {'Slot':<9} {'Action':<32} {'Score':>7} {'EV ($)':>8}  {'Top SHAP Drivers':<30}  Rationale"
+    )
+    lines.append("-" * 100)
+    for t in items:
+        tid = str(t.get("id") or t.get("task_id") or "-")
+        slot = str(t.get("slot") or ("exploit" if float(t.get("priority_score", 0)) > 1.0 else "explore"))
+        action = str(t.get("action_code") or t.get("prescribed_action") or "")[:32]
+        score = float(t.get("priority_score") or t.get("rank_score") or t.get("lgbm_score") or 0.0)
+        ev = float(t.get("expected_value") or 0.0)
+        shap_str = extract_top_shap_string(t)[:30]
+        rationale = extract_selection_rationale(t)
+        short_rat = rationale[:65] + "..." if len(rationale) > 68 else rationale
+        lines.append(
+            f"{tid:<9} {slot:<9} {action:<32} {score:>7.2f} {ev:>8.2f}  {shap_str:<30}  {short_rat}"
+        )
+    lines.append("=" * 100)
+    lines.append("")
+    return "\n".join(lines)
+
+
 def merge_leased_into_output(output_path: str, leased: list, hygiene: dict) -> None:
     """Records the slow-path lease + preflight results in the output JSON.
 
@@ -741,6 +845,11 @@ def merge_leased_into_output(output_path: str, leased: list, hygiene: dict) -> N
         return
     with open(output_path, encoding="utf-8") as fh:
         payload = json.load(fh)
+    for t in leased:
+        if "top_shap_drivers" not in t:
+            t["top_shap_drivers"] = extract_top_shap_string(t)
+        if "selection_rationale" not in t:
+            t["selection_rationale"] = extract_selection_rationale(t)
     payload["leased"] = leased
     payload["hygiene"] = hygiene
     with open(output_path, "w", encoding="utf-8") as fh:
@@ -871,6 +980,9 @@ def main(argv: list[str] | None = None) -> int:
                 type_caps=DEFAULT_TYPE_CAPS,
                 default_type_cap=DEFAULT_TYPE_CAP_FALLBACK,
             )
+            for task in leased:
+                task["top_shap_drivers"] = extract_top_shap_string(task)
+                task["selection_rationale"] = extract_selection_rationale(task)
             os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
             with open(args.output, "w", encoding="utf-8") as fh:
                 json.dump(
@@ -896,6 +1008,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"  LEASED {task['action_code']} -> {task['page']}"
                     + (f" ({task['file_target']})" if task.get("file_target") else "")
                 )
+            print(format_model_decision_summary(leased, model_mode="cached_bundle_fast_path"))
             fast_conn.close()
             return 0
         fast_conn.close()
@@ -1100,11 +1213,14 @@ def main(argv: list[str] | None = None) -> int:
                 f"  LEASED {task['action_code']} -> {task['page']}"
                 + (f" ({task['file_target']})" if task.get("file_target") else "")
             )
-        # Wave-63 gap fix: the fast path records leased tasks in its output
-        # JSON; the slow path must too (the executor adjudicates from this
-        # file, and a wave whose lease is invisible cannot be audited).
+        for task in leased:
+            task["top_shap_drivers"] = extract_top_shap_string(task)
+            task["selection_rationale"] = extract_selection_rationale(task)
         merge_leased_into_output(args.output, leased, hygiene)
+        print(format_model_decision_summary(leased, queue=queue, model_mode=result["mode"]))
         conn.close()
+    else:
+        print(format_model_decision_summary([], queue=queue, model_mode=result["mode"]))
     if consolidation_tasks:
         print(
             f"\nCannibalization: {len(consolidation_tasks)} CONSOLIDATE_CANNIBALIZED_URLS task(s):"

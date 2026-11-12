@@ -35,11 +35,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-VERSION = "2.2.2"
+VERSION = "2.3.0"
 
 MANDATORY_SECTIONS = [
     ("Executive Summary & Two-Part Scorecard", re.compile(r"##\s*1\.\s*Executive Summary.*Scorecard", re.IGNORECASE)),
     ("Part 1: Engineering Execution Quality", re.compile(r"###\s*Part 1:\s*Engineering Execution Quality", re.IGNORECASE)),
+    ("Machine Learning Model Decisions & Feature Attribution", re.compile(r"(###\s*Part 1\.1:\s*Machine Learning Model|##\s*1\.1\s*Machine Learning Model|###\s*Machine Learning Model Decisions)", re.IGNORECASE)),
     ("Part 2: Measured SEO & Business Effectiveness", re.compile(r"###\s*Part 2:\s*Measured SEO.*Effectiveness", re.IGNORECASE)),
     ("Reconciled Task Inventory & Ledger Alignment", re.compile(r"##\s*2\.\s*Reconciled Task Inventory", re.IGNORECASE)),
     ("Strategic Deep-Dive & Intent Analysis", re.compile(r"##\s*3\.\s*Strategic Deep-Dive", re.IGNORECASE)),
@@ -233,6 +234,15 @@ def validate_report_content(
     for name, pattern in MANDATORY_SECTIONS:
         if not pattern.search(content):
             errors.append(f"Missing mandatory section: '{name}'.")
+
+    # 2.1 Model Decisions & Feature Attribution verification
+    model_match = re.search(r"###\s*Part 1\.1:\s*Machine Learning Model.*?(?=###\s*Part 2:)", content, re.DOTALL | re.IGNORECASE)
+    if model_match:
+        model_text = model_match.group(0)
+        if "LGBMRanker" not in model_text and "rank_xendcg" not in model_text:
+            errors.append("Model Decisions section missing LGBMRanker / rank_xendcg architecture specification.")
+        if "| Task ID |" not in model_text or "Top SHAP" not in model_text:
+            errors.append("Model Decisions section missing Task Selection & Feature Attribution table.")
 
     # 3. Invariant P6 Verification: Part 2 premature score ban
     part2_match = re.search(r"###\s*Part 2:\s*Measured SEO.*?Effectiveness(.*?)\n---", content, re.DOTALL | re.IGNORECASE)

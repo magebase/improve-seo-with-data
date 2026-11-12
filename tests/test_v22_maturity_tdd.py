@@ -930,6 +930,11 @@ def test_validate_wave_close_waiver_reason(tmp_path: Path):
 ## 1. Executive Summary & Two-Part Scorecard
 ### Part 1: Engineering Execution Quality (Score: 10.0 / 10.0)
 | **Category** | 100% | **10.0 / 10** |
+### Part 1.1: Machine Learning Model Decisions & Feature Attributions
+LGBMRanker rank_xendcg model decisions.
+| Task ID | Target Query | Canonical URL | Model Rank Score | Expected Value ($) | Queue Slot | Top SHAP Attribution Drivers | Selection Rationale |
+| :---: | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
+| **1** | test | `https://test.com` | **1.500** | $10.00 | `Exploit` | `+0.40 imp` | Rationale |
 ### Part 2: Measured SEO & Business Effectiveness
 Status: NOT YET MEASURED (Awaiting GSC Recrawl & 28-Day Observation Window)
 ---

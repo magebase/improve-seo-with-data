@@ -988,12 +988,18 @@ def compile_wave_backlog(
                 ),
                 "rank_score": float(row.get("rank_score", 0.0) or 0.0),
                 "priority_score": float(row.get("priority_score") or row.get("rank_score") or 0.0),
+                "lgbm_score": float(row.get("rank_score", 0.0) or 0.0),
                 "expected_value": float(row.get("expected_value") or 0.0),
                 "cannibalization_risk": float(row.get("cannibalization_risk") or 0.0),
                 "confidence": float(row.get("confidence") or 1.0),
                 "decision_class": str(row.get("decision_class") or "SHIP"),
                 "source": row.get("source", "gsc"),
+                "shap": row.get("shap"),
+                "features": row.get("features"),
             }
+            if row.get("shap") and isinstance(row["shap"], dict):
+                top_shap = sorted(row["shap"].items(), key=lambda kv: abs(float(kv[1])), reverse=True)[:3]
+                task["target_component"] = ", ".join(f"{'+' if v>=0 else ''}{v:.2f} {k}" for k, v in top_shap)
             if propagation is not None:
                 task["catalog_propagation"] = dict(propagation)
             tasks.append(task)

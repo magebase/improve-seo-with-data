@@ -105,6 +105,7 @@ def test_generate_wave_changelog_structure(valid_report_markdown):
     # Asserts 8 mandatory sections exist
     assert "## 1. Executive Summary & Authoritative Two-Part Scorecard" in md
     assert "### Part 1: Engineering Execution Quality" in md
+    assert "### Part 1.1: Machine Learning Model Decisions & Feature Attributions" in md
     assert "### Part 2: Measured SEO & Business Effectiveness" in md
     assert "## 2. Reconciled Task Inventory & Ledger Alignment" in md
     assert "## 3. Strategic Deep-Dive & Intent Analysis" in md
@@ -329,11 +330,45 @@ def test_validate_wave_close_rejects_missing_task_ids(valid_report_markdown):
 
 
 def test_validate_wave_close_cli_version():
-    """Verifies validate_wave_close.py reports v2.2.2 via CLI."""
+    """Verifies validate_wave_close.py reports v2.3.0 via CLI."""
     import subprocess
     cmd = [sys.executable, str(SCRIPTS_DIR / "validate_wave_close.py"), "--version"]
     res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    assert "validate_wave_close.py v2.2.2" in res.stdout
+    assert "validate_wave_close.py v2.3.0" in res.stdout
+
+
+def test_validate_wave_close_detects_missing_model_decisions_section(valid_report_markdown):
+    """Negative test: Missing Part 1.1 Model Decisions section is rejected."""
+    corrupted_md = re.sub(
+        r"### Part 1\.1: Machine Learning Model Decisions.*?(?=### Part 2:)",
+        "",
+        valid_report_markdown,
+        flags=re.DOTALL,
+    )
+    passed, errors, warnings = validate_report_content(
+        content=corrupted_md,
+        domain="incomecanvas.com",
+        wave=15,
+    )
+    assert passed is False
+    assert any("Machine Learning Model Decisions" in e for e in errors)
+
+
+def test_validate_wave_close_detects_missing_shap_table(valid_report_markdown):
+    """Negative test: Part 1.1 lacking task attribution table is rejected."""
+    corrupted_md = re.sub(
+        r"#### Task Selection & Feature Attribution Inventory.*?(?=### Part 2:)",
+        "#### Task Selection & Feature Attribution Inventory\n\nNo attribution data provided.\n\n",
+        valid_report_markdown,
+        flags=re.DOTALL,
+    )
+    passed, errors, warnings = validate_report_content(
+        content=corrupted_md,
+        domain="incomecanvas.com",
+        wave=15,
+    )
+    assert passed is False
+    assert any("missing Task Selection & Feature Attribution table" in e for e in errors)
 
 
 def test_validate_wave_close_supports_commit_range(valid_report_markdown, monkeypatch):
