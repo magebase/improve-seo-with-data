@@ -1132,6 +1132,7 @@ def main(argv: list[str] | None = None) -> int:
             # without a hand-maintained prefix map.
             sibling_counts=derive_sibling_counts(all_scored),
             known_live_urls=known_live_urls,
+            max_per_family=0,
         )
         wave_tasks = full_backlog[: max(0, args.compile_wave)]
         print(
