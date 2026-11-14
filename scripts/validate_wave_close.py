@@ -206,6 +206,21 @@ def check_git_worktree_clean(repo_path: Path | str) -> tuple[bool, str]:
         return True, ""
 
 
+def extract_section4_text(content: str) -> str:
+    """Returns the Section 4 body.
+
+    The section heading is anchored to its own line and the match is
+    non-greedy: a DOTALL greedy ``.*Changes`` would otherwise swallow later
+    prose that merely contains the word "changes" and truncate the body.
+    """
+    match = re.search(
+        r"^##\s*4\.[^\n]*\n(.*?)(?=^##\s*5\.)",
+        content,
+        re.DOTALL | re.IGNORECASE | re.MULTILINE,
+    )
+    return match.group(1) if match else content
+
+
 def validate_report_content(
     content: str,
     domain: str | None = None,
@@ -308,8 +323,7 @@ def validate_report_content(
                 actual_files = get_git_changed_files(repo_path, reported_commit)
                 if actual_files:
                     # Check that every changed file appears in Section 4
-                    sec4_match = re.search(r"##\s*4\.\s*Exhaustive File.*Changes(.*?)##\s*5\.", content, re.DOTALL | re.IGNORECASE)
-                    sec4_text = sec4_match.group(1) if sec4_match else content
+                    sec4_text = extract_section4_text(content)
                     missing_files = [f for f in actual_files if f not in sec4_text]
                     if missing_files:
                         errors.append(
