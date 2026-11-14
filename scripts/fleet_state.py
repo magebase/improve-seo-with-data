@@ -738,6 +738,7 @@ def lease_tasks(
         "         ) AS page_rank"
         "  FROM atomic_task_backlog"
         f"  WHERE status = 'PENDING' {domain_filter}"
+        "    AND COALESCE(expected_value, 0.0) >= 0"
         "), pass_tagged AS ("
         "  SELECT id, priority_score, " + quota_case + " AS quota_pass"
         "  FROM ranked_pending"

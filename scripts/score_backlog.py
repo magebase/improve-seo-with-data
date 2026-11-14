@@ -785,7 +785,7 @@ def extract_selection_rationale(task: dict[str, Any]) -> str:
             f"Uncaptured search demand on query '{query}' with absent canonical route; prioritized dedicated route creation."
         )
     return (
-        f"Selected based on composite ML rank score ({score:.2f}) and positive expected value (${ev:.2f})."
+        f"Selected based on composite ML rank score ({score:.2f}) and expected value (${ev:.2f})."
     )
 
 

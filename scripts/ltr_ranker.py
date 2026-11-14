@@ -689,12 +689,20 @@ def detect_cannibalization(
     *,
     min_urls: int = CANNIBAL_MIN_URLS,
     max_pos: float = CANNIBAL_MAX_POS,
+    min_impressions: int = 100,
+    min_clicks: int = 5,
 ) -> tuple:
     """Flags queries split across >= min_urls distinct pages, all beyond max_pos.
 
     Both (or all) competing URLs must sit worse than ``max_pos`` — a page
-    inside the Top 10 is a winning owner protected by Guardrail 2. Returns
-    (rows, consolidation_tasks): each affected keeper row gains
+    inside the Top 10 is a winning owner protected by Guardrail 2.
+
+    Evidence gate (skill 15.5 ``LOW_DATA_UNCERTAIN``): a query with <= 100
+    impressions or <= 5 clicks carries no reliable ownership signal, so
+    near-zero-traffic splits (e.g. 1-6 impressions each) are never escalated
+    to ``CONSOLIDATE_CANNIBALIZED_URLS``.
+
+    Returns (rows, consolidation_tasks): each affected keeper row gains
     ``cannibalized_pages`` + a ``CONSOLIDATE_CANNIBALIZED_URLS`` action; each
     task carries the full competing-URL set with 301/canonical/title-split
     remedy hints for the implementing agent.
@@ -707,6 +715,10 @@ def detect_cannibalization(
     for query, group in by_query.items():
         pages = {str(r.get("page", "")) for r in group}
         if len(pages) < min_urls:
+            continue
+        total_impressions = sum(float(r.get("impressions", 0) or 0) for r in group)
+        total_clicks = sum(float(r.get("clicks", 0) or 0) for r in group)
+        if total_impressions < min_impressions or total_clicks < min_clicks:
             continue
         positions = [float(r.get("current_pos", 100) or 100) for r in group]
         if min(positions) <= max_pos:
@@ -934,6 +946,15 @@ def compile_wave_backlog(
         path = urlparse(page).path if page.startswith("http") else "/" + page.strip("/")
         path_segments = [seg for seg in path.strip("/").split("/") if seg]
         route_family = path_segments[0] if len(path_segments) > 1 else page_key
+        # /number/<digits>/ routes are inventory-driven: the route renders iff
+        # a PhoneNumber row exists, so no code change can "create" it. Emitting
+        # CREATE_PROGRAMMATIC_ROUTE for unprovisioned numbers produces waves of
+        # permanently-404 tasks; such numbers must be provisioned, not coded.
+        is_inventory_number_route = (
+            len(path_segments) >= 2
+            and path_segments[0] == "number"
+            and path_segments[1].isdigit()
+        )
         if max_per_family > 0 and family_counts[route_family] >= max_per_family:
             continue  # this template family already filled its wave quota
         tasks_before_row = len(tasks)
@@ -952,6 +973,8 @@ def compile_wave_backlog(
             if is_unbuilt and code != "CREATE_PROGRAMMATIC_ROUTE":
                 continue
             if code == "CREATE_PROGRAMMATIC_ROUTE" and not is_unbuilt:
+                continue
+            if code == "CREATE_PROGRAMMATIC_ROUTE" and is_inventory_number_route:
                 continue
             if not predicate(row):
                 continue
