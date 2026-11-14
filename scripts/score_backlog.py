@@ -116,6 +116,56 @@ class EconomicConfig:
     success_click_growth_threshold: float = 0.10  # Minimum 10% lift for organic intervention success
 
 
+DEFAULT_ECONOMICS_PATH = "~/.seo_fleet/economics.json"
+
+
+def load_economic_config(path: str | None = None) -> EconomicConfig:
+    """Loads fleet economic parameters from JSON, falling back to defaults.
+
+    The file is optional and every field is validated: a malformed or partial
+    file must never crash scoring, and negative labor rates are clamped to 0.
+    """
+    import json as _json
+    import os as _os
+
+    cfg = EconomicConfig()
+    target = _os.path.expanduser(path or DEFAULT_ECONOMICS_PATH)
+    if not _os.path.exists(target):
+        return cfg
+    try:
+        with open(target, "r", encoding="utf-8") as handle:
+            data = _json.load(handle)
+    except (OSError, ValueError):
+        return cfg
+    if not isinstance(data, dict):
+        return cfg
+
+    def _number(key: str, minimum: float | None = None) -> float | None:
+        value = data.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        value = float(value)
+        if minimum is not None and value < minimum:
+            value = minimum
+        return value
+
+    labor = _number("labor_hourly_rate", minimum=0.0)
+    if labor is not None:
+        cfg.labor_hourly_rate = labor
+    value = _number("value_per_conversion", minimum=0.0)
+    if value is not None:
+        cfg.value_per_conversion = value
+    horizon = _number("time_horizon_days")
+    if horizon is not None and horizon >= 1:
+        cfg.time_horizon_days = int(horizon)
+    growth = _number("success_click_growth_threshold", minimum=0.0)
+    if growth is not None:
+        cfg.success_click_growth_threshold = growth
+    if isinstance(data.get("currency"), str) and data["currency"].strip():
+        cfg.currency = data["currency"].strip()
+    return cfg
+
+
 def compute_opportunity_intelligence(
     row: dict[str, Any],
     conn: Any = None,
@@ -132,7 +182,7 @@ def compute_opportunity_intelligence(
 
     EV(a) = P(success) * IncrementalBusinessValue - ImplementationCost - ExpectedRiskCost
     """
-    cfg = config or EconomicConfig()
+    cfg = config or load_economic_config()
     feats = row.get("features") or {}
     cur_pos = float(feats.get("current_pos", 100.0) or 100.0)
     impr = float(row.get("impressions", 0.0) or feats.get("impressions", 0.0) or 0.0)
@@ -356,7 +406,7 @@ def evaluate_temporal_holdout_calibration(
     Strictly prevents data leakage: base rate is trained exclusively on historical training observations
     and frozen before evaluating out-of-sample Brier Skill Score (BSS), Log Loss, and reliability bins.
     """
-    cfg = config or EconomicConfig()
+    cfg = config or load_economic_config()
     query = """
         SELECT id, domain, page, target_query, action_code, deployed_at,
                baseline_clicks_28d, post_28d_clicks, did_outcome_class
