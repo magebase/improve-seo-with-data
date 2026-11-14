@@ -690,7 +690,9 @@ def verify_calculator_functionality(url: str, html: str) -> FunctionalTestResult
     # Generic Calculator
     else:
         math_total += 1
-        has_interactive_calc = bool(re.search(r"<input[^>]+type=['\"]number['\"]", html, re.IGNORECASE)) and bool(re.search(r"<button", html, re.IGNORECASE))
+        has_interactive_calc = bool(
+            re.search(r"<input[^>]+type=['\"](?:number|tel)['\"]", html, re.IGNORECASE)
+        ) and bool(re.search(r"<button", html, re.IGNORECASE))
         if has_interactive_calc:
             math_passed += 1
         else:
@@ -751,7 +753,11 @@ def verify_smsriver_functionality(url: str, html: str) -> FunctionalTestResult:
     )
 
 
-def verify_directory_functionality(url: str, html: str) -> FunctionalTestResult:
+def verify_directory_functionality(
+    url: str,
+    html: str,
+    large_listing_requires_filter: bool = True,
+) -> FunctionalTestResult:
     """Verifies that a directory or hub page provides structured entries and functioning navigation."""
     issues: list[str] = []
     links = re.findall(r"<a[^>]+href=['\"]([^'\"]+)['\"][^>]*>", html, re.IGNORECASE)
@@ -760,7 +766,7 @@ def verify_directory_functionality(url: str, html: str) -> FunctionalTestResult:
         issues.append(f"Directory Utility Failure: Found only {len(valid_links)} structured links (< 3 required for directory utility).")
 
     has_search_or_filter = bool(re.search(r"(<input[^>]+type=['\"]search['\"]|id=['\"][^'\"]*filter[^'\"]*['\"])", html, re.IGNORECASE))
-    if not has_search_or_filter and len(valid_links) > 20:
+    if large_listing_requires_filter and not has_search_or_filter and len(valid_links) > 20:
         issues.append("Directory Navigation Warning: Large listing directory lacks instant client-side filter or search input.")
 
     passed = len(issues) == 0
@@ -800,7 +806,11 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
 
     dom_ok, dom_issues = verify_dom_structural_integrity(html)
 
-    if "/compare/" in path or "/articles/" in path or "/guides/" in path:
+    if path.rstrip("/") in ("", "/index", "/index.html"):
+        # Site homepages are navigation hubs; the large-listing filter rule
+        # applies to catalog/directory pages, not landings.
+        res = verify_directory_functionality(url, html, large_listing_requires_filter=False)
+    elif "/compare/" in path or "/articles/" in path or "/guides/" in path:
         res = FunctionalTestResult(
             url=url,
             product_type="comparison" if "/compare/" in path else "editorial",
@@ -812,6 +822,12 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
     elif "openfileconverter.com" in host or "/convert/" in path or "/studio/" in path:
         res = verify_converter_functionality(url, html)
     elif "incomecanvas.com" in host or "/calculator" in path or "/article/wacc" in path:
+        res = verify_calculator_functionality(url, html)
+    elif path.rstrip("/") in ("/tools", "/tools/index"):
+        # Tool hub: structured listing + navigation, not a number inventory page.
+        res = verify_directory_functionality(url, html)
+    elif "/tools/" in path:
+        # Tool/calculator detail pages: interactive inputs, not carrier inventory.
         res = verify_calculator_functionality(url, html)
     elif "smsriver.com" in host or "/number" in path or "/sms" in path:
         res = verify_smsriver_functionality(url, html)
