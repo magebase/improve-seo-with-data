@@ -75,6 +75,26 @@ SOFT_404_PATTERNS = re.compile(
 )
 
 
+def _jsonld_type_names(node, depth: int = 0) -> list[str]:
+    """Collects every @type in a JSON-LD document, including @graph and nested nodes."""
+    if depth > 8:
+        return []
+    found: list[str] = []
+    if isinstance(node, dict):
+        t = node.get("@type")
+        if isinstance(t, str) and t:
+            found.append(t)
+        elif isinstance(t, list):
+            found.extend(str(entry) for entry in t if entry)
+        for value in node.values():
+            if isinstance(value, (dict, list)):
+                found.extend(_jsonld_type_names(value, depth + 1))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_jsonld_type_names(item, depth + 1))
+    return found
+
+
 def audit_html_technical_seo(
     html: str,
     url: str,
@@ -222,16 +242,11 @@ def audit_html_technical_seo(
         for block in jsonld_blocks:
             try:
                 data = json.loads(block.strip())
-                if isinstance(data, dict):
-                    t = data.get("@type", "unknown")
-                    jsonld_types.append(str(t))
-                elif isinstance(data, list):
-                    for item in data:
-                        if isinstance(item, dict):
-                            jsonld_types.append(str(item.get("@type", "unknown")))
             except Exception as e:
                 jsonld_valid = False
                 errors.append(f"Malformed JSON-LD structured data: {e}")
+                continue
+            jsonld_types.extend(_jsonld_type_names(data))
     gates.append(TechnicalSeoGateResult(
         name="structured_data_validity",
         passed=jsonld_valid,
