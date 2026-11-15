@@ -530,6 +530,8 @@ def test_detect_cannibalization_flags_multi_page_queries_beyond_top10():
         {
             "query": "cheap insurance",
             "page": "https://a.com/p1/",
+            "impressions": 200,
+            "clicks": 8,
             "current_pos": 14.0,
             "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
             "actions": ["REWRITE_SNIPPET_AND_TOP_300PX"],
@@ -537,6 +539,8 @@ def test_detect_cannibalization_flags_multi_page_queries_beyond_top10():
         {
             "query": "cheap insurance",
             "page": "https://a.com/p2/",
+            "impressions": 150,
+            "clicks": 6,
             "current_pos": 22.0,
             "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
             "actions": ["REWRITE_SNIPPET_AND_TOP_300PX"],
@@ -544,6 +548,8 @@ def test_detect_cannibalization_flags_multi_page_queries_beyond_top10():
         {
             "query": "healthy query",
             "page": "https://a.com/p3/",
+            "impressions": 300,
+            "clicks": 40,
             "current_pos": 5.0,
             "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
             "actions": ["REWRITE_SNIPPET_AND_TOP_300PX"],

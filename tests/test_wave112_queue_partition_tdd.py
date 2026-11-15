@@ -149,3 +149,10 @@ def test_wave_compiler_refuses_lookup_queries():
     assert tasks, "the legitimate demand row must still compile"
     assert all(t["query"] != "5493812234024" for t in tasks)
     assert any(t["query"] == "online sms status" for t in tasks)
+
+
+def test_exploration_never_duplicates_an_exploitation_row():
+    """A tiny pool must not let one task occupy both queue slots."""
+    rows = [_demand("online sms status", 0.9)]
+    queue = split_action_queue(rows, n_exploit=3, n_explore=1)
+    assert len(queue) == 1

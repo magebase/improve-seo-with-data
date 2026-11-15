@@ -1123,7 +1123,10 @@ def split_action_queue(
         entry["slot"] = "exploit"
         queue.append(entry)
 
-    start = int(len(ranked) * 0.50)
+    # Exploration must never re-sample an exploitation row: with a tiny pool
+    # the 50th-percentile floor lands inside the exploit slice and the same
+    # task would occupy two slots.
+    start = max(int(len(ranked) * 0.50), n_exploit)
     end = max(start + 1, int(len(ranked) * 0.80))
     pool = ranked[start:end]
     if len(pool) < n_explore:
