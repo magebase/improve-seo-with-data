@@ -49,6 +49,8 @@ from urllib.parse import urlparse
 
 import numpy as np
 
+from candidate_hygiene import is_lookup_query
+
 MODEL_FILE = "seo_lgbm_ranker.txt"
 META_FILE = "seo_lgbm_ranker.meta.json"
 
@@ -506,6 +508,38 @@ SPIN_OUT_MIN_FORUM_RATIO = 0.4
 # be wrong — they need internal-link equity and route depth, not a new route.
 ORPHAN_ACTIONS = ["BOOST_INTERNAL_LINKS", "EXPAND_THIN_ROUTE"]
 
+#: Coverage states that mean "Google knows the URL but has not indexed it yet".
+#: Such a route is a discovery/thinness problem, never a demand opportunity.
+RESCUE_COVERAGE_PREFIX = "Discovered - currently not indexed"
+
+
+def is_route_rescue_row(row: dict[str, Any]) -> bool:
+    """True when a candidate is a zero-demand route-rescue target, not demand.
+
+    Orphan rows are synthesized at ``current_pos=100`` with a slug-derived
+    query and zero impressions. Their feature vectors are therefore
+    degenerate: every orphan scores the same, and mixing them into the demand
+    ranking lets ties bury rows that carry real impressions (Wave 111: 17 of
+    20 queue slots were orphans, 3 carried demand).
+    """
+    if str(row.get("source", "")) == "orphan_route":
+        return True
+    if bool(row.get("is_sitemap_orphan")):
+        return True
+    return str(row.get("coverage_state", "")).startswith(RESCUE_COVERAGE_PREFIX)
+
+
+def partition_demand_and_rescue(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split scored rows into (demand, route_rescue) without dropping any row."""
+    demand: list[dict[str, Any]] = []
+    rescue: list[dict[str, Any]] = []
+    for row in rows:
+        (rescue if is_route_rescue_row(row) else demand).append(row)
+    return demand, rescue
+
+
 # Cannibalization: queries carried by >= CANNIBAL_MIN_URLS distinct pages ALL
 # ranking worse than CANNIBAL_MAX_POS (a page inside the Top 10 is a winner —
 # Guardrail 2 protects it from consolidation).
@@ -940,9 +974,20 @@ def compile_wave_backlog(
         known.add(str(p).rstrip("/"))
         known.add(str(p).rstrip("/") + "/")
     for row in sorted(rows, key=lambda r: r.get("rank_score", 0.0), reverse=True):
+        # OBSERVE / NO_ACTION are first-class contract outcomes: they exist to
+        # protect page equity and never permit code changes. Compiling them
+        # produced wave 103's negative-EV tasks (decision_class=OBSERVE,
+        # expected_value=-125), so they are dropped before task emission.
+        if str(row.get("decision_class") or "SHIP").upper() in {"OBSERVE", "NO_ACTION"}:
+            continue
         page = str(row.get("page", ""))
         page_key = page.rstrip("/")
         query = str(row.get("query", ""))
+        # A phone number / numeric prefix is a lookup, not heading demand: no
+        # <title>, <h2> or table can satisfy it. Emitting one wastes a wave
+        # slot and produces a task the agent can only close by fabricating.
+        if is_lookup_query(query):
+            continue
         path = urlparse(page).path if page.startswith("http") else "/" + page.strip("/")
         path_segments = [seg for seg in path.strip("/").split("/") if seg]
         route_family = path_segments[0] if len(path_segments) > 1 else page_key

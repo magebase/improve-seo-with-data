@@ -62,6 +62,7 @@ from ltr_ranker import (
     save_bundle,
     slice_per_domain,
     split_action_queue,
+    partition_demand_and_rescue,
     train_seo_ranker,
     derive_sibling_counts,
 )
@@ -1087,6 +1088,10 @@ def main(argv: list[str] | None = None) -> int:
         state_conn.close()
     all_scored = list(result["rows"])
     scored = list(result["rows"])
+    # The compiled backlog inventory is demand-only: an orphan route's rescue
+    # work is discovered from the `route_rescue` list, never from a heading
+    # task synthesized off a slug-derived query.
+    demand_scored, _rescue_all = partition_demand_and_rescue(all_scored)
 
     # Cannibalization detector: BEFORE the per-query collapse (which discards
     # the competitor rows), flag queries carried by >= 2 distinct pages all
@@ -1130,8 +1135,17 @@ def main(argv: list[str] | None = None) -> int:
         1, int(args.queue_size * EXPLOIT_SLOTS / (EXPLOIT_SLOTS + EXPLORE_SLOTS))
     )
     n_explore = max(1, args.queue_size - n_exploit)
+    # Route-rescue rows (zero-impression sitemap orphans, "Discovered - not
+    # indexed") carry degenerate features and tie with each other, so they may
+    # never spend a demand queue slot: Wave 111 produced 17 orphan slots of 20
+    # and buried every row that actually had impressions.
+    demand_rows, rescue_rows = partition_demand_and_rescue(scored)
     queue = split_action_queue(
-        scored, n_exploit=n_exploit, n_explore=n_explore, seed=args.seed
+        demand_rows, n_exploit=n_exploit, n_explore=n_explore, seed=args.seed
+    )
+    print(
+        f"Demand/route-rescue partition: {len(demand_rows)} demand rows, "
+        f"{len(rescue_rows)} route-rescue rows (rescue rows never take a queue slot)."
     )
 
     # Per-domain quota: a big property must not crowd young properties out of
@@ -1174,13 +1188,13 @@ def main(argv: list[str] | None = None) -> int:
         # cursor without re-running collection/scoring. The JSON output keeps
         # only the actionable --compile-wave slice of that inventory.
         full_backlog = compile_wave_backlog(
-            all_scored,
+            demand_scored,
             shipped_ledger=cooled_keys,
             target_wave_size=10_000_000,
             # Catalog families are derived from the rows themselves so a
             # top-ranked child route propagates its fix across every sibling
             # without a hand-maintained prefix map.
-            sibling_counts=derive_sibling_counts(all_scored),
+            sibling_counts=derive_sibling_counts(demand_scored),
             known_live_urls=known_live_urls,
             max_per_family=0,
         )
@@ -1198,6 +1212,7 @@ def main(argv: list[str] | None = None) -> int:
                 "site": payload.get("site"),
                 "scoring_mode": result["mode"],
                 "queue": queue,
+                "route_rescue": rescue_rows[:50],
                 "consolidation": consolidation_tasks,
                 "wave_tasks": wave_tasks,
             },

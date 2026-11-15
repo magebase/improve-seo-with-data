@@ -32,6 +32,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Sequence
 
+from candidate_hygiene import is_lookup_query
+
 DEFAULT_LOCK_REGISTRY = Path.home() / ".seo_fleet" / "worktree_locks.json"
 LOCK_HEARTBEAT_TTL_HOURS = 2
 
@@ -144,8 +146,8 @@ def is_clean_english_query(query: str) -> bool:
     """True when a query is single-heading-addressable English work.
 
     Rejects: operator/URL junk, uppercase Boolean operators, negation terms,
-    queries outside the 4-60 char / <=10 word band, >15% non-ASCII text, and
-    probable non-English queries.
+    phone numbers and bare numeric prefixes, queries outside the 4-60 char /
+    <=10 word band, >15% non-ASCII text, and probable non-English queries.
     """
     if not query or not query.strip():
         return False
@@ -155,6 +157,8 @@ def is_clean_english_query(query: str) -> bool:
     if len(query.split()) > 10:
         return False
     if JUNK_QUERY_RE.search(query) or BOOLEAN_OPERATOR_RE.search(query):
+        return False
+    if is_lookup_query(query):
         return False
     letters = [c for c in query if c.isalpha()]
     if letters:
