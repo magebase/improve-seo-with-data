@@ -139,9 +139,10 @@ def test_calibrated_bayesian_expected_value(temp_db: sqlite3.Connection):
         "page": "https://openfileconverter.com/convert/psd-to-png/",
         "query": "psd to png converter",
         "action_code": "CREATE_PROGRAMMATIC_ROUTE",
-        "clicks": 10.0,
-        "impressions": 1200.0,
-        "position": 8.0,
+        "prescribed_action": "CREATE_PROGRAMMATIC_ROUTE",
+        "clicks_30d": 10.0,
+        "impressions": 6000.0,
+        "features": {"current_pos": 8.0},
         "ctr": 0.0083,
     }
     tail_task = {
@@ -149,9 +150,10 @@ def test_calibrated_bayesian_expected_value(temp_db: sqlite3.Connection):
         "page": "https://openfileconverter.com/convert/obscure-format/",
         "query": "obscure format converter",
         "action_code": "CREATE_PROGRAMMATIC_ROUTE",
-        "clicks": 0.0,
+        "prescribed_action": "CREATE_PROGRAMMATIC_ROUTE",
+        "clicks_30d": 0.0,
         "impressions": 50.0,
-        "position": 45.0,
+        "features": {"current_pos": 45.0},
         "ctr": 0.0,
     }
 

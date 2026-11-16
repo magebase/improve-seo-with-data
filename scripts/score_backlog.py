@@ -341,12 +341,25 @@ def compute_opportunity_intelligence(
     else:
         decision_class = "OBSERVE"
 
+    # 11. Economic Sign Gate (v2.4): an expected loss is never shippable work.
+    # priority_score deliberately keeps a positive proxy when EV < 0 so that
+    # OBSERVE rows still have a stable ordering, but that proxy must never
+    # promote a losing row into SHIP/EXPERIMENT. Without this gate the live
+    # 2026-11-16 run shipped 2 SHIP + 11 EXPERIMENT rows whose net expected
+    # value ran from -$1.22 to -$2.49: edits to 1-15 impression queries that
+    # cannot repay their own labor.
+    ev_gate_blocked = False
+    if ev <= 0.0 and decision_class in {"SHIP", "EXPERIMENT"}:
+        decision_class = "OBSERVE"
+        ev_gate_blocked = True
+
     return {
         "expected_value": round(ev, 4),
         "cannibalization_risk": round(cann_risk, 4),
         "confidence": round(decision_confidence, 4),
         "priority_score": round(priority_score, 4),
         "decision_class": decision_class,
+        "ev_gate_blocked": ev_gate_blocked,
         # Statistical Decomposition (v2.2):
         "posterior_success_prob": round(p_success, 4),
         "is_cold_start": is_cold_start,
@@ -1147,6 +1160,12 @@ def main(argv: list[str] | None = None) -> int:
         f"Demand/route-rescue partition: {len(demand_rows)} demand rows, "
         f"{len(rescue_rows)} route-rescue rows (rescue rows never take a queue slot)."
     )
+    blocked = sum(1 for row in demand_rows if row.get("ev_gate_blocked"))
+    if blocked:
+        print(
+            f"Economic sign gate: {blocked} row(s) demoted from SHIP/EXPERIMENT to OBSERVE "
+            "(net expected value <= 0 - an expected loss is never shippable work)."
+        )
 
     # Per-domain quota: a big property must not crowd young properties out of
     # the queue; slice the globally ranked queue per registered domain.
