@@ -351,6 +351,7 @@ def preflight_hygiene(
     locked_path_prefixes: Sequence[str] = (),
     max_intent_tasks_per_page: int = 2,
     now: Optional[datetime] = None,
+    domain: Optional[str] = None,
 ) -> Dict[str, int]:
     """Scrub the PENDING cursor BEFORE the stratified lease runs.
 
@@ -368,9 +369,15 @@ def preflight_hygiene(
     canonicalize_backlog_action_codes(conn)
     same_query_graduated = auto_graduate_shipped_query_siblings(conn)
     title_locked = enforce_url_title_lock(conn)
-    rows = conn.execute(
-        "SELECT id, page, query, action_code, file_target, domain FROM atomic_task_backlog WHERE status = 'PENDING'"
-    ).fetchall()
+    query_sql = (
+        "SELECT id, page, query, action_code, file_target, domain, expected_value, decision_class "
+        "FROM atomic_task_backlog WHERE status = 'PENDING'"
+    )
+    params = ()
+    if domain:
+        query_sql += " AND domain = ?"
+        params = (domain,)
+    rows = conn.execute(query_sql, params).fetchall()
     report = {
         "rejected": 0,
         "graduated": 0,
@@ -387,8 +394,12 @@ def preflight_hygiene(
         ):
             intent_counts[page] = intent_counts.get(page, 0) + 1
 
-    for task_id, page, query, action_code, file_target, domain in rows:
-        if domain and page and page.startswith("http") and not is_valid_property_host(page, domain):
+    for task_id, page, query, action_code, file_target, d_name, expected_value, decision_class in rows:
+        if (expected_value is not None and expected_value < 0.0) or (decision_class or "").upper() == "OBSERVE":
+            _cas_status(conn, task_id, "REJECTED", shipped=False, stamp=stamp)
+            report["rejected"] += 1
+            continue
+        if d_name and page and page.startswith("http") and not is_valid_property_host(page, d_name):
             _cas_status(conn, task_id, "REJECTED", shipped=False, stamp=stamp)
             report["rejected"] += 1
             continue

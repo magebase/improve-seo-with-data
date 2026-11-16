@@ -134,3 +134,38 @@ def test_zero_value_is_observe_not_ship():
 def test_small_impression_rows_never_ship(impressions: float):
     scored = compute_opportunity_intelligence(_task(impressions=impressions))
     assert scored["decision_class"] == "OBSERVE", (impressions, scored["expected_value"])
+
+
+def test_preflight_hygiene_rejects_negative_ev_rows(tmp_path: Path):
+    """Pending rows carrying strictly negative expected value must be scrubbed."""
+    from cursor_hygiene import preflight_hygiene
+    from fleet_state import connect_state_db, enqueue_tasks
+
+    conn = connect_state_db(str(tmp_path / "ev_hygiene.db"))
+    enqueue_tasks(
+        conn,
+        [
+            {
+                "domain": "smsriver.com",
+                "page": "https://smsriver.com/receive-sms/pl/",
+                "query": "sms recive",
+                "action_code": "INJECT_SECONDARY_H2_ONLY",
+                "expected_value": -2.4838,
+                "decision_class": "EXPERIMENT",
+            },
+            {
+                "domain": "smsriver.com",
+                "page": "https://smsriver.com/status/",
+                "query": "online sms status",
+                "action_code": "BOOST_CLUSTER_CROSS_LINKS",
+                "expected_value": 15.0,
+                "decision_class": "SHIP",
+            },
+        ],
+    )
+    report = preflight_hygiene(conn, domain="smsriver.com")
+    assert report["rejected"] == 1
+    statuses = {r[0]: r[1] for r in conn.execute("SELECT query, status FROM atomic_task_backlog")}
+    assert statuses["sms recive"] == "REJECTED"
+    assert statuses["online sms status"] == "PENDING"
+

@@ -1034,6 +1034,7 @@ def main(argv: list[str] | None = None) -> int:
                 fast_conn,
                 route_intent_map=intent_map,
                 locked_path_prefixes=locked,
+                domain=domain,
             )
             leased = _lease(
                 fast_conn,
@@ -1258,6 +1259,7 @@ def main(argv: list[str] | None = None) -> int:
             conn,
             route_intent_map=intent_map,
             locked_path_prefixes=locked,
+            domain=domain,
         )
         lease_n = args.lease_size if args.lease_size > 0 else len(pending)
         # Stratified lease: /number/* (or any single template family) can
