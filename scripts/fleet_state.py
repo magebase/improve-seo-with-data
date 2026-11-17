@@ -1373,12 +1373,17 @@ def update_experiment_outcomes(
             ctrl_page, ctrl_pages_json, ctrl_base_clicks, pre_trend_div, status
         ) = exp
 
-        # Calculate actual days elapsed since deployment
+        # Calculate actual days elapsed since deployment. Production rows
+        # store naive timestamps; comparing them with an aware `now` raised
+        # TypeError, and the old fallback defaulted to days_elapsed (28),
+        # prematurely grading 1-3 day old experiments with phantom zeros.
         try:
-            dep_dt = datetime.fromisoformat(deployed_at_str)
-            actual_days = max(1, (now_dt - dep_dt).days)
+            dep_dt = datetime.fromisoformat(str(deployed_at_str).strip().replace("Z", "+00:00"))
+            if dep_dt.tzinfo is None:
+                dep_dt = dep_dt.replace(tzinfo=timezone.utc)
+            actual_days = max(0, (now_dt - dep_dt).days)
         except Exception:
-            actual_days = days_elapsed
+            actual_days = 0
 
         # Match fresh GSC data for treatment URL
         key = f"{query.strip().lower()}\n{page.strip().lower()}"
@@ -1668,7 +1673,7 @@ def get_query_owner(
     domain: str,
     query: str,
     candidate_page: str | None = None,
-    candidate_intent: str = "tool",
+    candidate_intent: str | None = None,
     serp_urls: list[str] | None = None,
     query_impressions: float = 0.0,
     query_clicks: float = 0.0,
@@ -1716,7 +1721,10 @@ def get_query_owner(
         if candidate_page and owner_url.rstrip("/") == candidate_page.rstrip("/"):
             risk_class = "OWNED"
             cann_risk = 0.0
-        elif candidate_page and candidate_intent != owner_intent:
+        elif candidate_page and candidate_intent is not None and candidate_intent != owner_intent:
+            # Only compare intents when the caller actually knows one: defaulting
+            # to "tool" silently downgraded every cross-page brand query to
+            # DISTINCT_INTENT (0.05), hiding real cannibalization.
             risk_class = "DISTINCT_INTENT"
             cann_risk = 0.05
         elif is_low_data:
