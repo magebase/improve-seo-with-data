@@ -199,31 +199,49 @@ def three_way_matrix_from_sitemap(
     verification", "2026", ...) crossed with the family's entity vocabulary —
     still zero network cost; demand is verified later by the surrogate or a
     budget-gated SERP pull.
+
+    A modifier is NOT a route. "bmp to png free" is the same page as
+    "/convert/bmp-to-png/" with an extra qualifying term, so candidates carry
+    the EXISTING owner route from the sitemap (Wave 31: tokenizing the query
+    into "/convert/bmp-free/" manufactured 404s and duplicate-intent doorway
+    slugs — 57 of 79 URL-Inspection probes came back "URL is unknown to
+    Google"). Entities with no existing route are skipped entirely.
     """
     domain_match = re.match(
         r"https?://([^/]+)/", (sitemap_urls[0] if sitemap_urls else "")
     )
     domain = (domain_match.group(1) if domain_match else "").lower()
     prefix = family_prefix.strip("/")
+    pair_separator = PAIR_ROUTE_SEPARATORS.get(prefix.lower(), "-to-")
+    pair_pattern = re.compile(
+        rf"/{re.escape(prefix)}/([a-z0-9-]+){re.escape(pair_separator)}([a-z0-9-]+)/", re.IGNORECASE
+    )
     single_pattern = re.compile(rf"/{re.escape(prefix)}/([a-z0-9-]+)/", re.IGNORECASE)
-    vocab: list[str] = []
+    # entity slug -> (human phrase, existing owner route)
+    entities: dict[str, tuple[str, str]] = {}
     for url in sitemap_urls:
+        pair = pair_pattern.search(url)
+        if pair:
+            slug = f"{pair.group(1).lower()}{pair_separator}{pair.group(2).lower()}"
+            phrase = slug.replace(pair_separator, " to " if pair_separator == "-to-" else " vs ")
+            entities[slug] = (phrase, url)
+            continue
         single = single_pattern.search(url)
-        if single and single.group(1).lower() not in vocab:
-            vocab.append(single.group(1).lower())
-    vocab.sort()
+        if single:
+            entity = single.group(1).lower()
+            entities.setdefault(entity, (entity, url))
     rows: list[dict[str, Any]] = []
     for template in templates:
         for modifier in modifiers:
-            for entity in vocab:
-                query = template.format(entity=entity, modifier=modifier)
+            for entity in sorted(entities):
+                phrase, owner = entities[entity]
+                query = template.format(entity=phrase, modifier=modifier)
                 if "{entity}" in query or "{modifier}" in query:
                     continue  # template not three-way compatible
-                slug = "-".join(tokenize(query)) or "expansion"
                 rows.append(
                     {
                         "query": query,
-                        "page": f"https://{domain}/{prefix}/{slug}/",
+                        "page": owner,
                         "clicks_30d": 0.0,
                         "impressions": 0.0,
                         "current_pos": 100.0,
@@ -333,6 +351,21 @@ def inspect_coverage_states(
     return results
 
 
+PAIR_ROUTE_SEPARATORS = {"convert": "-to-", "compare": "-vs-"}
+
+
+def pair_route_slug(family_prefix: str, source: str, target: str) -> str:
+    """Canonical pair-route slug for a family (`{a}-to-{b}` / `{a}-vs-{b}`).
+
+    The site's route grammar — not the rendered query text — decides the URL.
+    Wave 31 regression: tokenizing "convert bmp to png" produced
+    "/convert/convert-bmp-to-png/", a 404 that duplicated the existing
+    canonical "/convert/bmp-to-png/" page.
+    """
+    separator = PAIR_ROUTE_SEPARATORS.get(family_prefix.strip("/").lower(), "-")
+    return f"{source}{separator}{target}"
+
+
 def pairwise_matrix_from_sitemap(
     sitemap_urls: list[str],
     family_prefix: str,
@@ -346,6 +379,10 @@ def pairwise_matrix_from_sitemap(
     pairwise combinations NOT yet built through the caller's modifier
     templates. Zero network cost; demand signals arrive later via the
     surrogate or a SERP pull on the few pairs the ranker promotes.
+
+    Proposed pages follow the family's own route grammar
+    (``pair_route_slug``), so a proposal is a real, buildable canonical route
+    rather than a slugified query.
     """
     domain_match = re.match(
         r"https?://([^/]+)/", (sitemap_urls[0] if sitemap_urls else "")
@@ -353,15 +390,20 @@ def pairwise_matrix_from_sitemap(
     domain = (domain_match.group(1) if domain_match else "").lower()
     prefix = family_prefix.strip("/")
     vocab: list[str] = []
+    pair_separator = PAIR_ROUTE_SEPARATORS.get(prefix.lower(), "-to-")
     pair_pattern = re.compile(
-        rf"/{re.escape(prefix)}/([a-z0-9-]+)-to-([a-z0-9-]+)/", re.IGNORECASE
+        rf"/{re.escape(prefix)}/([a-z0-9-]+){re.escape(pair_separator)}([a-z0-9-]+)/", re.IGNORECASE
     )
     single_pattern = re.compile(rf"/{re.escape(prefix)}/([a-z0-9-]+)/", re.IGNORECASE)
     existing_pairs: set = set()
     for url in sitemap_urls:
         pair = pair_pattern.search(url)
         if pair:
+            # Both orders are recorded: /compare/svg-vs-png/ is a 301 to the
+            # canonical /compare/png-vs-svg/, so proposing the reverse would
+            # duplicate an intent the site already owns.
             existing_pairs.add((pair.group(1).lower(), pair.group(2).lower()))
+            existing_pairs.add((pair.group(2).lower(), pair.group(1).lower()))
             for entity in (pair.group(1), pair.group(2)):
                 if entity.lower() not in vocab:
                     vocab.append(entity.lower())
@@ -381,15 +423,17 @@ def pairwise_matrix_from_sitemap(
                 for b in vocab
                 if a != b and (a, b) not in existing_pairs
             ]
-            rendered = [template.format(a=a, b=b) for a, b in combos]
+            rendered = [
+                (template.format(a=a, b=b), f"{prefix}/{pair_route_slug(prefix, a, b)}")
+                for a, b in combos
+            ]
         else:
-            rendered = [template.format(entity=e) for e in vocab]
-        for rendered_query in rendered[:max_pairs]:
-            slug = "-".join(tokenize(rendered_query)) or "pair"
+            rendered = [(template.format(entity=e), f"{prefix}/{e}") for e in vocab]
+        for rendered_query, path in rendered[:max_pairs]:
             rows.append(
                 {
                     "query": rendered_query,
-                    "page": f"https://{domain}/{prefix}/{slug}/",
+                    "page": f"https://{domain}/{path}/",
                     "clicks_30d": 0.0,
                     "impressions": 0.0,
                     "current_pos": 100.0,
@@ -928,6 +972,43 @@ def dom_gap_flags(
     }
 
 
+_NON_PAGE_EXTENSIONS: tuple[str, ...] = (
+    ".xml",
+    ".txt",
+    ".json",
+    ".csv",
+    ".pdf",
+    ".zip",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".webp",
+    ".ico",
+    ".js",
+    ".css",
+    ".woff",
+    ".woff2",
+)
+
+
+def normalize_sitemap_loc(loc: str) -> str | None:
+    """Returns a canonical HTML route for a sitemap <loc>, or None for assets.
+
+    Child sitemaps (/sitemaps/tools.xml), feeds, and static assets are not
+    pages: appending the HTML trailing slash turned them into phantom orphan
+    candidates that 404 and consume URL-inspection quota.
+    """
+    loc = (loc or "").strip()
+    if not loc.startswith("http"):
+        return None
+    path = loc.split("?", 1)[0].lower()
+    if path.endswith(_NON_PAGE_EXTENSIONS):
+        return None
+    return loc.rstrip("/") + "/"
+
+
 def fetch_sitemap_urls(site: str, timeout: float = SITEMAP_URL_TIMEOUT) -> list[str]:
     """Fetches the live /sitemap.xml <loc> URLs (one index level supported).
 
@@ -962,7 +1043,7 @@ def fetch_sitemap_urls(site: str, timeout: float = SITEMAP_URL_TIMEOUT) -> list[
             except Exception:  # noqa: BLE001 - one dead child sitemap must not kill the sweep
                 continue
         locs.extend(nested)
-    return [loc.rstrip("/") + "/" for loc in locs if loc.startswith("http")]
+    return [normalized for loc in locs if (normalized := normalize_sitemap_loc(loc))]
 
 
 def synthesize_orphan_rows(
@@ -1069,7 +1150,8 @@ def gsc_candidates_with_fallback(
     the same primitive the backfill and recrawl-verification paths use.
     Returns (candidates, mode) where mode is "report" or "gsc_window".
     """
-    report = (run_report_fn or run_seo_report)(report_id, site)
+    gsc_property = site if (site.startswith("http") or site.startswith("sc-domain:")) else f"sc-domain:{site}"
+    report = (run_report_fn or run_seo_report)(report_id, gsc_property)
     if not report.get("ok", True) and "error" in report:
         print(
             f"      report failed ({str(report['error'])[:120]}); trying gsc-query window."
@@ -1087,10 +1169,21 @@ def gsc_candidates_with_fallback(
     window_rows = (pull_window_fn or pull_gsc_window)(
         site, start.isoformat(), end.isoformat()
     )
-    if not window_rows:
-        raise RuntimeError(
-            "no GSC candidates from either the report or the gsc-query window"
+    if not window_rows and window_days < 90:
+        print("      window carried no performance rows; falling back to 90d window.")
+        start_90 = end - timedelta(days=90)
+        window_rows = (pull_window_fn or pull_gsc_window)(
+            site, start_90.isoformat(), end.isoformat()
         )
+    if not window_rows and window_days < 180:
+        print("      90d window carried no performance rows; falling back to 180d window.")
+        start_180 = end - timedelta(days=180)
+        window_rows = (pull_window_fn or pull_gsc_window)(
+            site, start_180.isoformat(), end.isoformat()
+        )
+    if not window_rows:
+        print("      no GSC candidates found in report or window; continuing with empty GSC rows.")
+        return [], "empty"
     print(f"      gsc-query window: {len(window_rows)} (query, page) rows.")
     return window_rows, "gsc_window"
 
@@ -1493,8 +1586,9 @@ def main(argv: list[str] | None = None) -> int:
 
         print(f"[1/3] Pulling GSC performance for {args.site} via seo binary ...")
         try:
+            window = max(28, args.backfill_days) if args.backfill_days > 0 else 28
             rows, source_mode = gsc_candidates_with_fallback(
-                args.site, report_id=args.report
+                args.site, report_id=args.report, window_days=window
             )
         except RuntimeError as exc:
             print(f"ERROR: GSC collection failed: {exc}", file=sys.stderr)
