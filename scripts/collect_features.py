@@ -1140,6 +1140,7 @@ def gsc_candidates_with_fallback(
     pull_window_fn: Any = None,
     window_days: int = 28,
     report_id: str = "search-performance-overview",
+    allow_empty: bool = False,
 ) -> tuple:
     """Collects GSC candidates from the composite report, with a window fallback.
 
@@ -1182,8 +1183,12 @@ def gsc_candidates_with_fallback(
             site, start_180.isoformat(), end.isoformat()
         )
     if not window_rows:
-        print("      no GSC candidates found in report or window; continuing with empty GSC rows.")
-        return [], "empty"
+        if allow_empty:
+            print("      no GSC candidates found in report or window; continuing with empty GSC rows.")
+            return [], "empty"
+        raise RuntimeError(
+            "no GSC candidates from either the report or the gsc-query window"
+        )
     print(f"      gsc-query window: {len(window_rows)} (query, page) rows.")
     return window_rows, "gsc_window"
 
@@ -1588,7 +1593,10 @@ def main(argv: list[str] | None = None) -> int:
         try:
             window = max(28, args.backfill_days) if args.backfill_days > 0 else 28
             rows, source_mode = gsc_candidates_with_fallback(
-                args.site, report_id=args.report, window_days=window
+                args.site,
+                report_id=args.report,
+                window_days=window,
+                allow_empty=not args.no_orphans or bool(args.force_expand),
             )
         except RuntimeError as exc:
             print(f"ERROR: GSC collection failed: {exc}", file=sys.stderr)
