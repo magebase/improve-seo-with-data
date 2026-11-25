@@ -49,6 +49,8 @@ from urllib.parse import urlparse
 
 import numpy as np
 
+from indexation_forecast import IndexationModel, evaluate_launch_candidate
+
 MODEL_FILE = "seo_lgbm_ranker.txt"
 META_FILE = "seo_lgbm_ranker.meta.json"
 
@@ -825,6 +827,8 @@ def compile_wave_backlog(
     sibling_counts: dict[str, int] | None = None,
     max_per_family: int = 3,
     known_live_urls: set[str] | None = None,
+    launch_model: IndexationModel | None = None,
+    enforce_launch_gate: bool = True,
 ) -> list[dict[str, Any]]:
     """Compiles a ranked backlog into ATOMIC TDD tasks (35-60 per wave).
 
@@ -978,6 +982,15 @@ def compile_wave_backlog(
                 continue
             if not predicate(row):
                 continue
+            launch_decision = None
+            if code == "CREATE_PROGRAMMATIC_ROUTE" and enforce_launch_gate:
+                # Position 90+ is a demand-absence signal, not a demand signal.
+                # A new URL must clear the calibrated indexation floor and the
+                # live-data / uniqueness / link-equity contract before it can
+                # consume crawl budget.
+                launch_decision = evaluate_launch_candidate(row, model=launch_model)
+                if not launch_decision.eligible:
+                    continue
             # Rule: Never emit inlink tasks for root homepage '/' (every page already links to / via brand header/footer)
             if path in ("", "/") and code in (
                 "WIRE_HUB_AND_FOOTER_INLINKS",
@@ -1017,9 +1030,15 @@ def compile_wave_backlog(
                 "confidence": float(row.get("confidence") or 1.0),
                 "decision_class": str(row.get("decision_class") or "SHIP"),
                 "source": row.get("source", "gsc"),
+                "template_family": route_family,
                 "shap": row.get("shap"),
                 "features": row.get("features"),
             }
+            if launch_decision is not None:
+                task["p_index_28d"] = round(launch_decision.p_index_28d, 4)
+                task["p_index_56d"] = round(launch_decision.p_index_56d, 4)
+                task["launch_evidence"] = launch_decision.evidence
+                task["launch_features"] = launch_decision.features
             if row.get("shap") and isinstance(row["shap"], dict):
                 top_shap = sorted(row["shap"].items(), key=lambda kv: abs(float(kv[1])), reverse=True)[:3]
                 task["target_component"] = ", ".join(f"{'+' if v>=0 else ''}{v:.2f} {k}" for k, v in top_shap)

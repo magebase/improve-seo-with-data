@@ -447,6 +447,16 @@ def ensure_candidate_depth(
             active.extend(orphans[: _need()])
             tiers_used.append("sitemap_orphans")
 
+    # Real demand before synthetic expansion.  DataForSEO suggestions carry
+    # measured volume and SERP evidence; the pairwise/three-way matrices are
+    # last-resort suggestions that the launch gate will reject without that
+    # evidence anyway.  Paid discovery must never sit behind free filler.
+    if _need() and suggest_fn is not None:
+        suggestions = suggest_fn(_need())[: _need()]
+        if suggestions:
+            active.extend(suggestions)
+            tiers_used.append("dfseo_suggest")
+
     matrix_yielded = False
     if _need() and matrix_fn is not None:
         matrix_rows = matrix_fn(_need())[: _need()]
@@ -460,10 +470,6 @@ def ensure_candidate_depth(
     if _need() and exhausted and three_way_fn is not None:
         active.extend(three_way_fn(_need())[: _need()])
         tiers_used.append("three_way_expansion")
-
-    if _need() and suggest_fn is not None:
-        active.extend(suggest_fn(_need())[: _need()])
-        tiers_used.append("dfseo_suggest")
 
     return active, {"tiers_used": tiers_used, "rows": len(active), "min_rows": min_rows}
 
@@ -712,70 +718,6 @@ def auto_expand_candidates_if_depleted(
             "reason": "backlog_healthy",
             "threshold": pending_threshold,
         }
-
-    # Invariant P0: Property-Specific, Age-Adjusted Expansion Gate (Outcome Engine v2.2.1)
-    # Replaces flat cutoff with diagnostic indexation debt assessment (Awaiting Crawl vs Discovered vs Crawled vs Technical)
-    if state_conn is not None and hasattr(state_conn, "execute") and not force:
-        try:
-            insp_rows = state_conn.execute(
-                "SELECT coverage_state, last_crawl_time FROM url_inspections WHERE url LIKE ?",
-                (f"%{clean_domain}%",),
-            ).fetchall()
-            if insp_rows:
-                total_insp = len(insp_rows)
-                indexed = 0
-                discovered_not_indexed = 0
-                crawled_not_indexed = 0
-                duplicate_canonical = 0
-                technical_excluded = 0
-                awaiting_crawl = 0
-
-                for cov, last_crawl in insp_rows:
-                    cov_clean = str(cov or "").strip().lower()
-                    if cov_clean == "submitted and indexed":
-                        indexed += 1
-                    elif "discovered" in cov_clean:
-                        discovered_not_indexed += 1
-                    elif "crawled" in cov_clean:
-                        crawled_not_indexed += 1
-                    elif "duplicate" in cov_clean or "canonical" in cov_clean:
-                        duplicate_canonical += 1
-                    elif "noindex" in cov_clean or "404" in cov_clean or "5" in cov_clean:
-                        technical_excluded += 1
-                    elif "unknown" in cov_clean or not last_crawl:
-                        awaiting_crawl += 1
-                    else:
-                        awaiting_crawl += 1
-
-                eligible_pool = total_insp - awaiting_crawl
-                debt_count = discovered_not_indexed + crawled_not_indexed + duplicate_canonical + technical_excluded
-                adjusted_debt_ratio = debt_count / max(1, eligible_pool)
-
-                if eligible_pool >= 10 and adjusted_debt_ratio > 0.50:
-                    # Continue candidate discovery, but restrict admission of new programmatic routes
-                    return candidates, {
-                        "expanded": False,
-                        "admission_restricted": True,
-                        "pending_before": pending,
-                        "reason": "admission_restricted_indexation_debt",
-                        "adjusted_debt_ratio": round(adjusted_debt_ratio, 2),
-                        "total_inspected": total_insp,
-                        "eligible_pool": eligible_pool,
-                        "indexed": indexed,
-                        "discovered_not_indexed": discovered_not_indexed,
-                        "crawled_not_indexed": crawled_not_indexed,
-                        "duplicate_canonical": duplicate_canonical,
-                        "technical_excluded": technical_excluded,
-                        "awaiting_crawl": awaiting_crawl,
-                        "message": (
-                            f"Programmatic route admission restricted on {clean_domain}: age-adjusted indexation debt "
-                            f"{adjusted_debt_ratio:.1%} > 50.0% (Discovered: {discovered_not_indexed}, Crawled unindexed: {crawled_not_indexed}, "
-                            f"Technical: {technical_excluded}, Awaiting crawl: {awaiting_crawl}, Indexed: {indexed}). "
-                            f"Discovery active; new page publishing paused."
-                        ),
-                    }
-        except Exception:
-            pass
 
     expanded: list[dict[str, Any]] = list(candidates)
     seen_keys: set[tuple[str, str]] = {

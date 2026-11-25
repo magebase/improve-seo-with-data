@@ -26,6 +26,13 @@ def test_unbuilt_routes_collapse_triplets():
             },
             "source": "orphan_route",
             "rank_score": 10.0,
+            # A launch needs real demand, live data, sibling uniqueness and
+            # indexed inlinks; position alone is not evidence.
+            "search_volume_log": 3.0,
+            "template_index_rate": 0.8,
+            "unique_data_fields": 8,
+            "sibling_similarity": 0.2,
+            "inlinks_from_indexed": 5,
         }
     ]
 
@@ -86,11 +93,11 @@ def test_purge_seo_alpha_zones_scoped_to_target_zone(monkeypatch):
     import sys
     from pathlib import Path
 
+    test_path = Path(__file__).resolve()
     candidate_roots = [
-        Path(__file__).resolve().parents[3] / "Projects" / "saas-factory",
-        Path(__file__).resolve().parents[5] / "Projects" / "saas-factory",
-        Path.home() / "Projects" / "saas-factory",
-    ]
+        parent / "Projects" / "saas-factory"
+        for parent in test_path.parents[1:7]
+    ] + [Path.home() / "Projects" / "saas-factory"]
     repo_root = next((p for p in candidate_roots if p.exists()), Path.home() / "Projects" / "saas-factory")
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))

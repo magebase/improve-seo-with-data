@@ -531,6 +531,8 @@ def test_detect_cannibalization_flags_multi_page_queries_beyond_top10():
             "query": "cheap insurance",
             "page": "https://a.com/p1/",
             "current_pos": 14.0,
+            "impressions": 1200.0,
+            "clicks": 10.0,
             "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
             "actions": ["REWRITE_SNIPPET_AND_TOP_300PX"],
         },
@@ -538,6 +540,8 @@ def test_detect_cannibalization_flags_multi_page_queries_beyond_top10():
             "query": "cheap insurance",
             "page": "https://a.com/p2/",
             "current_pos": 22.0,
+            "impressions": 800.0,
+            "clicks": 5.0,
             "prescribed_action": "REWRITE_SNIPPET_AND_TOP_300PX",
             "actions": ["REWRITE_SNIPPET_AND_TOP_300PX"],
         },
@@ -731,7 +735,9 @@ def test_waterfall_never_drops_below_tier_order_and_dedupes():
         suggest_fn=suggest_fn,
     )
     assert len(rows) >= 3
-    assert report["tiers_used"] == ["gsc", "catalog_matrix", "dfseo_suggest"]
+    # Real demand (DataForSEO suggestions) is consumed before synthetic matrix
+    # filler; once the need is met the matrix is never called.
+    assert report["tiers_used"] == ["gsc", "dfseo_suggest"]
 
 
 def test_pairwise_matrix_synthesizes_unbuilt_entity_pairs():
@@ -796,7 +802,22 @@ def test_compile_wave_backlog_fills_target_with_distinct_atomic_tasks():
     rows = [
         _scored("q1", "https://a.com/p1/", 8.0, 60.0, 0.0, 0.9, 6.0, shap_hub=-0.2),
         _scored("q2", "https://a.com/p2/", 12.0, 10.0, 1.0, 0.3, 2.0),
-        _scored("q3", "https://b.com/p3/", 95.0, 0.0, 0.0, 0.9, 1.0),
+        _scored(
+            "q3",
+            "https://b.com/p3/",
+            95.0,
+            0.0,
+            0.0,
+            0.9,
+            1.0,
+            # A new URL must carry real demand + live-data + uniqueness +
+            # link-equity evidence, not just a deep position.
+            search_volume_log=3.0,
+            template_index_rate=0.8,
+            unique_data_fields=8,
+            sibling_similarity=0.2,
+            inlinks_from_indexed=5,
+        ),
     ]
     tasks = compile_wave_backlog(rows, shipped_ledger=set(), target_wave_size=8)
     codes = [t["action_code"] for t in tasks]

@@ -102,6 +102,23 @@ CREATE TABLE IF NOT EXISTS url_inspections (
 );
 CREATE INDEX IF NOT EXISTS url_inspections_site_age
     ON url_inspections (site, inspected_at);
+CREATE TABLE IF NOT EXISTS page_launch_outcomes (
+    domain           TEXT NOT NULL,
+    url              TEXT NOT NULL,
+    template_family  TEXT NOT NULL DEFAULT 'root',
+    launched_at      TEXT NOT NULL,
+    first_crawled_at TEXT,
+    indexed_at       TEXT,
+    coverage_state   TEXT,
+    p_index_28d      REAL,
+    p_index_56d      REAL,
+    features_json    TEXT NOT NULL DEFAULT '{}',
+    source           TEXT NOT NULL DEFAULT 'programmatic_route',
+    updated_at       TEXT NOT NULL,
+    PRIMARY KEY (domain, url)
+);
+CREATE INDEX IF NOT EXISTS page_launch_outcomes_family
+    ON page_launch_outcomes (domain, template_family, launched_at);
 CREATE TABLE IF NOT EXISTS url_inspection_budget (
     day         TEXT NOT NULL,
     spent       INTEGER NOT NULL DEFAULT 0,

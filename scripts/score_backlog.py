@@ -38,6 +38,8 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from bootstrap_labels import generate_bootstrap_grades
+from indexation_forecast import MODEL_PATH as INDEXATION_MODEL_PATH
+from indexation_forecast import IndexationModel, record_launches_from_tasks
 from fleet_state import (
     DEFAULT_TYPE_CAPS,
     DEFAULT_TYPE_CAP_FALLBACK,
@@ -332,6 +334,10 @@ def compute_opportunity_intelligence(
     elif cur_pos <= 3.0 and cur_ctr >= target_ctr:
         decision_class = "NO_ACTION"  # Protect winners
     elif impr < 10 and cur_pos > 30.0:
+        decision_class = "OBSERVE"
+    elif impr < 200.0 and clicks <= 0.0 and cur_pos > 30.0:
+        # A deep-tail row with almost no impressions and zero clicks has no
+        # evidence of demand; a high model score must not turn it into SHIP.
         decision_class = "OBSERVE"
     elif priority_score >= 1.5 and cann_risk < 0.40 and decision_confidence >= 0.40:
         decision_class = "SHIP"
@@ -1173,6 +1179,12 @@ def main(argv: list[str] | None = None) -> int:
         # across ALL scored rows (600-900 tasks), so runs 2..50 lease from the
         # cursor without re-running collection/scoring. The JSON output keeps
         # only the actionable --compile-wave slice of that inventory.
+        # The indexation model is the launch authority for NEW URLs.  When no
+        # trained bundle exists the transparent cold-start prior still applies;
+        # a synthetic pair with zero demand and no evidence cannot become a page.
+        launch_model = IndexationModel.load(
+            os.environ.get("INDEXATION_MODEL_PATH", INDEXATION_MODEL_PATH)
+        )
         full_backlog = compile_wave_backlog(
             all_scored,
             shipped_ledger=cooled_keys,
@@ -1183,6 +1195,7 @@ def main(argv: list[str] | None = None) -> int:
             sibling_counts=derive_sibling_counts(all_scored),
             known_live_urls=known_live_urls,
             max_per_family=0,
+            launch_model=launch_model,
         )
         wave_tasks = full_backlog[: max(0, args.compile_wave)]
         print(
@@ -1214,6 +1227,12 @@ def main(argv: list[str] | None = None) -> int:
         conn = connect_state_db(args.state_db)
         pending = full_backlog + queue if args.compile_wave > 0 else queue
         added = enqueue_tasks(conn, pending)
+        recorded_launches = record_launches_from_tasks(conn, pending)
+        if recorded_launches:
+            print(
+                f"Indexation ledger: recorded {recorded_launches} new-route launch(es) "
+                "for 7/28/56-day coverage learning."
+            )
         # Pre-lease hygiene on the freshly enqueued backlog too (junk from the
         # compile never reaches the lease), then the stratified lease with
         # BOTH diversity axes: route-family caps AND task-type quotas.
