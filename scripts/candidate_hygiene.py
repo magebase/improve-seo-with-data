@@ -144,6 +144,25 @@ def is_valid_seo_candidate(domain: str, url_path_or_url: str, query: str) -> boo
     return not (collapsed_q.startswith(base_stem) and len(collapsed_q) <= len(base_stem) + 5)
 
 
+def is_lookup_query(query: str) -> bool:
+    """True for a phone number or a bare numeric prefix.
+
+    Such a query is a lookup, not demand a heading can serve: ``5493812234024``
+    or ``0082`` can never be answered by an ``<h2>``. Emitting heading work for
+    one produces a task no page can satisfy, which is how 7 numeric-query rows
+    reached the live PENDING cursor and one reached a compiled wave slice.
+    """
+    text = (query or "").strip()
+    if not text:
+        return False
+    digits = sum(1 for c in text if c.isdigit())
+    letters = sum(1 for c in text if c.isalpha())
+    if digits == 0:
+        return False
+    # Bare numeric prefix, or a dialable number with at most two stray letters.
+    return letters == 0 or (digits >= 7 and letters <= 2)
+
+
 def _norm_page_key(page: str) -> str:
     raw = (page or "").strip().rstrip("/")
     return raw.lower()

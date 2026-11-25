@@ -32,6 +32,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Sequence
 
+from candidate_hygiene import is_lookup_query
+
 DEFAULT_LOCK_REGISTRY = Path.home() / ".seo_fleet" / "worktree_locks.json"
 LOCK_HEARTBEAT_TTL_HOURS = 2
 
@@ -144,8 +146,8 @@ def is_clean_english_query(query: str) -> bool:
     """True when a query is single-heading-addressable English work.
 
     Rejects: operator/URL junk, uppercase Boolean operators, negation terms,
-    queries outside the 4-60 char / <=10 word band, >15% non-ASCII text, and
-    probable non-English queries.
+    phone numbers and bare numeric prefixes, queries outside the 4-60 char /
+    <=10 word band, >15% non-ASCII text, and probable non-English queries.
     """
     if not query or not query.strip():
         return False
@@ -155,6 +157,8 @@ def is_clean_english_query(query: str) -> bool:
     if len(query.split()) > 10:
         return False
     if JUNK_QUERY_RE.search(query) or BOOLEAN_OPERATOR_RE.search(query):
+        return False
+    if is_lookup_query(query):
         return False
     letters = [c for c in query if c.isalpha()]
     if letters:
@@ -347,6 +351,7 @@ def preflight_hygiene(
     locked_path_prefixes: Sequence[str] = (),
     max_intent_tasks_per_page: int = 2,
     now: Optional[datetime] = None,
+    domain: Optional[str] = None,
 ) -> Dict[str, int]:
     """Scrub the PENDING cursor BEFORE the stratified lease runs.
 
@@ -364,9 +369,15 @@ def preflight_hygiene(
     canonicalize_backlog_action_codes(conn)
     same_query_graduated = auto_graduate_shipped_query_siblings(conn)
     title_locked = enforce_url_title_lock(conn)
-    rows = conn.execute(
-        "SELECT id, page, query, action_code, file_target, domain FROM atomic_task_backlog WHERE status = 'PENDING'"
-    ).fetchall()
+    query_sql = (
+        "SELECT id, page, query, action_code, file_target, domain, expected_value, decision_class "
+        "FROM atomic_task_backlog WHERE status = 'PENDING'"
+    )
+    params = ()
+    if domain:
+        query_sql += " AND domain = ?"
+        params = (domain,)
+    rows = conn.execute(query_sql, params).fetchall()
     report = {
         "rejected": 0,
         "graduated": 0,
@@ -383,8 +394,12 @@ def preflight_hygiene(
         ):
             intent_counts[page] = intent_counts.get(page, 0) + 1
 
-    for task_id, page, query, action_code, file_target, domain in rows:
-        if domain and page and page.startswith("http") and not is_valid_property_host(page, domain):
+    for task_id, page, query, action_code, file_target, d_name, expected_value, decision_class in rows:
+        if (expected_value is not None and expected_value < 0.0) or (decision_class or "").upper() == "OBSERVE":
+            _cas_status(conn, task_id, "REJECTED", shipped=False, stamp=stamp)
+            report["rejected"] += 1
+            continue
+        if d_name and page and page.startswith("http") and not is_valid_property_host(page, d_name):
             _cas_status(conn, task_id, "REJECTED", shipped=False, stamp=stamp)
             report["rejected"] += 1
             continue

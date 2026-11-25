@@ -64,6 +64,7 @@ from ltr_ranker import (
     save_bundle,
     slice_per_domain,
     split_action_queue,
+    partition_demand_and_rescue,
     train_seo_ranker,
     derive_sibling_counts,
 )
@@ -346,12 +347,25 @@ def compute_opportunity_intelligence(
     else:
         decision_class = "OBSERVE"
 
+    # 11. Economic Sign Gate (v2.4): an expected loss is never shippable work.
+    # priority_score deliberately keeps a positive proxy when EV < 0 so that
+    # OBSERVE rows still have a stable ordering, but that proxy must never
+    # promote a losing row into SHIP/EXPERIMENT. Without this gate the live
+    # 2026-11-16 run shipped 2 SHIP + 11 EXPERIMENT rows whose net expected
+    # value ran from -$1.22 to -$2.49: edits to 1-15 impression queries that
+    # cannot repay their own labor.
+    ev_gate_blocked = False
+    if ev <= 0.0 and decision_class in {"SHIP", "EXPERIMENT"}:
+        decision_class = "OBSERVE"
+        ev_gate_blocked = True
+
     return {
         "expected_value": round(ev, 4),
         "cannibalization_risk": round(cann_risk, 4),
         "confidence": round(decision_confidence, 4),
         "priority_score": round(priority_score, 4),
         "decision_class": decision_class,
+        "ev_gate_blocked": ev_gate_blocked,
         # Statistical Decomposition (v2.2):
         "posterior_success_prob": round(p_success, 4),
         "is_cold_start": is_cold_start,
@@ -1026,6 +1040,7 @@ def main(argv: list[str] | None = None) -> int:
                 fast_conn,
                 route_intent_map=intent_map,
                 locked_path_prefixes=locked,
+                domain=domain,
             )
             leased = _lease(
                 fast_conn,
@@ -1093,6 +1108,10 @@ def main(argv: list[str] | None = None) -> int:
         state_conn.close()
     all_scored = list(result["rows"])
     scored = list(result["rows"])
+    # The compiled backlog inventory is demand-only: an orphan route's rescue
+    # work is discovered from the `route_rescue` list, never from a heading
+    # task synthesized off a slug-derived query.
+    demand_scored, _rescue_all = partition_demand_and_rescue(all_scored)
 
     # Cannibalization detector: BEFORE the per-query collapse (which discards
     # the competitor rows), flag queries carried by >= 2 distinct pages all
@@ -1136,9 +1155,24 @@ def main(argv: list[str] | None = None) -> int:
         1, int(args.queue_size * EXPLOIT_SLOTS / (EXPLOIT_SLOTS + EXPLORE_SLOTS))
     )
     n_explore = max(1, args.queue_size - n_exploit)
+    # Route-rescue rows (zero-impression sitemap orphans, "Discovered - not
+    # indexed") carry degenerate features and tie with each other, so they may
+    # never spend a demand queue slot: Wave 111 produced 17 orphan slots of 20
+    # and buried every row that actually had impressions.
+    demand_rows, rescue_rows = partition_demand_and_rescue(scored)
     queue = split_action_queue(
-        scored, n_exploit=n_exploit, n_explore=n_explore, seed=args.seed
+        demand_rows, n_exploit=n_exploit, n_explore=n_explore, seed=args.seed
     )
+    print(
+        f"Demand/route-rescue partition: {len(demand_rows)} demand rows, "
+        f"{len(rescue_rows)} route-rescue rows (rescue rows never take a queue slot)."
+    )
+    blocked = sum(1 for row in demand_rows if row.get("ev_gate_blocked"))
+    if blocked:
+        print(
+            f"Economic sign gate: {blocked} row(s) demoted from SHIP/EXPERIMENT to OBSERVE "
+            "(net expected value <= 0 - an expected loss is never shippable work)."
+        )
 
     # Per-domain quota: a big property must not crowd young properties out of
     # the queue; slice the globally ranked queue per registered domain.
@@ -1186,13 +1220,13 @@ def main(argv: list[str] | None = None) -> int:
             os.environ.get("INDEXATION_MODEL_PATH", INDEXATION_MODEL_PATH)
         )
         full_backlog = compile_wave_backlog(
-            all_scored,
+            demand_scored,
             shipped_ledger=cooled_keys,
             target_wave_size=10_000_000,
             # Catalog families are derived from the rows themselves so a
             # top-ranked child route propagates its fix across every sibling
             # without a hand-maintained prefix map.
-            sibling_counts=derive_sibling_counts(all_scored),
+            sibling_counts=derive_sibling_counts(demand_scored),
             known_live_urls=known_live_urls,
             max_per_family=0,
             launch_model=launch_model,
@@ -1211,6 +1245,7 @@ def main(argv: list[str] | None = None) -> int:
                 "site": payload.get("site"),
                 "scoring_mode": result["mode"],
                 "queue": queue,
+                "route_rescue": rescue_rows[:50],
                 "consolidation": consolidation_tasks,
                 "wave_tasks": wave_tasks,
             },
@@ -1243,6 +1278,7 @@ def main(argv: list[str] | None = None) -> int:
             conn,
             route_intent_map=intent_map,
             locked_path_prefixes=locked,
+            domain=domain,
         )
         lease_n = args.lease_size if args.lease_size > 0 else len(pending)
         # Stratified lease: /number/* (or any single template family) can

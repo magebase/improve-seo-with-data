@@ -831,10 +831,10 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
         res = verify_calculator_functionality(url, html)
     elif "smsriver.com" in host or "/number" in path or "/sms" in path:
         res = verify_smsriver_functionality(url, html)
+    elif "/directory/" in path or "/niche/" in path or "/formats/" in path or path.rstrip("/") in ("/calculators", "/tools"):
+        res = verify_directory_functionality(url, html)
     elif "figiva.com" in host or "/gpa" in path:
         res = verify_calculator_functionality(url, html)
-    elif "/directory/" in path or "/niche/" in path or "/formats/" in path:
-        res = verify_directory_functionality(url, html)
     else:
         res = FunctionalTestResult(
             url=url,
