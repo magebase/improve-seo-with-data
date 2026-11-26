@@ -1184,3 +1184,44 @@ def split_action_queue(
         entry["slot"] = "explore"
         queue.append(entry)
     return queue
+
+
+LAUNCH_ACTIONS = {"LAUNCH_PSEO_ROUTE", "CREATE_PROGRAMMATIC_ROUTE"}
+
+
+def filter_launch_queue(
+    queue: list[dict[str, Any]],
+    launch_model: IndexationModel | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Remove new-URL actions that fail the indexation launch gate.
+
+    ``split_action_queue`` can surface ``LAUNCH_PSEO_ROUTE`` for an existing
+    deep-tail row.  That queue is consumed directly by agents, so the gate
+    must run here too; otherwise a page can be created through the queue while
+    the atomic wave compiler is correctly blocking it.
+    """
+    kept: list[dict[str, Any]] = []
+    blocked: list[dict[str, Any]] = []
+    for row in queue:
+        action = str(
+            row.get("action_code") or row.get("prescribed_action") or ""
+        ).upper()
+        if action not in LAUNCH_ACTIONS:
+            kept.append(row)
+            continue
+        decision = evaluate_launch_candidate(row, model=launch_model)
+        if decision.eligible:
+            row["p_index_28d"] = round(decision.p_index_28d, 4)
+            row["p_index_56d"] = round(decision.p_index_56d, 4)
+            row["launch_evidence"] = decision.evidence
+            kept.append(row)
+        else:
+            blocked.append(
+                {
+                    "page": row.get("page"),
+                    "query": row.get("query"),
+                    "action": action,
+                    "reasons": decision.reasons,
+                }
+            )
+    return kept, blocked

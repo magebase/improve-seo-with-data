@@ -484,7 +484,8 @@ def load_cached_serp_volumes(
     volumes: dict[str, float] = {}
     for query in queries:
         row = conn.execute(
-            "SELECT search_volume, fetched_at FROM dfs_serp_cache WHERE query = ?",
+            "SELECT search_volume, fetched_at FROM dfs_serp_cache "
+            "WHERE lower(query) = lower(?) ORDER BY fetched_at DESC LIMIT 1",
             (query,),
         ).fetchone()
         if not row or row[0] is None:

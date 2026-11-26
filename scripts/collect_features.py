@@ -1974,14 +1974,10 @@ def main(argv: list[str] | None = None) -> int:
                 "serp_pixel_crowding": 0.0,
             }
         )
+        # Only the cached Keywords-Data volume is a real demand signal.
+        # SERP items can contain unrelated Labs keyword_info blocks; using the
+        # first one leaked high volumes onto unrelated queries.
         volume = volume_by_query.get(cand["query"])
-        if volume is None:
-            for item in serp_items:
-                if item.get("type") == "keyword_info" or "keyword_volume" in item:
-                    volume = (
-                        float(item.get("keyword_volume") or item.get("vol") or 0) or None
-                    )
-                    break
         volume_log = (
             math.log10(volume + 1)
             if volume

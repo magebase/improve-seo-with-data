@@ -23,10 +23,10 @@ def test_cached_volume_is_reused_without_a_network_call():
 
 def test_volume_survives_a_serp_cache_refresh():
     conn = connect_state_db(":memory:")
-    save_serp_volumes(conn, {"q": 440.0})
-    upsert_serp_cache(conn, "q", [{"type": "organic", "title": "Q"}], ["organic"])
-    volumes = load_cached_serp_volumes(conn, ["q"])
-    assert volumes == {"q": 440.0}
+    save_serp_volumes(conn, {"Receive SMS Germany": 440.0})
+    upsert_serp_cache(conn, "Receive SMS Germany", [{"type": "organic", "title": "Q"}], ["organic"])
+    volumes = load_cached_serp_volumes(conn, ["receive sms germany"])
+    assert volumes == {"receive sms germany": 440.0}
     conn.close()
 
 

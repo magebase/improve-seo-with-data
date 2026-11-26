@@ -55,6 +55,7 @@ from ltr_ranker import (
     compile_wave_backlog,
     detect_cannibalization,
     filter_cooldown,
+    filter_launch_queue,
     heuristic_base_score,
     load_bundle,
     load_cooldown_keys,
@@ -1163,6 +1164,17 @@ def main(argv: list[str] | None = None) -> int:
     queue = split_action_queue(
         demand_rows, n_exploit=n_exploit, n_explore=n_explore, seed=args.seed
     )
+    # The queue is consumed directly by agents.  Apply the same indexation
+    # gate the atomic compiler uses, so LAUNCH_PSEO_ROUTE cannot bypass it.
+    launch_model = IndexationModel.load(
+        os.environ.get("INDEXATION_MODEL_PATH", INDEXATION_MODEL_PATH)
+    )
+    queue, launch_blocked = filter_launch_queue(queue, launch_model)
+    if launch_blocked:
+        print(
+            f"Indexation launch gate: removed {len(launch_blocked)} queue task(s) "
+            "without demand/data/uniqueness/link evidence."
+        )
     print(
         f"Demand/route-rescue partition: {len(demand_rows)} demand rows, "
         f"{len(rescue_rows)} route-rescue rows (rescue rows never take a queue slot)."
@@ -1213,12 +1225,6 @@ def main(argv: list[str] | None = None) -> int:
         # across ALL scored rows (600-900 tasks), so runs 2..50 lease from the
         # cursor without re-running collection/scoring. The JSON output keeps
         # only the actionable --compile-wave slice of that inventory.
-        # The indexation model is the launch authority for NEW URLs.  When no
-        # trained bundle exists the transparent cold-start prior still applies;
-        # a synthetic pair with zero demand and no evidence cannot become a page.
-        launch_model = IndexationModel.load(
-            os.environ.get("INDEXATION_MODEL_PATH", INDEXATION_MODEL_PATH)
-        )
         full_backlog = compile_wave_backlog(
             demand_scored,
             shipped_ledger=cooled_keys,
@@ -1278,7 +1284,7 @@ def main(argv: list[str] | None = None) -> int:
             conn,
             route_intent_map=intent_map,
             locked_path_prefixes=locked,
-            domain=domain,
+            domain=target_domain,
         )
         lease_n = args.lease_size if args.lease_size > 0 else len(pending)
         # Stratified lease: /number/* (or any single template family) can

@@ -78,6 +78,28 @@ def test_zero_inlinks_blocks_the_route():
     assert tasks == []
 
 
+def test_queue_launch_action_without_evidence_is_removed():
+    from ltr_ranker import filter_launch_queue
+
+    queue = [
+        {
+            "action_code": "LAUNCH_PSEO_ROUTE",
+            "query": "new country service pair",
+            "page": "https://example.com/receive-sms/de/whatsapp/",
+            "current_pos": 100.0,
+            "impressions": 0.0,
+        },
+        {
+            "action_code": "INJECT_EXACT_TITLE_AND_H2",
+            "query": "existing page",
+            "page": "https://example.com/existing/",
+        },
+    ]
+    kept, blocked = filter_launch_queue(queue)
+    assert [row["action_code"] for row in kept] == ["INJECT_EXACT_TITLE_AND_H2"]
+    assert blocked[0]["reasons"]
+
+
 def test_legacy_override_is_explicit_and_never_the_default():
     row = {
         "query": "legacy synthetic",
