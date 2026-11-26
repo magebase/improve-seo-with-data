@@ -34,6 +34,19 @@ ROW_RE = re.compile(r"<tr>(.*?)</tr>", re.DOTALL)
 CELL_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.DOTALL)
 TAG_RE = re.compile(r"<[^>]+>")
 TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+BOILERPLATE_RE = re.compile(
+    r"(every figure below is computed.*?vendor claim\.|"
+    r"observed map concentration:|country concentration|live leaders:|"
+    r"the remaining \d+ live servers make up the rest.*?largest rows\.|"
+    r"methodology: one snapshot.*?never inferred\.|"
+    r"low current live sample:.*?transient dip\.|"
+    r"pilot context:|live status /|server status and player count|"
+    r"measured benchmark|countries represented|maps observed|"
+    r"pilot player rank|share of pilot players|average players / server|"
+    r"players now|online servers|median ping|country distribution|"
+    r"observed maps|largest live servers|snapshot:)",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def _fetch(url: str, timeout: int = 20) -> str:
@@ -68,11 +81,15 @@ def _extract(html: str) -> dict[str, object]:
     )
     title = _text(TITLE_RE.search(html).group(1)) if TITLE_RE.search(html) else ""
     body = _text(benchmark_match.group(1)) if benchmark_match else _text(html)
+    body = BOILERPLATE_RE.sub(" ", body)
+    body = re.sub(r"\s+", " ", body).strip()
     return {
         "metrics": metrics,
         "rows": rows,
         "title": title,
-        "entity": re.split(r"\s+Server Benchmarks", title, maxsplit=1)[0],
+        "entity": re.split(
+            r"\s+(?:Server Benchmarks|Server Status)", title, maxsplit=1
+        )[0],
         "text": body,
         "hash": hashlib.sha256(html.encode("utf-8")).hexdigest(),
     }
