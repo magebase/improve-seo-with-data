@@ -873,7 +873,7 @@ def actions_from_indexation(
     actions: list[GrowthAction] = []
     for url, coverage, last_crawl in rows:
         page = str(url or "").strip()
-        if allowed_urls and _normalize_page(page) not in allowed_urls:
+        if allowed_urls is not None and _normalize_page(page) not in allowed_urls:
             continue
         if not page or page in seen:
             continue
@@ -1107,7 +1107,7 @@ def build_growth_plan(
         (_row_domain(row, "") for row in rows if _row_domain(row, "")), ""
     )
     rows = hydrate_inspection_states(rows, conn, domain=domain)
-    if sitemap_urls:
+    if sitemap_urls is not None:
         rows = [
             row
             for row in rows
