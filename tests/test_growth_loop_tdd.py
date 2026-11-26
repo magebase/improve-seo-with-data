@@ -193,3 +193,35 @@ def test_numeric_phone_queries_never_become_title_actions():
     queries = {action["query"] for action in plan["actions"]}
     assert "5493812234024" not in queries
     assert "receive sms usa" in queries
+
+
+def test_cached_inspection_failure_becomes_indexation_action():
+    conn = connect_state_db(":memory:")
+    ensure_growth_schema(conn)
+    conn.execute(
+        "INSERT INTO url_inspections (url, site, coverage_state, indexing_state, inspected_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (
+            "https://example.com/orphan/",
+            "sc-domain:example.com",
+            "Discovered - currently not indexed",
+            "INDEXING_ALLOWED",
+            "2026-11-26T00:00:00+00:00",
+        ),
+    )
+    conn.commit()
+
+    plan = build_growth_plan([], domain="example.com", conn=conn)
+    assert plan["actions"]
+    assert plan["actions"][0]["action_code"] == "REQUEST_INDEXING"
+    assert plan["actions"][0]["page"] == "https://example.com/orphan/"
+    assert plan["guarantee"] in {"maintenance_only", "information_only"}
+
+
+def test_domain_scoped_plan_never_falls_back_to_another_domain():
+    plan = build_growth_plan(
+        [_row(page="https://figiva.com/calculators/", query="crypto calculator")],
+        domain="smsriver.com",
+    )
+    assert plan["guarantee"] == "information_only"
+    assert plan["actions"][0]["page"] == "https://smsriver.com/"

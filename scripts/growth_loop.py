@@ -688,6 +688,65 @@ def actions_from_repair_queue(
     return actions
 
 
+def actions_from_indexation(
+    conn: sqlite3.Connection | None,
+    *,
+    domain: str,
+    now: datetime | None = None,
+) -> list[GrowthAction]:
+    """Turn cached URL-Inspection failures into explicit indexation fixes."""
+    if conn is None or not domain:
+        return []
+    try:
+        rows = list(
+            conn.execute(
+                "SELECT url, coverage_state, last_crawl_time FROM url_inspections "
+                "WHERE site LIKE ? ORDER BY inspected_at DESC LIMIT 200",
+                (f"%{domain}%",),
+            )
+        )
+    except sqlite3.Error:
+        return []
+    seen: set[str] = set()
+    actions: list[GrowthAction] = []
+    for url, coverage, last_crawl in rows:
+        page = str(url or "").strip()
+        if not page or page in seen:
+            continue
+        seen.add(page)
+        state = str(coverage or "").lower()
+        if not state or "submitted and indexed" in state or state == "indexed":
+            continue
+        if "discovered" in state:
+            code = "REQUEST_INDEXING"
+            reason = "discovered_not_indexed"
+        elif "duplicate" in state or "canonical" in state:
+            code = "FIX_INDEXABILITY"
+            reason = "canonical_or_duplicate"
+        else:
+            code = "FIX_INDEXABILITY"
+            reason = "coverage_not_indexed"
+        actions.append(
+            _make_action(
+                domain=domain,
+                page=page,
+                query="",
+                action_code=code,
+                p_success=SUCCESS_PRIOR.get(code, 0.45),
+                lift_clicks=0.0,
+                evidence={
+                    "source": "url_inspections",
+                    "reason": reason,
+                    "coverage_state": coverage,
+                    "last_crawl_time": last_crawl,
+                    "honest_note": "Indexation fix; no click lift claimed before impressions exist.",
+                },
+                now=now,
+            )
+        )
+    return actions
+
+
 def _dedupe_actions(actions: Iterable[GrowthAction]) -> list[GrowthAction]:
     best: dict[str, GrowthAction] = {}
     for action in actions:
@@ -730,7 +789,11 @@ def _fallback_action(
     That action does not claim a ranking lift; the plan reports
     ``information_only`` honestly.
     """
-    candidates = list(rows)
+    candidates = [
+        row
+        for row in rows
+        if not domain or _row_domain(row, domain).lower() == domain.lower()
+    ]
     best: dict[str, Any] | None = None
     for row in candidates:
         page, query = _row_pages(row)
@@ -800,6 +863,7 @@ def build_growth_plan(
     all_actions.extend(actions_from_queue(queue or [], domain=domain, now=now))
     all_actions.extend(actions_from_features(rows, domain=domain, now=now))
     all_actions.extend(actions_from_repair_queue(conn, domain=domain, now=now))
+    all_actions.extend(actions_from_indexation(conn, domain=domain, now=now))
     actions = _dedupe_actions(all_actions)
 
     blocked = _open_or_recent_keys(
