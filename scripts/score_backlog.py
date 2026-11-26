@@ -1038,6 +1038,32 @@ def merge_leased_into_output(output_path: str, leased: list, hygiene: dict) -> N
         json.dump(payload, fh, indent=2)
 
 
+def _attach_growth_plan(output_path: str, plan: dict[str, Any]) -> None:
+    """Attach the non-empty execution plan to the queue artifact."""
+    try:
+        with open(output_path, encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception:
+        return
+    payload["growth_plan"] = plan
+    with open(output_path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2)
+
+
+def _print_growth_plan(plan: dict[str, Any]) -> None:
+    print(
+        "Growth loop: "
+        f"{plan.get('guarantee')} | {len(plan.get('actions', []))} action(s) "
+        f"({plan.get('reason', '')})"
+    )
+    for action in plan.get("actions", [])[:5]:
+        print(
+            f"  {action['action_code']:<32} {action['page'][:60]:<60} "
+            f"lift={action['expected_clicks_lower']:.2f}/90d "
+            f"p10={action['evidence'].get('ranking', {}).get('p_top10', '-')}"
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--features", default="data/ltr_features.json")
@@ -1181,9 +1207,22 @@ def main(argv: list[str] | None = None) -> int:
                 task["top_shap_drivers"] = extract_top_shap_string(task)
                 task["selection_rationale"] = extract_selection_rationale(task)
             os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+            from growth_loop import build_growth_plan
+
+            growth_plan = build_growth_plan(
+                [],
+                domain=args.domain or "",
+                queue=leased,
+                conn=fast_conn,
+            )
             with open(args.output, "w", encoding="utf-8") as fh:
                 json.dump(
-                    {"fast_path": True, "hygiene": hygiene, "leased": leased},
+                    {
+                        "fast_path": True,
+                        "hygiene": hygiene,
+                        "leased": leased,
+                        "growth_plan": growth_plan,
+                    },
                     fh,
                     indent=2,
                 )
@@ -1210,6 +1249,7 @@ def main(argv: list[str] | None = None) -> int:
                     leased, model_mode="cached_bundle_fast_path"
                 )
             )
+            _print_growth_plan(growth_plan)
             fast_conn.close()
             return 0
         fast_conn.close()
@@ -1500,14 +1540,31 @@ def main(argv: list[str] | None = None) -> int:
             task["top_shap_drivers"] = extract_top_shap_string(task)
             task["selection_rationale"] = extract_selection_rationale(task)
         merge_leased_into_output(args.output, leased, hygiene)
+        from growth_loop import build_growth_plan
+
+        growth_plan = build_growth_plan(
+            rows,
+            domain=str(target_domain or ""),
+            queue=queue + leased,
+            conn=conn,
+        )
         print(
             format_model_decision_summary(
                 leased, queue=queue, model_mode=result["mode"]
             )
         )
+        _print_growth_plan(growth_plan)
         conn.close()
+        _attach_growth_plan(args.output, growth_plan)
     else:
+        from growth_loop import build_growth_plan
+
+        growth_plan = build_growth_plan(
+            rows, domain=str(target_domain or ""), queue=queue
+        )
         print(format_model_decision_summary([], queue=queue, model_mode=result["mode"]))
+        _print_growth_plan(growth_plan)
+        _attach_growth_plan(args.output, growth_plan)
     if consolidation_tasks:
         print(
             f"\nCannibalization: {len(consolidation_tasks)} CONSOLIDATE_CANNIBALIZED_URLS task(s):"

@@ -282,6 +282,45 @@ CREATE TABLE IF NOT EXISTS repair_actions (
 );
 CREATE INDEX IF NOT EXISTS repair_actions_status
     ON repair_actions (domain, status);
+CREATE TABLE IF NOT EXISTS growth_actions (
+    action_key          TEXT PRIMARY KEY,
+    domain              TEXT NOT NULL,
+    page                TEXT NOT NULL,
+    query               TEXT NOT NULL DEFAULT '',
+    action_code         TEXT NOT NULL,
+    kind                TEXT NOT NULL,
+    target              TEXT NOT NULL DEFAULT '',
+    status              TEXT NOT NULL DEFAULT 'OPEN',
+    p_success           REAL NOT NULL DEFAULT 0.0,
+    p_success_lower     REAL NOT NULL DEFAULT 0.0,
+    expected_clicks_90d REAL NOT NULL DEFAULT 0.0,
+    expected_clicks_lower REAL NOT NULL DEFAULT 0.0,
+    expected_value      REAL NOT NULL DEFAULT 0.0,
+    effort_hours        REAL NOT NULL DEFAULT 0.0,
+    score               REAL NOT NULL DEFAULT 0.0,
+    baseline_json       TEXT NOT NULL DEFAULT '{}',
+    evidence_json       TEXT NOT NULL DEFAULT '{}',
+    created_at          TEXT NOT NULL,
+    due_at              TEXT,
+    completed_at        TEXT,
+    outcome_json        TEXT,
+    updated_at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS growth_actions_domain_status
+    ON growth_actions (domain, status, due_at);
+CREATE INDEX IF NOT EXISTS growth_actions_due
+    ON growth_actions (status, due_at);
+CREATE TABLE IF NOT EXISTS growth_runs (
+    run_id          TEXT PRIMARY KEY,
+    domain          TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    action_count    INTEGER NOT NULL DEFAULT 0,
+    positive_count  INTEGER NOT NULL DEFAULT 0,
+    guarantee       TEXT NOT NULL DEFAULT '',
+    manifest_json   TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS growth_runs_domain_created
+    ON growth_runs (domain, created_at);
 """
 
 

@@ -216,7 +216,76 @@ python scripts/seo_factory.py cohort-measure --cohort coh_...   --day 21 --index
 
 **Discipline:** an existing domain below 65% active-sitemap indexation does not get a new-template pilot. Run `repair-plan` and `ENRICH` first. A fresh domain may start with 1–2 Tier A authority assets plus one 5–15 URL Tier B pilot.
 
-### 4.3 Mandatory Invocation Output: Machine Learning Model Transparency & SHAP Attribution
+### 4.3 The Positive-Expectation Invocation Loop (v3.0)
+
+The earlier versions of this skill were **gate-heavy**: they could correctly refuse a bad page and still return an empty queue. That is a safety property, not a growth property. The 2026-11-26 SMSRiver run exposed the gap: 1,064 candidates produced 0 new routes, 867 existing pages were identified as enrichment work, and the operator was left holding a diagnosis rather than an executable next step.
+
+**Self-critique of the pre-v3 loop**
+
+1. **A score is not an action.** The ranker ranked *candidates*; it did not own a portfolio of launch, enrichment, internal-link, technical and measurement actions with marginal cost.
+2. **The indexation gate had a zero-solution.** When every new route failed, the run had no fallback that improved the pages already indexed. A filter that returns zero does not increase indexation or ranking.
+3. **Indexation probability was modelled; ranking probability was not.** `evaluate_launch_candidate` answers "will Google index this?" but not "will this page reach the top 10?" The two probabilities have different features and different failure modes.
+4. **The fast cursor could lease zero.** `score_backlog.py --state-db` returns leased tasks only; a drained backlog produced a successful-looking empty invocation.
+5. **Repair, discovery and the queue were separate state machines.** `repair-plan`, `discover`, `score_backlog` and `experiment_ledger` did not share one action ledger, so the same work could be re-recommended or never closed.
+6. **No mandatory review surface.** The experiment ledger had DiD machinery, but no single command forced an owner to record baseline → action → due review → outcome for every intervention.
+7. **No honest guarantee label.** A measurement task and a ranking intervention were both rendered as "actions", letting an agent imply a ranking win where no ranking work happened.
+
+**The v3 invocation contract**
+
+Every invocation must call the planner and must end with a non-empty action plan:
+
+```bash
+python scripts/growth_loop.py plan \
+  --features data/ltr_features.json \
+  --action-queue data/action_queue.json \
+  --state-db ~/.seo_fleet/fleet_state.db \
+  --domain smsriver.com --limit 5 --record \
+  --output data/growth_plan.json
+
+# after shipping the selected action(s)
+python scripts/growth_loop.py complete <action_key> --commit-sha <sha>
+
+# at the 21-day review
+python scripts/growth_loop.py review --observations observations.json --domain smsriver.com
+python scripts/growth_loop.py status --domain smsriver.com
+```
+
+The planner draws from four portfolios and ranks them on a common click-equivalent scale:
+
+| Portfolio | Action codes | What "improvement" means |
+| :--- | :--- | :--- |
+| **GROW** | `LAUNCH_PSEO_ROUTE`, `CREATE_PROGRAMMATIC_ROUTE` | demand + payload contract + indexation gate cleared |
+| **IMPROVE** | `INJECT_SECONDARY_H2_ONLY`, `REWRITE_TITLE_META`, `ENRICH_UNIQUE_DATA`, `REFRESH_STALE_CONTENT` | measured GSC/SERP gap on an existing URL |
+| **CONNECT** | `INJECT_CONTEXTUAL_INLINK` | indexed link equity to a page that has impressions but too few inlinks |
+| **MAINTAIN** | `FIX_INDEXABILITY`, `REQUEST_INDEXING`, `CONSOLIDATE_CANNIBALIZED_URLS`, `PRUNE_OR_NOINDEX` | a crawl/index defect that blocks every other gain |
+| **MEASURE** | `MEASURE_OUTCOME`, `INSTRUMENT_TELEMETRY` | closes the loop or establishes the baseline; **never** claimed as a ranking lift |
+
+**Ranking probability prior.** `estimate_ranking_probability` returns `p_top10`, `p_top3`, their lower bounds, and the model name. It is a transparent logistic prior over position, SERP openness (forum share, competitor title match, pixel crowding), internal-link equity, content depth, demand and the weakest-top-10 referring-domain gap, multiplied by the indexation probability. It is deliberately **not** presented as a calibrated Google probability; it becomes empirical as `action_effectiveness_stats` accumulates real experiments. The action score is:
+
+$$
+\text{score}(a) = \frac{\mathbb{E}[\Delta\text{clicks}_{90d} \mid a] \times p_{lower}(a)}{\text{effort\_hours}(a)}
+$$
+
+**Honest guarantee labels.** The plan's `guarantee` field is one of:
+
+- `positive_expected_click_lift` — at least one selected action has a positive measured click-lift lower bound. This is the only label that supports a claim of likely improvement.
+- `maintenance_only` — only indexation/hygiene actions remain.
+- `fallback_existing_page` — no gate-cleared action exists, so a bounded title/description test on the highest-impression existing page is emitted.
+- `measurement_only` — all known actions are already open; the run measures instead of duplicating work.
+- `information_only` — no measured pages or backlog exist; the run instruments telemetry and says so.
+
+The planner never emits a `LAUNCH_*` action as a fallback. A zero-evidence domain receives telemetry work, not a fabricated page. An invocation is allowed to say **"no positive click-lift action exists; here is the measurement that unblocks the next one"** — that is honest and still advances the loop. What it may not do is return an empty queue or call a measurement a ranking win.
+
+**Stateful rules**
+
+- `growth_actions.action_key = hash(domain, page, query, action_code, target)`. An `OPEN` or recently `SHIPPED` key is never re-emitted inside the cooldown.
+- `plan --record` writes the run and opens its actions; `complete` marks the shipped action and sets a 21-day review date; `review` compares clicks/position against the recorded baseline and marks `SUCCESS` or `FAILED`.
+- A successful action raises the measured prior for that action/route family; a failed action is not repeated by the next run.
+- `measurement_only` and `information_only` runs are visible in `growth_runs` so an operator can see the difference between a week of experiments and a week of diagnostics.
+
+**The one guarantee this skill can honestly make:** every invocation leaves the site with either (a) a positive lower-bound click-lift action, (b) a bounded indexation fix, or (c) the measurement needed to make the next decision. It cannot guarantee Google will index or rank a page, and no honest SEO system can.
+
+### 4.4 Mandatory Invocation Output: Machine Learning Model Transparency & SHAP Attribution
 
 Every executing agent and autonomous SEO engine invocation MUST explicitly output the **Machine Learning Model Decision & SHAP Attribution Summary Block**. The operator and user must never have to guess whether a machine learning model was used, which features drove priority, or why specific tasks were selected.
 
@@ -446,6 +515,13 @@ python3 scripts/train_ranker.py --objective lambdarank    # for mature click-ric
 # Stage 3: score the backlog -> prescribed actions + calibrated Expected Clicks
 python3 scripts/score_backlog.py                      # auto-trains if no bundle exists
 
+# Stage 3.5: ALWAYS produce a non-empty positive-expectation plan, even when
+# the gate correctly rejects every new route. This is the execution loop.
+python3 scripts/growth_loop.py plan \
+    --features data/ltr_features.json --action-queue data/action_queue.json \
+    --state-db ~/.seo_fleet/fleet_state.db --domain smsriver.com \
+    --limit 5 --record --output data/growth_plan.json
+
 # Stage 4 (30 days later): join executed queue against fresh GSC, append
 # labeled outcomes, and retrain in one step
 python3 scripts/log_outcomes_and_retrain.py \
@@ -560,6 +636,7 @@ proxy timeouts — see Invariants B and E; the render-cost lesson stands.)
 | [`scripts/collect_features.py`](./scripts/collect_features.py) | **Stage 1 Collector:** pulls real GSC performance via the `seo` binary, enriches top candidates through the DataForSEO Standard Queue, computes the 8-feature ranking matrix, and writes `data/ltr_features.json`. |
 | [`scripts/train_ranker.py`](./scripts/train_ranker.py) | **Stage 2 Trainer:** trains the always-on rank_xendcg/LambdaRanker from the pooled outcome history (bootstrap SERP grades or real click buckets, adaptive `min_data_in_leaf`, heuristic init_score residual learning), calibrates margins onto Expected 30-Day Clicks when clicked outcomes exist, and persists the deployable bundle to `models/`. Refuses below 10 trainable rows. |
 | [`scripts/score_backlog.py`](./scripts/score_backlog.py) | **Stage 3 Scorer:** ranks the collected backlog with the trained bundle, auto-trains one from bootstrap grades when no bundle exists (>= 10 rows), prescribes SHAP-driven actions, and emits the 85/15 `data/action_queue.json`. |
+| [`scripts/growth_loop.py`](./scripts/growth_loop.py) | **Positive-Expectation Invocation Planner:** merges the ranked queue, measured GSC/SERP gaps, repair actions and due experiments into one non-empty action plan; scores actions by lower-bound expected click lift / effort, carries a transparent ranking-probability prior, dedupes OPEN/SHIPPED keys, and records the baseline → 21-day review loop. |
 | [`scripts/fleet_ingest.py`](./scripts/fleet_ingest.py) | **Stage 1.5 Fleet Harmonizer:** pools GSC `(query, page)` rows from ALL authenticated properties into one domain-agnostic 8-feature schema (log-scaled volume, URL-path cluster IDs, neutral SERP-feature fills), dedupes with max-clicks-wins, and writes the pooled training history that powers cross-domain day-one training. |
 | [`scripts/log_outcomes_and_retrain.py`](./scripts/log_outcomes_and_retrain.py) | **Stage 4 Loop Closer:** joins a previously executed queue against fresh GSC outcomes 30 days later, appends idempotently to the labeled history, and triggers retraining. |
 | [`scripts/setup_observability.py`](./scripts/setup_observability.py) | Scans, validates, heals, and exports telemetry manifests (`DataSourceManifest`) and drop-in tracking snippets. |
