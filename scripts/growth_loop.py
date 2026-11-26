@@ -1264,11 +1264,15 @@ def build_growth_plan(
                 now=now,
             )
         selected = [strategic]
-        guarantee = "below_materiality_floor"
-        reason = (
-            f"no action clears the {MATERIALITY_FLOOR_CLICKS_90D:g}-click/90d "
-            "floor; escalating to a Tier A asset instead of shipping busywork"
-        )
+        if strategic.action_code == "MEASURE_OUTCOME":
+            guarantee = "measurement_only"
+            reason = "all known strategic work is complete or in flight; measure it"
+        else:
+            guarantee = "below_materiality_floor"
+            reason = (
+                f"no action clears the {MATERIALITY_FLOOR_CLICKS_90D:g}-click/90d "
+                "floor; escalating to a Tier A asset instead of shipping busywork"
+            )
     else:
         fallback = _fallback_action(rows, domain=domain, now=now)
         if fallback.action_key in blocked:
