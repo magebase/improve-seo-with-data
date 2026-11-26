@@ -123,6 +123,10 @@ class UnifiedOptimizationTarget:
     potential_click_lift: float
     friction_penalty: float
     potential_impact_score: float
+    # Provenance: "measured" only when every contributing source was a real
+    # export; "demo" means at least one source fell back to illustrative data.
+    data_quality: str = "measured"
+    demo_sources: list = field(default_factory=list)
     # Behavioral & Technical telemetry
     rage_clicks: int = 0
     dead_clicks: int = 0
@@ -156,6 +160,7 @@ class MultiPlatformTelemetryIngestor:
         cf_zone_id: Optional[str] = None,
     ):
         self.site_url = site_url
+        self.demo_sources: set = set()
         self.gsc_key_path = gsc_key_path or os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GSC_KEY_PATH")
         self.clarity_project_id = clarity_project_id or os.getenv("CLARITY_PROJECT_ID")
         self.clarity_api_key = clarity_api_key or os.getenv("CLARITY_API_KEY")
@@ -180,6 +185,7 @@ class MultiPlatformTelemetryIngestor:
             except Exception as e:
                 print(f"[1/4 GSC] Live API query failed: {e}. Falling back to deterministic baseline telemetry.")
 
+        self.demo_sources.add("gsc")
         print("[1/4 GSC] SYNTHETIC baseline (NOT measured evidence) - live API query failed or no site URL.")
         return self._generate_synthetic_gsc()
 
@@ -355,6 +361,7 @@ class MultiPlatformTelemetryIngestor:
                 for item in data
             }
 
+        self.demo_sources.add("clarity")
         print(
             "[2/4 Clarity] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
             "pass --clarity-file with a real export or wire CLARITY_API_TOKEN before trusting friction penalties."
@@ -413,6 +420,9 @@ class MultiPlatformTelemetryIngestor:
                 for item in data
             }
 
+        self.demo_sources.add("posthog")
+
+
         print(
             "[3/4 PostHog] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
             "pass --posthog-file with a real export before trusting conversion metrics."
@@ -467,6 +477,9 @@ class MultiPlatformTelemetryIngestor:
                 )
                 for item in data
             }
+
+        self.demo_sources.add("cloudflare")
+
 
         print(
             "[4/4 Cloudflare] DEMO/ILLUSTRATIVE fallback values (NOT measured evidence) - "
@@ -825,6 +838,10 @@ class SEOOptimizerEngine:
 
         # Sort by potential impact score descending
         targets.sort(key=lambda x: x.potential_impact_score, reverse=True)
+        if self.ingestor.demo_sources:
+            for t in targets:
+                t.data_quality = "demo"
+                t.demo_sources = sorted(self.ingestor.demo_sources)
         return targets
 
 
@@ -933,6 +950,12 @@ def main():
     parser.add_argument("--action-queue", help="Path to action_queue JSON from LGBMRanker")
     parser.add_argument("--output-json", help="Path to write prioritized JSON action queue")
     parser.add_argument("--output-md", help="Path to write Markdown executive report")
+    parser.add_argument(
+        "--allow-demo",
+        action="store_true",
+        help="Permit emitting the queue when any source fell back to illustrative demo data (exit 0). "
+        "Without this flag a demo-contaminated run exits 2 so no agent executes fabricated evidence.",
+    )
 
     args = parser.parse_args()
 
@@ -950,6 +973,15 @@ def main():
     # Print ASCII CLI report
     print(format_ascii_report(targets, args.site))
 
+    demo_sources = sorted(ingestor.demo_sources)
+    if demo_sources:
+        print(
+            "[DEMO DATA] sources used illustrative fallback values: "
+            + ", ".join(demo_sources)
+            + " — every target is tagged data_quality='demo'; do not execute as SEO evidence "
+            "(supply real exports or rerun with --allow-demo for inspection)."
+        )
+
     # Optional JSON export
     if args.output_json:
         serializable = [asdict(t) for t in targets]
@@ -960,9 +992,20 @@ def main():
     # Optional Markdown export
     if args.output_md:
         md_content = format_markdown_report(targets, args.site)
+        if demo_sources:
+            md_content = (
+                "> **DEMO DATA WARNING:** "
+                f"{', '.join(demo_sources)} fell back to illustrative values. "
+                "This report is not measured evidence and must not drive production changes.\n\n"
+                + md_content
+            )
         with open(args.output_md, "w", encoding="utf-8") as f:
             f.write(md_content)
         print(f"[OK] Executive report exported to Markdown: {args.output_md}")
+
+    if demo_sources and not args.allow_demo:
+        print("[BLOCKED] Demo-contaminated run: exiting 2 (pass --allow-demo to inspect only).")
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
