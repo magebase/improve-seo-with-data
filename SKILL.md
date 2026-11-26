@@ -216,8 +216,8 @@ python scripts/seo_factory.py discover --seeds "bin lookup,iban validator" \
 
 # Track 2: collect live first-party benchmark telemetry into contracts
 python scripts/collect_live_benchmarks.py \
-    --sitemap https://gameservers.adstim.net/sitemap.xml \
-    --cluster-id cl_xxx --domain gameservers.adstim.net \
+    --sitemap https://browseservers.com/benchmarks-sitemap.xml \
+    --cluster-id cl_xxx --domain browseservers.com \
     --state-db ~/.seo_fleet/fleet_state.db --output data/pilot_contracts.json
 
 python scripts/seo_factory.py cluster-check --input cluster.json
