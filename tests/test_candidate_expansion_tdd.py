@@ -90,7 +90,10 @@ def test_mine_paa_and_related_from_cache_extracts_and_maps_queries(mem_db):
 
     # Check PAA candidate mapping
     queries = {m["query"]: m for m in mined}
-    assert "Can OBJ files be converted to STL" in queries or "Can OBJ files be converted to STL?" in queries
+    assert (
+        "Can OBJ files be converted to STL" in queries
+        or "Can OBJ files be converted to STL?" in queries
+    )
     # High token overlap with /convert/obj-to-stl/
     obj_item = next(m for m in mined if "OBJ" in m["query"])
     assert obj_item["page"] == "https://openfileconverter.com/convert/obj-to-stl/"
@@ -137,7 +140,9 @@ def test_mine_paa_and_related_from_cache_dict_input():
         max_candidates=5,
     )
 
-    assert len(mined) == 2
+    # The PAA query maps to an existing entity page; the unmatched
+    # "PDF to Word OCR" variant is not minted as a raw query slug.
+    assert len(mined) == 1
     paa = next(m for m in mined if m["source"] == "paa_expansion")
     assert "PDF to editable DOCX" in paa["query"]
     assert paa["page"] == "https://openfileconverter.com/convert/pdf-to-docx/"
@@ -209,7 +214,10 @@ def test_auto_expand_triggers_when_pending_below_threshold(mem_db):
     assert report["pending_before"] == 3
     assert len(expanded) > len(initial_candidates)
     # Proves orphan route was injected
-    assert any(c["page"] == "https://openfileconverter.com/convert/step-to-stl/" for c in expanded)
+    assert any(
+        c["page"] == "https://openfileconverter.com/convert/step-to-stl/"
+        for c in expanded
+    )
     # Proves mined related search was injected
     assert any("Convert PNG to SVG" in c["query"] for c in expanded)
 
@@ -366,5 +374,6 @@ def test_mine_paa_and_related_from_cache_cross_tenant_isolation(mem_db):
         max_candidates=10,
     )
 
-    assert len(mined) == 0, f"Expected 0 cross-tenant leaked candidates, got {len(mined)}: {mined}"
-
+    assert len(mined) == 0, (
+        f"Expected 0 cross-tenant leaked candidates, got {len(mined)}: {mined}"
+    )

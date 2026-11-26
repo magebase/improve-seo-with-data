@@ -730,17 +730,25 @@ def mine_paa_and_related_from_cache(
                             best_overlap = ov
                             best_url = u
 
-                query_intent = classify_query_intent(clean_text)
-                candidate_kind = "existing_page" if best_url else "new_route"
-                if best_url and not intent_matches(best_url, clean_text):
-                    # Do not attach a consumer verification query to a
-                    # comparison/troubleshooting URL just because tokens
-                    # overlap.  Re-route it to its own intent family.
-                    best_url = None
-                    candidate_kind = "new_route"
-                if not best_url:
-                    best_url, query_intent = proposed_route_for_query(
-                        clean_text, clean_domain
+                canonical = canonical_route_for_query(
+                    clean_text, clean_domain, sitemap_urls
+                )
+                if canonical is None:
+                    # No canonical entity route.  Keep only a genuinely
+                    # matching existing page; never mint a raw query slug.
+                    if not best_url or not intent_matches(best_url, clean_text):
+                        continue
+                    query_intent = classify_query_intent(clean_text)
+                    candidate_kind = "existing_page"
+                else:
+                    best_url, query_intent = canonical
+                    candidate_kind = (
+                        "existing_page"
+                        if any(
+                            u.rstrip("/") == best_url.rstrip("/")
+                            for u in (sitemap_urls or [])
+                        )
+                        else "new_route"
                     )
 
                 key = (clean_text.lower(), best_url.lower().rstrip("/"))
@@ -1445,19 +1453,65 @@ def intent_matches(page: str, query: str, explicit: Any = None) -> bool:
     )
 
 
-def proposed_route_for_query(query: str, domain: str) -> tuple[str, str]:
-    intent = classify_query_intent(query)
-    prefix = {
-        "comparison": "compare",
-        "troubleshooting": "troubleshooting",
-        "developer": "developer",
-        "verification": "verify",
-        "inbox": "receive-sms",
-        "tool": "tools",
-        "guide": "guides",
-    }[intent]
-    slug = "-".join(tokenize(query).keys()) or "guide"
-    return f"https://{domain}/{prefix}/{slug}/", intent
+SERVICE_ALIASES = {
+    "gmail": "google",
+    "google": "google",
+    "whatsapp": "whatsapp",
+    "telegram": "telegram",
+    "discord": "discord",
+    "tinder": "tinder",
+    "paypal": "paypal",
+    "facebook": "facebook",
+    "instagram": "instagram",
+    "twitter": "twitter",
+    "x": "twitter",
+    "amazon": "amazon",
+    "apple": "apple",
+    "microsoft": "microsoft",
+}
+
+UNSUPPORTED_CAPABILITY_TERMS = (
+    "send sms",
+    "send free sms",
+    "send a text",
+    "outbound sms",
+    "voice call",
+    "phone call",
+    "buy number",
+    "paid number",
+    "private number",
+)
+
+
+def unsupported_capability(query: str) -> str | None:
+    text = " " + str(query).strip().lower() + " "
+    for term in UNSUPPORTED_CAPABILITY_TERMS:
+        if term in text:
+            return term.replace(" ", "_")
+    return None
+
+
+def service_entity(query: str) -> str | None:
+    for token in tokenize(query):
+        alias = SERVICE_ALIASES.get(token)
+        if alias:
+            return alias
+    return None
+
+
+def _sitemap_url_for_path(
+    sitemap_urls: list[str] | None, target_path: str
+) -> str | None:
+    target = "/" + target_path.strip("/") + "/"
+    for url in sitemap_urls or []:
+        path = (
+            "/"
+            + url.split("://", 1)[-1].split("/", 1)[-1].split("?", 1)[0].strip("/")
+            + "/"
+        )
+        if path == target:
+            return url
+    return None
 
 
 def load_page_contracts(path: str | None) -> dict[str, dict[str, Any]]:
@@ -1497,6 +1551,29 @@ def contract_for_page(
         if key and key in contracts:
             return contracts[key]
     return {}
+
+
+def canonical_route_for_query(
+    query: str,
+    domain: str,
+    sitemap_urls: list[str] | None = None,
+) -> tuple[str, str] | None:
+    """Map a query to one canonical entity URL, not a slugified query.
+
+    ``gmail`` and ``google`` share ``/verify/google/``; ``discord`` maps to
+    ``/verify/discord/``.  Queries requiring an unsupported product capability
+    (outbound SMS, voice calls, paid private numbers) return ``None``.
+    """
+    if unsupported_capability(query):
+        return None
+    service = service_entity(query)
+    if not service:
+        return None
+    target = f"/verify/{service}/"
+    existing = _sitemap_url_for_path(sitemap_urls, target)
+    if existing:
+        return existing, "verification"
+    return f"https://{domain}{target}", "verification"
 
 
 def max_sibling_similarity(

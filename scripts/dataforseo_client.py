@@ -135,7 +135,9 @@ def resolve_credentials(
     explicit_env = env is not None
     active_env = env if explicit_env else dict(os.environ)
     env_login = active_env.get("DATAFORSEO_LOGIN") or active_env.get("DFS_LOGIN")
-    env_password = active_env.get("DATAFORSEO_PASSWORD") or active_env.get("DFS_PASSWORD")
+    env_password = active_env.get("DATAFORSEO_PASSWORD") or active_env.get(
+        "DFS_PASSWORD"
+    )
     if env_login and env_password:
         return env_login, env_password
     combined = active_env.get("DATAFORSEO_API_KEY")
@@ -146,7 +148,9 @@ def resolve_credentials(
     if not explicit_env:
         file_creds = load_env_credentials_file()
         f_login = file_creds.get("DATAFORSEO_LOGIN") or file_creds.get("DFS_LOGIN")
-        f_password = file_creds.get("DATAFORSEO_PASSWORD") or file_creds.get("DFS_PASSWORD")
+        f_password = file_creds.get("DATAFORSEO_PASSWORD") or file_creds.get(
+            "DFS_PASSWORD"
+        )
         if f_login and f_password:
             return f_login, f_password
         f_combined = file_creds.get("DATAFORSEO_API_KEY")
@@ -166,29 +170,57 @@ def _tokenize(query: str) -> set[str]:
 
 
 def _item_domain(item: dict[str, Any]) -> str:
-    """Resolve the real result domain.
+    """Resolve the real publisher domain for a SERP item.
 
-    DataForSEO returns ``domain: google.com`` with a ``google.com/goto`` URL
-    for some organic results; the actual publisher is in the breadcrumb.  Using
-    the raw domain made every SERP look Google-owned and hid forums.
+    DataForSEO may return ``domain: google.com`` with a ``google.com/goto``
+    URL when Google throttles redirect resolution.  The breadcrumb usually
+    carries the publisher; ``website_name`` is the fallback for UGC hosts
+    (Reddit, YouTube, Facebook, Instagram) whose breadcrumb is sometimes bare.
+    An unresolved result returns ``""`` rather than falsely counting as
+    google.com.
     """
     domain = str(item.get("domain", "")).strip().lower()
     if domain and domain not in {"google.com", "www.google.com"}:
         return domain
+
     breadcrumb = str(item.get("breadcrumb", "")).strip()
     if breadcrumb:
         token = breadcrumb.split()[0].lower()
         for prefix in ("https://", "http://"):
             if token.startswith(prefix):
-                token = token[len(prefix):]
+                token = token[len(prefix) :]
         token = token.split("/")[0].lstrip("www.")
         if token and token not in {"google.com", "www.google.com"}:
             return token
+
+    website_name = str(item.get("website_name", "")).strip().lower()
+    if website_name:
+        name = website_name.split()[0].strip(".,;:()[]")
+        ugc_brands = {
+            "reddit": "reddit.com",
+            "quora": "quora.com",
+            "youtube": "youtube.com",
+            "facebook": "facebook.com",
+            "instagram": "instagram.com",
+            "twitter": "twitter.com",
+            "tiktok": "tiktok.com",
+            "linkedin": "linkedin.com",
+            "pinterest": "pinterest.com",
+            "medium": "medium.com",
+        }
+        if name in ugc_brands:
+            return ugc_brands[name]
+        if "." in name and name not in {"google", "google.com"}:
+            return name
+
     url = str(item.get("url", "")).strip().lower()
     for prefix in ("https://", "http://"):
         if url.startswith(prefix):
-            url = url[len(prefix):]
-    return url.split("/")[0].lstrip("www.")
+            url = url[len(prefix) :]
+    host = url.split("/")[0].lstrip("www.")
+    if host in {"google.com", "www.google.com"}:
+        return ""
+    return host
 
 
 def extract_serp_features(items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -207,6 +239,7 @@ def extract_serp_features(items: list[dict[str, Any]]) -> dict[str, Any]:
         "shopping": False,
         "local_pack": False,
         "forum_ugc_ratio": 0.0,
+        "unresolved_domains": 0,
     }
     forum_items = 0
     for item in items:
@@ -214,6 +247,8 @@ def extract_serp_features(items: list[dict[str, Any]]) -> dict[str, Any]:
         if item_type in features and isinstance(features.get(item_type), bool):
             features[item_type] = True
         domain = _item_domain(item)
+        if item_type == "organic" and not domain:
+            features["unresolved_domains"] += 1
         if item_type == "organic" and any(d in domain for d in FORUM_UGC_DOMAINS):
             forum_items += 1
         if item_type == "discussions_and_forums":

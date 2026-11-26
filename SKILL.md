@@ -140,6 +140,10 @@ The model is trained on `page_launch_outcomes` (URL Inspection coverage state + 
 5. **Template litmus** — if hiding the variable (country/app/service) leaves no meaningfully different content, or stripping the data collapses the page, the template is rejected (`non_boilerplate_ratio < 0.50`).
 6. **Planned indexed inlinks** — a new URL cannot already have live inlinks; use `planned_indexed_inlinks` from the routing/hub config. Existing pages use live `inlinks_from_indexed` and are never launch candidates; they are `existing_page_requires_enrichment`.
 
+**Entity-level routing.** Related-search variants are collapsed onto one canonical entity URL (`gmail`/`google` -> `/verify/google/`, `discord` -> `/verify/discord/`). A query never becomes a raw slugified URL. Queries requiring a capability the product does not have (outbound `send sms`, voice calls, paid private numbers) are rejected before scoring.
+
+**Domain health before a canary.** A new-template canary is confounded while the existing domain is unhealthy. `domain_health_gate` blocks canary selection until the measured baseline reaches `--min-domain-index-rate` (default 65%). It uses cached URL Inspection coverage, not impressions.
+
 **Canary proof before scale.** A template is never scaled from a static score:
 
 1. Ship a 10–20 URL canary cohort from `build_canary_cohort` and isolate it in a dedicated sitemap (`canary_sitemap`).

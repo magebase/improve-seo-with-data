@@ -666,6 +666,7 @@ CANARY_MIN_SIZE = 10
 CANARY_MAX_SIZE = 20
 CANARY_MIN_INDEXED_RATE = 0.80
 CANARY_MIN_IMPRESSIONS = 1.0
+DEFAULT_MIN_DOMAIN_INDEX_RATE = 0.65
 
 
 def _template_family(page: str) -> str:
@@ -680,6 +681,8 @@ def build_canary_cohort(
     size: int = CANARY_MAX_SIZE,
     model: IndexationModel | None = None,
     max_per_family: int = 5,
+    domain_indexed_rate: float | None = None,
+    min_domain_index_rate: float = DEFAULT_MIN_DOMAIN_INDEX_RATE,
 ) -> list[dict[str, Any]]:
     """Select a small, evidence-qualified, family-diverse canary cohort.
 
@@ -689,6 +692,11 @@ def build_canary_cohort(
     """
     size = max(0, min(int(size), CANARY_MAX_SIZE))
     if size < CANARY_MIN_SIZE:
+        return []
+    # A canary on an unhealthy domain is a confounded experiment: it measures
+    # site-wide quality drag, not the new template.  Require a known, healthy
+    # baseline before spending crawl/quality equity on a new cohort.
+    if domain_indexed_rate is None or domain_indexed_rate < min_domain_index_rate:
         return []
     eligible: list[tuple[dict[str, Any], LaunchDecision]] = []
     for row in rows:
@@ -782,6 +790,29 @@ def canary_sitemap(urls: list[str], *, base_url: str = "") -> str:
         + "\n".join(rows)
         + "\n</urlset>\n"
     )
+
+
+def domain_health_gate(
+    indexed: int,
+    total: int,
+    *,
+    min_indexed_rate: float = DEFAULT_MIN_DOMAIN_INDEX_RATE,
+) -> dict[str, Any]:
+    """Decide whether the existing domain baseline is healthy enough to test."""
+    rate = indexed / total if total else 0.0
+    reasons: list[str] = []
+    if total < CANARY_MIN_SIZE:
+        reasons.append("insufficient_domain_sample")
+    if rate < min_indexed_rate:
+        reasons.append("domain_indexed_rate_below_floor")
+    return {
+        "total": total,
+        "indexed": indexed,
+        "indexed_rate": round(rate, 4),
+        "min_indexed_rate": min_indexed_rate,
+        "canary_allowed": not reasons,
+        "reasons": reasons,
+    }
 
 
 def _parse_timestamp(value: Any) -> datetime | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collect_features import (
+    canonical_route_for_query,
     classify_page_intent,
     classify_query_intent,
     contract_for_page,
@@ -112,3 +113,32 @@ def test_page_contract_is_loaded_by_family_and_page(tmp_path):
     contract = contract_for_page("https://example.com/receive-sms/de/", contracts)
     assert contract["unique_data_fields"] == 5
     assert contract["planned_indexed_inlinks"] == 4
+
+
+def test_gmail_maps_to_existing_google_entity_route():
+    route = canonical_route_for_query(
+        "Receive Gmail verification code online free",
+        "smsriver.com",
+        ["https://smsriver.com/verify/google/"],
+    )
+    assert route == ("https://smsriver.com/verify/google/", "verification")
+
+
+def test_send_sms_is_rejected_as_unsupported_capability():
+    assert (
+        canonical_route_for_query(
+            "Send free uk sms verification",
+            "smsriver.com",
+            ["https://smsriver.com/verify/google/"],
+        )
+        is None
+    )
+
+
+def test_discord_maps_to_one_canonical_entity_not_query_slug():
+    route = canonical_route_for_query(
+        "Temp number for Discord free",
+        "smsriver.com",
+        ["https://smsriver.com/verify/discord/"],
+    )
+    assert route == ("https://smsriver.com/verify/discord/", "verification")

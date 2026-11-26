@@ -13,6 +13,7 @@ from indexation_forecast import (
     backtest,
     build_canary_cohort,
     canary_sitemap,
+    domain_health_gate,
     evaluate_canary_outcomes,
     evaluate_launch_candidate,
     extract_launch_features,
@@ -357,7 +358,9 @@ def test_canary_cohort_is_small_family_diverse_and_gated():
         row["page"] = f"https://example.com/verify/app{index}/"
         row["query"] = f"verify app{index}"
         rows.append(row)
-    cohort = build_canary_cohort(rows, size=10, max_per_family=5)
+    cohort = build_canary_cohort(
+        rows, size=10, max_per_family=5, domain_indexed_rate=0.80
+    )
     assert len(cohort) == 10
     assert {row["template_family"] for row in cohort} == {"receive-sms", "verify"}
     assert all(row["canary"] is True for row in cohort)
@@ -382,3 +385,19 @@ def test_canary_sitemap_isolates_the_cohort():
     xml = canary_sitemap(["https://example.com/a/"], base_url="https://example.com")
     assert "<loc>https://example.com/a/</loc>" in xml
     assert xml.startswith("<?xml")
+
+
+def test_canary_is_blocked_on_an_unhealthy_domain_baseline():
+    health = domain_health_gate(4, 40, min_indexed_rate=0.65)
+    assert health["canary_allowed"] is False
+    assert "domain_indexed_rate_below_floor" in health["reasons"]
+    assert domain_health_gate(28, 40, min_indexed_rate=0.65)["canary_allowed"] is True
+    assert (
+        build_canary_cohort(
+            [_strong_candidate() for _ in range(12)],
+            size=10,
+            domain_indexed_rate=0.10,
+            min_domain_index_rate=0.65,
+        )
+        == []
+    )

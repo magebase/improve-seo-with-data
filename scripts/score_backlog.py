@@ -42,12 +42,14 @@ from indexation_forecast import MODEL_PATH as INDEXATION_MODEL_PATH
 from indexation_forecast import (
     IndexationModel,
     build_canary_cohort,
+    domain_health_gate,
     record_launches_from_tasks,
 )
 from fleet_state import (
     DEFAULT_TYPE_CAPS,
     DEFAULT_TYPE_CAP_FALLBACK,
     connect_state_db,
+    domain_indexed_rate,
     enqueue_tasks,
     lease_tasks,
     pending_count,
@@ -1047,6 +1049,12 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help="emit a 10-20 URL canary cohort for a single template before scaling",
     )
+    parser.add_argument(
+        "--min-domain-index-rate",
+        type=float,
+        default=0.65,
+        help="block a new-template canary until the existing domain baseline is healthy",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--ledger",
@@ -1295,15 +1303,39 @@ def main(argv: list[str] | None = None) -> int:
             f"Indexation launch gate: removed {len(launch_blocked)} queue task(s) "
             "without demand/data/uniqueness/link evidence."
         )
-    canary = (
-        build_canary_cohort(demand_scored, size=args.canary_size, model=launch_model)
-        if args.canary_size
-        else []
-    )
-    if canary:
-        print(
-            f"Canary cohort: {len(canary)} URL(s) selected; do not scale before 80% indexation."
+    canary = []
+    if args.canary_size:
+        health = {"known": False, "total": 0, "indexed": 0, "rate": 0.0}
+        if args.state_db:
+            health_conn = connect_state_db(args.state_db)
+            try:
+                health = domain_indexed_rate(health_conn, target_domain or "")
+            finally:
+                health_conn.close()
+        gate = domain_health_gate(
+            int(health["indexed"]),
+            int(health["total"]),
+            min_indexed_rate=args.min_domain_index_rate,
         )
+        if not health["known"] or not gate["canary_allowed"]:
+            print(
+                "Canary blocked: existing domain baseline is not healthy "
+                f"({health['indexed']}/{health['total']} indexed, "
+                f"rate {health['rate']:.2%}; required {args.min_domain_index_rate:.0%})."
+            )
+        else:
+            canary = build_canary_cohort(
+                demand_scored,
+                size=args.canary_size,
+                model=launch_model,
+                domain_indexed_rate=float(health["rate"]),
+                min_domain_index_rate=args.min_domain_index_rate,
+            )
+            if canary:
+                print(
+                    f"Canary cohort: {len(canary)} URL(s) selected; "
+                    "do not scale before 80% indexation."
+                )
     print(
         f"Demand/route-rescue partition: {len(demand_rows)} demand rows, "
         f"{len(rescue_rows)} route-rescue rows (rescue rows never take a queue slot)."

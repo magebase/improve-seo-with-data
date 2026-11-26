@@ -2664,3 +2664,26 @@ def dead_route_candidates(
             }
         )
     return dead
+
+
+def domain_indexed_rate(conn: sqlite3.Connection, site: str) -> dict[str, Any]:
+    """Measured baseline indexation rate from cached URL Inspection rows."""
+    clean = str(site).replace("sc-domain:", "").strip().lower().rstrip("/")
+    if not clean:
+        return {"known": False, "total": 0, "indexed": 0, "rate": 0.0}
+    rows = conn.execute(
+        "SELECT coverage_state FROM url_inspections WHERE lower(site) LIKE ?",
+        (f"%{clean}%",),
+    ).fetchall()
+    total = len(rows)
+    indexed = sum(
+        1
+        for (coverage,) in rows
+        if "submitted and indexed" in str(coverage or "").lower()
+    )
+    return {
+        "known": total > 0,
+        "total": total,
+        "indexed": indexed,
+        "rate": round(indexed / total, 4) if total else 0.0,
+    }
