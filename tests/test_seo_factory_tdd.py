@@ -81,11 +81,23 @@ def test_compare_child_without_absorbed_value_is_gone_not_301():
 
 def test_compare_child_with_backlinks_keeps_equity_via_301():
     decision = classify_disposal(
-        _row("https://smsriver.com/compare/twilio-vs-plivo/", backlinks=3),
+        _row(
+            "https://smsriver.com/compare/twilio-vs-plivo/",
+            backlinks=3,
+            legitimate_referring_domains=1,
+        ),
         sitemap_urls=SITEMAP,
     )
     assert decision["decision"] == "MERGE_301"
     assert decision["target"] == "https://smsriver.com/compare/"
+
+
+def test_compare_child_with_only_spam_backlinks_is_gone():
+    decision = classify_disposal(
+        _row("https://smsriver.com/compare/twilio-vs-plivo/", backlinks=3),
+        sitemap_urls=SITEMAP,
+    )
+    assert decision["decision"] == "GONE_410"
 
 
 def test_guide_child_with_absorbed_content_can_301():
@@ -282,14 +294,20 @@ def test_outside_in_discovery_uses_real_serp_and_authority():
                 "big.example": {"referring_domains": 50000},
             }[domain]
 
+    funnel: dict = {}
     rows = discover_cluster_candidates(
-        FakeClient(), seeds=["test harness"], niche="developer"
+        FakeClient(), seeds=["test harness"], niche="developer", diagnostics=funnel
     )
     assert len(rows) == 1
     assert rows[0]["volume"] == 600.0
     assert rows[0]["entities"] == 15
     assert rows[0]["winnable"] is True
     assert rows[0]["weak_top10_count"] == 2
+    assert funnel["raw_suggestions"] == 15
+    assert funnel["valid_entities"] == 15
+    assert funnel["aggregate_demand"] == 600.0
+    assert funnel["serps_checked"] == 5
+    assert funnel["rejection_reason"] == ""
 
 
 def test_discovered_cluster_is_persisted():
@@ -339,3 +357,18 @@ def test_finalize_caps_footprint_and_noindexes_non_keep_inventory():
     final = finalize_footprint(decisions, keep_urls=keep)
     assert final["counts"]["NOINDEX"] == 1
     assert final["counts"]["GONE_410"] == 1
+
+
+def test_discover_reports_empty_funnel_instead_of_a_black_box():
+    class EmptyClient:
+        def keyword_suggestions(self, seeds, limit=100):
+            return [{"keyword": "x", "volume": 0}]
+
+    funnel: dict = {}
+    rows = discover_cluster_candidates(
+        EmptyClient(), seeds=["x"], niche="test", diagnostics=funnel
+    )
+    assert rows == []
+    assert funnel["raw_suggestions"] == 1
+    assert funnel["valid_entities"] == 0
+    assert funnel["rejection_reason"] == "no_valid_entities"

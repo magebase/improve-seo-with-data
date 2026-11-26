@@ -176,14 +176,14 @@ python scripts/score_backlog.py --features data/ltr_features.json \
 **Existing-site repair.** `repair-plan` classifies every current URL before any new page is considered:
 
 - `PROTECT` — any click in 90 days, indexed with impressions, or a hard-locked route; never touched by a prune batch. Backlinks alone do not protect a page: they make an ancestor merge the preferred option so the equity survives.
-- `MERGE_301` — only a genuine **ancestor** replacement (`/country-codes/germany/` → `/country-codes/`). A generic `/compare/` or `/guides/` hub is not a replacement unless the source value was actually absorbed or it has backlinks; otherwise the source is `GONE_410`. A hub is never redirected into a child, and unrelated pages are never bulk-redirected to `/`.
+- `MERGE_301` — only a genuine **ancestor** replacement (`/country-codes/germany/` → `/country-codes/`). A generic `/compare/` or `/guides/` hub is not a replacement unless the source value was actually absorbed or it has **legitimate referring domains**; PBN-only backlinks do not count, and those sources are `GONE_410`. A hub is never redirected into a child, and unrelated pages are never bulk-redirected to `/`.
 - `NOINDEX` — user-facing routes with no search intent (`/status/`, `/workbench/`); strip from sitemaps, do not robots-block.
 - `ENRICH` — demand or live inventory exists but value does not; add first-party telemetry instead of minting a new URL.
 - `GONE_410` — zero clicks, zero backlinks, no ancestor, no utility.
 
 **Data-moat contracts.** `page_contracts` binds every Tier B page to a dry-run payload: `data_source_hash`, at least 3 unique data fields, entity-stripped overlap ≤ 0.45, at least 3 planned indexed inlinks, and a cluster. `compute_stripped_overlap` is the CI check: strip country/app/brand tokens and measure shingle overlap on the remaining prose.
 
-**Outside-in winnability.** `evaluate_cluster` requires aggregate demand ≥ 500 searches/month across **at least 15 valid entities**, plus at least 2 weak top-10 slots (UGC or ≤ 250 referring domains), before a cluster can become a pilot. It is data-in, no fabricated volume. `discover` aggregates the whole keyword-pattern list, not one keyword at a time.
+**Outside-in winnability.** `evaluate_cluster` requires aggregate demand ≥ 500 searches/month across **at least 15 valid entities**, plus at least 2 weak top-10 slots (UGC or ≤ 250 referring domains), before a cluster can become a pilot. It is data-in, no fabricated volume. `discover` aggregates the whole keyword-pattern list, not one keyword at a time, and always emits a funnel: `raw_suggestions → valid_entities → aggregate_demand → serps_checked → weak_top10_slots → rejection_reason`. An empty result with `no_valid_entities` is a parser/volume problem; an empty result with `insufficient_demand` or `top10_too_authoritative` is the gate working.
 
 **Cohort state machine.** A pilot is 5–15 URLs in a dedicated sitemap, measured at days 7/14/21/45:
 

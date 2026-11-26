@@ -115,6 +115,9 @@ def classify_disposal(
         "impressions_90d": float(row.get("impressions_90d") or 0),
         "coverage_state": row.get("coverage_state"),
         "backlinks": float(row.get("backlinks") or 0),
+        "legitimate_referring_domains": float(
+            row.get("legitimate_referring_domains") or 0
+        ),
         "live_inventory_count": float(row.get("live_inventory_count") or 0),
     }
     if _is_protected(row):
@@ -143,7 +146,7 @@ def classify_disposal(
         if (
             family in {"compare", "guides"}
             and not absorbed
-            and evidence["backlinks"] <= 0
+            and evidence["legitimate_referring_domains"] <= 0
         ):
             return {
                 "url": url,
@@ -500,24 +503,42 @@ def discover_cluster_candidates(
     niche: str,
     limit: int = 100,
     max_keywords: int = 5,
+    diagnostics: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Outside-in discovery with real volume, SERP and backlink evidence.
 
     The cluster is the aggregate pattern, not one keyword.  Aggregate demand and
     entity count are evaluated together; a single 50-volume keyword is not a
     business.  A missing API response is an error, not zero demand.
+
+    ``diagnostics`` receives the compact funnel for an empty result, so a
+    rejected niche is distinguishable from a parser that extracted nothing.
     """
+    raw_suggestions = list(client.keyword_suggestions(seeds, limit=limit))
     suggestions = [
         row
-        for row in client.keyword_suggestions(seeds, limit=limit)
+        for row in raw_suggestions
         if row.get("keyword") and float(row.get("volume") or 0) > 0
     ]
+    funnel: dict[str, Any] = {
+        "seeds": list(seeds),
+        "raw_suggestions": len(raw_suggestions),
+        "valid_entities": len(suggestions),
+        "aggregate_demand": round(sum(float(row["volume"]) for row in suggestions), 2),
+        "serps_checked": 0,
+        "weak_top10_slots": 0,
+        "rejection_reason": "",
+    }
     if not suggestions:
+        funnel["rejection_reason"] = "no_valid_entities"
+        if diagnostics is not None:
+            diagnostics.update(funnel)
         return []
     volumes = [float(row["volume"]) for row in suggestions]
     domains: list[str] = []
     for suggestion in suggestions[: max(0, int(max_keywords))]:
         serp = client.fetch_serp_live(suggestion["keyword"], depth=10)
+        funnel["serps_checked"] += 1
         for item in (serp[0].get("items") if serp else []) or []:
             if item.get("type") != "organic":
                 continue
@@ -535,6 +556,11 @@ def discover_cluster_candidates(
         top10_domains=domains,
         authority=authority,
     )
+    funnel["weak_top10_slots"] = evaluation["weak_top10_count"]
+    if not evaluation["winnable"]:
+        funnel["rejection_reason"] = ",".join(evaluation["reasons"])
+    if diagnostics is not None:
+        diagnostics.update(funnel)
     return [
         {
             "entity_pattern": " | ".join(seeds),
@@ -542,6 +568,7 @@ def discover_cluster_candidates(
             "volume": round(sum(volumes), 2),
             "top10_domains": domains,
             "authority": authority,
+            "funnel": funnel,
             **evaluation,
         }
     ]
@@ -773,12 +800,14 @@ def main(argv: list[str] | None = None) -> int:
             from dataforseo_client import DataForSEOClient, resolve_credentials
 
             login, password = resolve_credentials()
+            diagnostics: dict[str, Any] = {}
             rows = discover_cluster_candidates(
                 DataForSEOClient(login, password),
                 seeds=[s.strip() for s in args.seeds.split(",") if s.strip()],
                 niche=args.niche,
                 limit=args.limit,
                 max_keywords=args.max_keywords,
+                diagnostics=diagnostics,
             )
             saved = [
                 save_cluster(
@@ -790,7 +819,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 for row in rows
             ]
-            text = json.dumps(saved, indent=2)
+            text = json.dumps({"funnel": diagnostics, "clusters": saved}, indent=2)
             if args.output:
                 Path(args.output).write_text(text, encoding="utf-8")
             print(text)
