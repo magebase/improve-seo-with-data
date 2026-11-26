@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fleet_state import connect_state_db
+from fleet_state import connect_state_db, save_url_inspections
 from growth_loop import (
     build_growth_plan,
     complete_growth_action,
@@ -428,3 +428,31 @@ def test_pbn_domains_are_removed_from_the_authority_ratio():
     assert clean["host_legitimate_rd"] == 2
     assert clean["authority_ratio"] < raw["authority_ratio"]
     assert clean["p_top10"] < raw["p_top10"]
+
+
+def test_open_indexation_work_is_reported_instead_of_a_tier_a_placeholder():
+    conn = connect_state_db(":memory:")
+    ensure_growth_schema(conn)
+    save_url_inspections(
+        conn,
+        "sc-domain:example.com",
+        {
+            "https://example.com/receive-sms/gb/": {
+                "coverage_state": "Crawled - currently not indexed",
+                "indexing_state": "INDEXING_ALLOWED",
+                "last_crawl_time": "2026-11-20T00:00:00Z",
+            }
+        },
+    )
+    conn.commit()
+    first = build_growth_plan([], domain="example.com", conn=conn)
+    assert first["guarantee"] == "indexation_prerequisite"
+    assert record_growth_plan(conn, first) >= 1
+    second = build_growth_plan([], domain="example.com", conn=conn)
+    assert second["guarantee"] == "indexation_prerequisite"
+    assert second["open_action_count"] >= 1
+    assert second["actions"][0]["action_code"] == "ENRICH_UNIQUE_DATA"
+    assert second["actions"][0]["status"] == "OPEN"
+    assert all(
+        action["action_code"] != "BUILD_TIER_A_ASSET" for action in second["actions"]
+    )

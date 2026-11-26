@@ -1013,6 +1013,23 @@ def _dedupe_actions(actions: Iterable[GrowthAction]) -> list[GrowthAction]:
     return list(best.values())
 
 
+def _open_action_keys(
+    conn: sqlite3.Connection | None,
+    *,
+    domain: str,
+) -> set[str]:
+    if conn is None:
+        return set()
+    try:
+        rows = conn.execute(
+            "SELECT action_key FROM growth_actions WHERE domain = ? AND status = 'OPEN'",
+            (domain,),
+        )
+        return {str(row[0]) for row in rows}
+    except sqlite3.Error:
+        return set()
+
+
 def _open_or_recent_keys(
     conn: sqlite3.Connection | None,
     *,
@@ -1180,6 +1197,12 @@ def build_growth_plan(
         actions_from_indexation(conn, domain=domain, allowed_urls=sitemap_urls, now=now)
     )
     actions = _dedupe_actions(all_actions)
+    open_keys = _open_action_keys(conn, domain=domain)
+    open_indexation = [
+        action
+        for action in actions
+        if action.action_key in open_keys and action.priority_track == "indexation"
+    ]
 
     blocked = _open_or_recent_keys(
         conn, domain=domain, cooldown_days=cooldown_days, now=now
@@ -1201,6 +1224,13 @@ def build_growth_plan(
         reason = (
             "indexation blockers must be fixed before CTR/ranking actions; "
             "no click lift is claimed"
+        )
+    elif open_indexation:
+        selected = open_indexation[: max(1, limit)]
+        guarantee = "indexation_prerequisite"
+        reason = (
+            "indexation work is already open; do not duplicate it with a "
+            "strategic or CTR action"
         )
     elif material:
         selected = material[: max(1, limit)]
@@ -1284,6 +1314,8 @@ def build_growth_plan(
             1 for action in selected if action.priority_track == "indexation"
         ),
         "actions": [action.to_dict() for action in selected],
+        "open_actions": [action.to_dict() for action in open_indexation],
+        "open_action_count": len(open_indexation),
         "evaluated_due": [],
     }
 
