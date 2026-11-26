@@ -38,6 +38,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from bootstrap_labels import generate_bootstrap_grades
+from collect_features import fetch_sitemap_urls
 from indexation_forecast import MODEL_PATH as INDEXATION_MODEL_PATH
 from indexation_forecast import (
     IndexationModel,
@@ -1309,7 +1310,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.state_db:
             health_conn = connect_state_db(args.state_db)
             try:
-                health = domain_indexed_rate(health_conn, target_domain or "")
+                sitemap_urls: list[str] = []
+                try:
+                    sitemap_urls = fetch_sitemap_urls(target_domain or "")
+                except Exception:
+                    sitemap_urls = []
+                health = domain_indexed_rate(
+                    health_conn,
+                    target_domain or "",
+                    sitemap_urls=sitemap_urls,
+                    max_age_days=21,
+                )
             finally:
                 health_conn.close()
         gate = domain_health_gate(

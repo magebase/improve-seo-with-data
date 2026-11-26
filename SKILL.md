@@ -142,6 +142,8 @@ The model is trained on `page_launch_outcomes` (URL Inspection coverage state + 
 
 **Entity-level routing.** Related-search variants are collapsed onto one canonical entity URL (`gmail`/`google` -> `/verify/google/`, `discord` -> `/verify/discord/`). A query never becomes a raw slugified URL. Queries requiring a capability the product does not have (outbound `send sms`, voice calls, paid private numbers) are rejected before scoring.
 
+**Off-page authority is a separate gate.** Run `python scripts/authority_report.py --target <domain> --competitors <csv>` before assuming on-page work can rank. DataForSEO backlinks exposes domain rank, referring domains, and spam score; a domain with `rank 0` and a handful of referring domains cannot outrank established competitors through template changes alone.
+
 **Domain health before a canary.** A new-template canary is confounded while the existing domain is unhealthy. `domain_health_gate` blocks canary selection until the measured baseline reaches `--min-domain-index-rate` (default 65%). It uses cached URL Inspection coverage, not impressions.
 
 **Canary proof before scale.** A template is never scaled from a static score:

@@ -589,6 +589,36 @@ class DataForSEOClient:
                     )
         return rows
 
+    def backlinks_summary(self, target: str) -> dict[str, Any]:
+        """Backlinks/authority summary for a domain (DataForSEO Backlinks).
+
+        ``rank`` is DataForSEO's domain rank (0 = unranked); referring domains
+        and spam score are the off-page variables the on-page gate cannot see.
+        """
+        envelope = self._post(
+            "/backlinks/summary/live",
+            [
+                {
+                    "target": str(target).strip(),
+                    "internal_list_limit": 0,
+                    "backlinks_status_type": "live",
+                }
+            ],
+        )
+        task = (envelope.get("tasks") or [{}])[0]
+        result = (task.get("result") or [{}])[0]
+        return {
+            "target": result.get("target") or target,
+            "rank": result.get("rank"),
+            "backlinks": result.get("backlinks"),
+            "referring_domains": result.get("referring_domains"),
+            "referring_main_domains": result.get("referring_main_domains"),
+            "referring_pages": result.get("referring_pages"),
+            "backlinks_spam_score": result.get("backlinks_spam_score"),
+            "broken_pages": result.get("broken_pages"),
+            "first_seen": result.get("first_seen"),
+        }
+
     @staticmethod
     def _task(
         keyword: str,

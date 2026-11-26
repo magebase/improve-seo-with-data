@@ -2666,24 +2666,56 @@ def dead_route_candidates(
     return dead
 
 
-def domain_indexed_rate(conn: sqlite3.Connection, site: str) -> dict[str, Any]:
-    """Measured baseline indexation rate from cached URL Inspection rows."""
+def domain_indexed_rate(
+    conn: sqlite3.Connection,
+    site: str,
+    *,
+    sitemap_urls: list[str] | None = None,
+    max_age_days: int = 21,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Measured baseline indexation rate from cached URL Inspection rows.
+
+    The denominator is deliberately narrow: only URLs present in the live
+    sitemap and inspected inside the freshness window count.  Stale rows for
+    deleted URLs must not dilute or inflate the domain-health threshold.
+    """
     clean = str(site).replace("sc-domain:", "").strip().lower().rstrip("/")
     if not clean:
-        return {"known": False, "total": 0, "indexed": 0, "rate": 0.0}
+        return {"known": False, "total": 0, "indexed": 0, "rate": 0.0, "filtered": 0}
     rows = conn.execute(
-        "SELECT coverage_state FROM url_inspections WHERE lower(site) LIKE ?",
+        "SELECT url, coverage_state, inspected_at FROM url_inspections "
+        "WHERE lower(site) LIKE ?",
         (f"%{clean}%",),
     ).fetchall()
-    total = len(rows)
-    indexed = sum(
-        1
-        for (coverage,) in rows
-        if "submitted and indexed" in str(coverage or "").lower()
-    )
+    allowed = None
+    if sitemap_urls:
+        allowed = {str(url).rstrip("/") for url in sitemap_urls if url}
+    cutoff = _utc_now(now) - timedelta(days=max(0, int(max_age_days)))
+    counted = 0
+    indexed = 0
+    filtered = 0
+    for url, coverage, inspected_at in rows:
+        if allowed is not None and str(url).rstrip("/") not in allowed:
+            filtered += 1
+            continue
+        try:
+            inspected = datetime.fromisoformat(str(inspected_at))
+        except (TypeError, ValueError):
+            filtered += 1
+            continue
+        if inspected.tzinfo is None:
+            inspected = inspected.replace(tzinfo=timezone.utc)
+        if inspected < cutoff:
+            filtered += 1
+            continue
+        counted += 1
+        if "submitted and indexed" in str(coverage or "").lower():
+            indexed += 1
     return {
-        "known": total > 0,
-        "total": total,
+        "known": counted > 0,
+        "total": counted,
         "indexed": indexed,
-        "rate": round(indexed / total, 4) if total else 0.0,
+        "rate": round(indexed / counted, 4) if counted else 0.0,
+        "filtered": filtered,
     }
