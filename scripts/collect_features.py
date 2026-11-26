@@ -1429,6 +1429,8 @@ def classify_query_intent(query: str) -> str:
 
 def classify_page_intent(page: str) -> str:
     path = "/" + str(page).split("://", 1)[-1].split("?", 1)[0].split("/", 1)[-1]
+    if "-vs-" in path.lower() or "comparison" in path.lower():
+        return "comparison"
     for prefix, intent in PAGE_INTENT_PREFIXES:
         if path.startswith(prefix):
             return intent

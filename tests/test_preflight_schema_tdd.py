@@ -27,6 +27,12 @@ def test_consumer_verification_query_does_not_match_a_comparison_page():
     )
 
 
+def test_guide_slug_with_vs_is_still_a_comparison_page():
+    page = "https://example.com/guides/short-code-vs-10dlc-vs-toll-free-sms-comparison/"
+    assert classify_page_intent(page) == "comparison"
+    assert intent_matches(page, "Receive Gmail verification code online free") is False
+
+
 def test_consumer_verification_query_matches_a_verification_page():
     query = "Receive Gmail verification code online free"
     assert intent_matches("https://example.com/verify/gmail/", query) is True
