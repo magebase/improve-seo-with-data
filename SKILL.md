@@ -169,7 +169,50 @@ python scripts/score_backlog.py --features data/ltr_features.json \
   --canary-size 20 --compile-wave 20
 ```
 
-### 4.2 Mandatory Invocation Output: Machine Learning Model Transparency & SHAP Attribution
+### 4.2 Unified pSEO State Machine (Repair → Contract → Pilot → Scale)
+
+`scripts/seo_factory.py` turns the launch gate into a lifecycle. The fleet DB is the single source of truth: `clusters`, `page_contracts`, `cohorts`, and `url_lifecycle` sit alongside the existing GSC/SERP/inspection tables.
+
+**Existing-site repair.** `repair-plan` classifies every current URL before any new page is considered:
+
+- `PROTECT` — any click in 90 days, indexed with impressions, or a backlink; never touched by a prune batch.
+- `MERGE_301` — only a genuine **ancestor** replacement (`/country-codes/germany/` → `/country-codes/`). A hub is never redirected into a child, and unrelated pages are never bulk-redirected to `/`.
+- `NOINDEX` — user-facing routes with no search intent (`/status/`, `/workbench/`); strip from sitemaps, do not robots-block.
+- `ENRICH` — demand exists but value does not; add first-party telemetry instead of minting a new URL.
+- `GONE_410` — zero clicks, zero backlinks, no ancestor, no utility.
+
+**Data-moat contracts.** `page_contracts` binds every Tier B page to a dry-run payload: `data_source_hash`, at least 3 unique data fields, entity-stripped overlap ≤ 0.45, at least 3 planned indexed inlinks, and a cluster. `compute_stripped_overlap` is the CI check: strip country/app/brand tokens and measure shingle overlap on the remaining prose.
+
+**Outside-in winnability.** `evaluate_cluster` requires aggregate demand ≥ 50 and at least 2 weak top-10 slots (UGC or ≤ 250 referring domains) before a cluster can become a pilot. It is data-in, no fabricated volume.
+
+**Cohort state machine.** A pilot is 5–15 URLs in a dedicated sitemap, measured at days 7/14/21/45:
+
+- `PILOT_LIVE` → `SCALING` only at ≥ 80% indexed **and** non-zero impressions.
+- Day-21 indexation below 50% → `FROZEN` and the contract is reviewed.
+- Day-45 unindexed with no impressions → `PRUNE` back into the repair queue.
+
+```bash
+# Existing URL triage (writes url_lifecycle)
+python scripts/seo_factory.py repair-plan   --input url_rows.json --sitemap-file sitemap_urls.json   --domain smsriver.com --persist
+
+# Validate/register dry-run contracts
+python scripts/seo_factory.py contracts --input contracts.json
+
+# Outside-in discovery (real Labs volume + SERP + Backlinks authority)
+python scripts/seo_factory.py discover --seeds "receive sms,otp test" \
+  --niche sms --limit 10 --max-keywords 5 --output clusters.json
+
+# Offline cluster gate
+python scripts/seo_factory.py cluster-check --input cluster.json
+
+# Pilot lifecycle
+python scripts/seo_factory.py cohort-create --template verify-entity   --domain smsriver.com --urls urls.json
+python scripts/seo_factory.py cohort-measure --cohort coh_...   --day 21 --indexed 8 --total 10 --impressions 120
+```
+
+**Discipline:** an existing domain below 65% active-sitemap indexation does not get a new-template pilot. Run `repair-plan` and `ENRICH` first. A fresh domain may start with 1–2 Tier A authority assets plus one 5–15 URL Tier B pilot.
+
+### 4.3 Mandatory Invocation Output: Machine Learning Model Transparency & SHAP Attribution
 
 Every executing agent and autonomous SEO engine invocation MUST explicitly output the **Machine Learning Model Decision & SHAP Attribution Summary Block**. The operator and user must never have to guess whether a machine learning model was used, which features drove priority, or why specific tasks were selected.
 

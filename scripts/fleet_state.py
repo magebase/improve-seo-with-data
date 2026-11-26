@@ -215,6 +215,73 @@ CREATE TABLE IF NOT EXISTS action_effectiveness_stats (
     updated_at              TEXT NOT NULL,
     PRIMARY KEY (domain, action_code, route_family)
 );
+CREATE TABLE IF NOT EXISTS clusters (
+    cluster_id        TEXT PRIMARY KEY,
+    niche             TEXT NOT NULL,
+    entity_pattern    TEXT NOT NULL,
+    demand_score      REAL NOT NULL DEFAULT 0.0,
+    winnability_score REAL NOT NULL DEFAULT 0.0,
+    weakest_top10_rd  REAL,
+    status            TEXT NOT NULL DEFAULT 'DISCOVERED',
+    evidence_json     TEXT NOT NULL DEFAULT '{}',
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS clusters_status_score
+    ON clusters (status, winnability_score DESC);
+CREATE TABLE IF NOT EXISTS page_contracts (
+    url                    TEXT PRIMARY KEY,
+    cluster_id             TEXT,
+    tier                   TEXT NOT NULL DEFAULT 'B',
+    data_source_hash       TEXT NOT NULL,
+    unique_data_fields     INTEGER NOT NULL DEFAULT 0,
+    stripped_overlap_score REAL NOT NULL DEFAULT 1.0,
+    planned_indexed_inlinks INTEGER NOT NULL DEFAULT 0,
+    rendered_at            TEXT NOT NULL,
+    status                 TEXT NOT NULL DEFAULT 'CONTRACTED'
+);
+CREATE INDEX IF NOT EXISTS page_contracts_cluster
+    ON page_contracts (cluster_id, status);
+CREATE TABLE IF NOT EXISTS cohorts (
+    cohort_id          TEXT PRIMARY KEY,
+    template_id        TEXT NOT NULL,
+    domain             TEXT NOT NULL,
+    stage              TEXT NOT NULL DEFAULT 'PILOT_LIVE',
+    urls_json          TEXT NOT NULL DEFAULT '[]',
+    launched_at        TEXT NOT NULL,
+    day7_indexed       REAL,
+    day14_indexed      REAL,
+    day21_indexed      REAL,
+    day45_impressions  REAL,
+    verdict            TEXT,
+    updated_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS cohorts_stage
+    ON cohorts (stage, updated_at);
+CREATE TABLE IF NOT EXISTS url_lifecycle (
+    url         TEXT PRIMARY KEY,
+    domain      TEXT NOT NULL,
+    state       TEXT NOT NULL,
+    reason      TEXT,
+    cluster_id  TEXT,
+    updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS url_lifecycle_domain_state
+    ON url_lifecycle (domain, state);
+CREATE TABLE IF NOT EXISTS repair_actions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    domain      TEXT NOT NULL,
+    url         TEXT NOT NULL,
+    action      TEXT NOT NULL,
+    target_url  TEXT,
+    reason      TEXT,
+    status      TEXT NOT NULL DEFAULT 'PENDING',
+    created_at  TEXT NOT NULL,
+    applied_at  TEXT,
+    UNIQUE (domain, url, action)
+);
+CREATE INDEX IF NOT EXISTS repair_actions_status
+    ON repair_actions (domain, status);
 """
 
 
