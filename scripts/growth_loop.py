@@ -29,12 +29,14 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import sqlite3
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 from urllib.parse import urlparse
 
 DEFAULT_STATE_DB = str(Path.home() / ".seo_fleet" / "fleet_state.db")
@@ -163,6 +165,16 @@ def _normalize_query(value: str) -> str:
     return " ".join(str(value or "").lower().split())
 
 
+def _usable_query(value: str) -> bool:
+    """Reject phone-number/digit strings masquerading as search intent."""
+    query = _normalize_query(value)
+    if not query:
+        return True  # page-level maintenance actions are allowed
+    if not re.search(r"[a-z]", query):
+        return False
+    return not re.fullmatch(r"[\d\s+()\-./]+", query)
+
+
 def expected_ctr(position: float) -> float:
     """Conservative position -> CTR planning prior."""
     pos = max(1.0, _f(position, 100.0))
@@ -187,7 +199,9 @@ def estimate_ranking_probability(row: dict[str, Any]) -> dict[str, Any]:
         pos = 30.0
     pos = min(pos, 100.0)
 
-    forum = _clamp(_f(feats.get("serp_forum_ratio", row.get("serp_forum_ratio"))), 0.0, 1.0)
+    forum = _clamp(
+        _f(feats.get("serp_forum_ratio", row.get("serp_forum_ratio"))), 0.0, 1.0
+    )
     title_match = _clamp(
         _f(feats.get("title_exact_match_rate", row.get("title_exact_match_rate"))),
         0.0,
@@ -198,12 +212,25 @@ def estimate_ranking_probability(row: dict[str, Any]) -> dict[str, Any]:
         0.0,
         1.0,
     )
-    hub_links = max(0.0, _f(feats.get("parent_hub_internal_links", row.get("parent_hub_internal_links"))))
-    inlinks = max(0.0, _f(row.get("inlinks_from_indexed", feats.get("inlinks_from_indexed"))))
-    unique_fields = max(0.0, _f(row.get("unique_data_fields", feats.get("unique_data_fields"))))
+    hub_links = max(
+        0.0,
+        _f(
+            feats.get("parent_hub_internal_links", row.get("parent_hub_internal_links"))
+        ),
+    )
+    inlinks = max(
+        0.0, _f(row.get("inlinks_from_indexed", feats.get("inlinks_from_indexed")))
+    )
+    unique_fields = max(
+        0.0, _f(row.get("unique_data_fields", feats.get("unique_data_fields")))
+    )
     weakest_rd = _f(row.get("weakest_top10_rd", feats.get("weakest_top10_rd")), 0.0)
-    volume_log = max(0.0, _f(feats.get("search_volume_log", row.get("search_volume_log"))))
-    p_index = _clamp(_f(row.get("p_index_28d", feats.get("p_index_28d")), 0.5), 0.0, 1.0)
+    volume_log = max(
+        0.0, _f(feats.get("search_volume_log", row.get("search_volume_log")))
+    )
+    p_index = _clamp(
+        _f(row.get("p_index_28d", feats.get("p_index_28d")), 0.5), 0.0, 1.0
+    )
 
     position_signal = _clamp((31.0 - pos) / 30.0, 0.0, 1.0)
     serp_openness = _clamp(
@@ -269,7 +296,10 @@ def _baseline(row: dict[str, Any]) -> dict[str, Any]:
         "clicks": round(_f(row.get("clicks_30d", row.get("clicks"))), 4),
         "impressions": round(_f(row.get("impressions")), 4),
         "ctr": round(_f(row.get("ctr")), 6),
-        "position": round(_f(row.get("current_pos", (row.get("features") or {}).get("current_pos"))), 4),
+        "position": round(
+            _f(row.get("current_pos", (row.get("features") or {}).get("current_pos"))),
+            4,
+        ),
         "measured_at": str(row.get("measured_at") or ""),
     }
 
@@ -368,7 +398,9 @@ def _make_action(
 
 
 def _row_domain(row: dict[str, Any], fallback: str) -> str:
-    return str(row.get("domain") or _domain_from_url(str(row.get("page") or "")) or fallback)
+    return str(
+        row.get("domain") or _domain_from_url(str(row.get("page") or "")) or fallback
+    )
 
 
 def _row_pages(row: dict[str, Any]) -> tuple[str, str]:
@@ -399,14 +431,20 @@ def actions_from_queue(
     for row in rows:
         page, query = _row_pages(row)
         code = str(row.get("action_code") or row.get("prescribed_action") or "").upper()
-        if not code:
+        if not code or not _usable_query(query):
             continue
         row_domain = _row_domain(row, domain)
         if domain and row_domain.lower() != domain.lower():
             continue
         impressions = _f(row.get("impressions"))
-        current_pos = _f(row.get("current_pos", (row.get("features") or {}).get("current_pos")), 100.0)
-        p_success = _f(row.get("posterior_success_prob", row.get("p_success")), SUCCESS_PRIOR.get(code, 0.40))
+        current_pos = _f(
+            row.get("current_pos", (row.get("features") or {}).get("current_pos")),
+            100.0,
+        )
+        p_success = _f(
+            row.get("posterior_success_prob", row.get("p_success")),
+            SUCCESS_PRIOR.get(code, 0.40),
+        )
         expected = _f(row.get("expected_clicks_30d"))
         if expected > 0:
             lift = expected * 3.0
@@ -454,7 +492,7 @@ def actions_from_features(
     actions: list[GrowthAction] = []
     for row in rows:
         page, query = _row_pages(row)
-        if not page:
+        if not page or not _usable_query(query):
             continue
         feats = row.get("features") if isinstance(row.get("features"), dict) else {}
         impressions = _f(row.get("impressions", feats.get("impressions")))
@@ -472,7 +510,9 @@ def actions_from_features(
         # plausible top-10 move, but only when there is real demand evidence.
         if 10.0 <= pos <= 30.0 and impressions >= 10:
             target_pos = max(1.0, pos - 3.0)
-            lift = impressions * max(0.001, expected_ctr(target_pos) - expected_ctr(pos))
+            lift = impressions * max(
+                0.001, expected_ctr(target_pos) - expected_ctr(pos)
+            )
             actions.append(
                 _make_action(
                     domain=row_domain,
@@ -547,8 +587,12 @@ def actions_from_features(
 
         # Data-depth gap: only propose enrichment where a real page already
         # has demand; do not turn an empty row into a content-writing task.
-        unique_fields = _f(row.get("unique_data_fields", feats.get("unique_data_fields")))
-        non_boilerplate = _f(row.get("non_boilerplate_ratio", feats.get("non_boilerplate_ratio")), 1.0)
+        unique_fields = _f(
+            row.get("unique_data_fields", feats.get("unique_data_fields"))
+        )
+        non_boilerplate = _f(
+            row.get("non_boilerplate_ratio", feats.get("non_boilerplate_ratio")), 1.0
+        )
         if impressions >= 10 and (unique_fields < 3 or non_boilerplate < 0.50):
             actions.append(
                 _make_action(
@@ -572,7 +616,11 @@ def actions_from_features(
 
         # Indexation block: no clicks can arrive while the page is not indexed.
         coverage = str(row.get("coverage_state") or "").lower()
-        if coverage and "indexed" not in coverage and "submitted and indexed" not in coverage:
+        if (
+            coverage
+            and "indexed" not in coverage
+            and "submitted and indexed" not in coverage
+        ):
             actions.append(
                 _make_action(
                     domain=row_domain,
@@ -614,7 +662,9 @@ def actions_from_repair_queue(
         return []
     actions: list[GrowthAction] = []
     for row in rows:
-        row_domain, url, action, target_url, reason = (str(value or "") for value in row)
+        row_domain, url, action, target_url, reason = (
+            str(value or "") for value in row
+        )
         code = action.upper()
         # Repair dispositions are indexation hygiene, not click forecasts.  A
         # prune is still a valid action but must not claim positive clicks.
@@ -693,7 +743,10 @@ def _fallback_action(
     if best:
         row = best["row"]
         impressions = _f(row.get("impressions"))
-        pos = _f(row.get("current_pos", (row.get("features") or {}).get("current_pos")), 100.0)
+        pos = _f(
+            row.get("current_pos", (row.get("features") or {}).get("current_pos")),
+            100.0,
+        )
         lift = max(0.0, impressions * max(0.001, expected_ctr(pos) * 0.05))
         return _make_action(
             domain=_row_domain(row, domain),
@@ -740,7 +793,9 @@ def build_growth_plan(
     """Build a non-empty, de-duplicated, evidence-ranked action plan."""
     now = now or _now()
     rows = list(rows)
-    domain = domain or next((_row_domain(row, "") for row in rows if _row_domain(row, "")), "")
+    domain = domain or next(
+        (_row_domain(row, "") for row in rows if _row_domain(row, "")), ""
+    )
     all_actions: list[GrowthAction] = []
     all_actions.extend(actions_from_queue(queue or [], domain=domain, now=now))
     all_actions.extend(actions_from_features(rows, domain=domain, now=now))
@@ -751,7 +806,10 @@ def build_growth_plan(
         conn, domain=domain, cooldown_days=cooldown_days, now=now
     )
     actions = [action for action in actions if action.action_key not in blocked]
-    actions.sort(key=lambda action: (action.expected_clicks_lower > 0, action.score), reverse=True)
+    actions.sort(
+        key=lambda action: (action.expected_clicks_lower > 0, action.score),
+        reverse=True,
+    )
 
     positive = [action for action in actions if action.expected_clicks_lower > 0]
     if positive:
@@ -798,7 +856,9 @@ def build_growth_plan(
         "domain": domain,
         "guarantee": guarantee,
         "reason": reason,
-        "positive_action_count": sum(1 for action in selected if action.expected_clicks_lower > 0),
+        "positive_action_count": sum(
+            1 for action in selected if action.expected_clicks_lower > 0
+        ),
         "actions": [action.to_dict() for action in selected],
         "evaluated_due": [],
     }
@@ -893,7 +953,8 @@ def record_growth_plan(
                     json.dumps(action.get("baseline") or {}, sort_keys=True),
                     json.dumps(action.get("evidence") or {}, sort_keys=True),
                     action.get("created_at") or _iso(now),
-                    action.get("due_at") or _iso(now + timedelta(days=DEFAULT_REVIEW_DAYS)),
+                    action.get("due_at")
+                    or _iso(now + timedelta(days=DEFAULT_REVIEW_DAYS)),
                     _iso(now),
                 ),
             )
@@ -959,7 +1020,10 @@ def due_growth_actions(
         "AND due_at <= ? AND (? = '' OR domain = ?) ORDER BY due_at ASC",
         (_iso(now), domain, domain),
     ).fetchall()
-    columns = [column[0] for column in conn.execute("SELECT * FROM growth_actions LIMIT 0").description]
+    columns = [
+        column[0]
+        for column in conn.execute("SELECT * FROM growth_actions LIMIT 0").description
+    ]
     return [dict(zip(columns, row)) for row in rows]
 
 
@@ -982,9 +1046,15 @@ def review_growth_actions(
     reviews: list[dict[str, Any]] = []
     for row in due_growth_actions(conn, domain=domain, now=now):
         key = row["page"]
-        obs = observations.get(key) or observations.get(f"{key}|{row['query']}") or observations.get(row["query"])
+        obs = (
+            observations.get(key)
+            or observations.get(f"{key}|{row['query']}")
+            or observations.get(row["query"])
+        )
         if not obs:
-            reviews.append({"action_key": row["action_key"], "status": "AWAITING_OBSERVATION"})
+            reviews.append(
+                {"action_key": row["action_key"], "status": "AWAITING_OBSERVATION"}
+            )
             continue
         baseline = json.loads(row.get("baseline_json") or "{}")
         base_clicks = _f(baseline.get("clicks"))
@@ -1007,7 +1077,12 @@ def review_growth_actions(
         conn.execute(
             "UPDATE growth_actions SET status = ?, outcome_json = ?, updated_at = ? "
             "WHERE action_key = ?",
-            ("SUCCESS" if success else "FAILED", json.dumps(outcome, sort_keys=True), _iso(now), row["action_key"]),
+            (
+                "SUCCESS" if success else "FAILED",
+                json.dumps(outcome, sort_keys=True),
+                _iso(now),
+                row["action_key"],
+            ),
         )
         try:
             from fleet_state import extract_route_family, record_action_effectiveness
@@ -1021,12 +1096,18 @@ def review_growth_actions(
                 click_lift=clicks - base_clicks,
                 rank_delta=base_pos - pos,
             )
-        except Exception:
+        except (ImportError, sqlite3.Error):
             # The action status is still authoritative if effectiveness
             # bookkeeping is unavailable; never lose the review because of a
             # secondary statistics failure.
             pass
-        reviews.append({"action_key": row["action_key"], "status": "SUCCESS" if success else "FAILED", "outcome": outcome})
+        reviews.append(
+            {
+                "action_key": row["action_key"],
+                "status": "SUCCESS" if success else "FAILED",
+                "outcome": outcome,
+            }
+        )
     conn.commit()
     return reviews
 

@@ -46,7 +46,11 @@ def test_ranking_probability_rewards_near_open_and_linked_pages():
             unique_data_fields=8,
             weakest_top10_rd=5,
             p_index_28d=0.95,
-            features={"current_pos": 8, "serp_forum_ratio": 0.60, "title_exact_match_rate": 0.10},
+            features={
+                "current_pos": 8,
+                "serp_forum_ratio": 0.60,
+                "title_exact_match_rate": 0.10,
+            },
         )
     )
     far = estimate_ranking_probability(
@@ -164,3 +168,28 @@ def test_unmeasured_due_action_stays_awaiting_observation():
 
     reviews = review_growth_actions(conn, {}, domain="example.com")
     assert reviews[0]["status"] == "AWAITING_OBSERVATION"
+
+
+def test_numeric_phone_queries_never_become_title_actions():
+    plan = build_growth_plan(
+        [
+            _row(
+                page="https://example.com/",
+                query="5493812234024",
+                impressions=500.0,
+                current_pos=3.0,
+                features={"current_pos": 3.0},
+            ),
+            _row(
+                page="https://example.com/receive-sms/us/",
+                query="receive sms usa",
+                impressions=500.0,
+                current_pos=9.0,
+                features={"current_pos": 9.0},
+            ),
+        ],
+        domain="example.com",
+    )
+    queries = {action["query"] for action in plan["actions"]}
+    assert "5493812234024" not in queries
+    assert "receive sms usa" in queries
