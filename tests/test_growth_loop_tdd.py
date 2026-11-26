@@ -404,3 +404,27 @@ def test_sitemap_scope_excludes_retired_urls():
         action["page"] == "https://example.com/receive-sms/gb/"
         for action in plan["actions"]
     )
+
+
+def test_pbn_domains_are_removed_from_the_authority_ratio():
+    from growth_loop import estimate_ranking_probability
+
+    clean = estimate_ranking_probability(
+        _row(
+            host_legitimate_rd=42,
+            referring_domains=[
+                "example.org",
+                "news.example",
+                "seoninjalinkboost.site",
+                "cripio.shop",
+            ],
+            weakest_top10_rd=674,
+        )
+    )
+    raw = estimate_ranking_probability(
+        _row(host_legitimate_rd=42, weakest_top10_rd=674)
+    )
+
+    assert clean["host_legitimate_rd"] == 2
+    assert clean["authority_ratio"] < raw["authority_ratio"]
+    assert clean["p_top10"] < raw["p_top10"]

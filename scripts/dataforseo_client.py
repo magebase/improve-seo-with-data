@@ -648,6 +648,37 @@ class DataForSEOClient:
                     )
         return rows
 
+    def backlinks_list(self, target: str, *, limit: int = 1000) -> list[dict[str, Any]]:
+        """Backlink rows for PBN-aware referring-domain counting.
+
+        The summary endpoint returns a count only. This endpoint returns the
+        source domains and DataForSEO's per-backlink spam score so the planner
+        can remove flagged PBN hosts instead of inflating authority.
+        """
+        envelope = self._post(
+            "/backlinks/backlinks/live",
+            [
+                {
+                    "target": str(target).strip(),
+                    "limit": max(1, min(int(limit), 1000)),
+                    "mode": "as_is",
+                    "backlinks_status_type": "live",
+                }
+            ],
+        )
+        rows: list[dict[str, Any]] = []
+        for task in envelope.get("tasks") or []:
+            for result in task.get("result") or []:
+                for item in result.get("items") or []:
+                    rows.append(
+                        {
+                            "domain_from": str(item.get("domain_from") or "").strip(),
+                            "backlink_spam_score": item.get("backlink_spam_score"),
+                            "dofollow": item.get("dofollow"),
+                        }
+                    )
+        return rows
+
     def backlinks_summary(self, target: str) -> dict[str, Any]:
         """Backlinks/authority summary for a domain (DataForSEO Backlinks).
 

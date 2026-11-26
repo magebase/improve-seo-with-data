@@ -198,6 +198,56 @@ def expected_ctr(position: float) -> float:
     return 0.002
 
 
+PBN_TOKENS = (
+    "pbn",
+    "backlink",
+    "linkboost",
+    "seoninjia",
+    "seoninja",
+    "guestpost",
+    "guest-post",
+    "linkfarm",
+    "link-building",
+    "buy-links",
+    "seocodeminty",
+    "cripio",
+    "prepaidgiftbalance",
+)
+PBN_TLDS = {".site", ".shop", ".online", ".top", ".click", ".loan", ".buzz"}
+
+
+def is_flagged_pbn_domain(domain: str) -> bool:
+    """Conservative PBN/spam filter for referring-domain counts.
+
+    A suspicious token is enough. A risky TLD alone is not: plenty of real
+    businesses use .shop/.online, so require the token there too.
+    """
+    value = str(domain or "").strip().lower().strip(".")
+    if not value:
+        return True
+    if any(token in value for token in PBN_TOKENS):
+        return True
+    return value.endswith(tuple(PBN_TLDS)) and bool(
+        re.search(r"(seo|link|rank|traffic|boost|marketing)", value)
+    )
+
+
+def legitimate_referring_domain_count(
+    domains: Iterable[str] | None,
+    *,
+    fallback: float = 0.0,
+) -> float:
+    """Count distinct referring domains after removing flagged PBN hosts."""
+    if domains is None:
+        return fallback
+    clean = {
+        str(domain).strip().lower()
+        for domain in domains
+        if str(domain).strip() and not is_flagged_pbn_domain(str(domain))
+    }
+    return float(len(clean))
+
+
 def indexing_state(row: dict[str, Any]) -> bool | None:
     """True indexed, False explicitly rejected, None unknown.
 
@@ -299,13 +349,21 @@ def estimate_ranking_probability(row: dict[str, Any]) -> dict[str, Any]:
         + 0.10 * min(volume_log, 6.0)
         - 0.35 * authority_penalty
     )
-    host_rd = _f(
-        row.get(
-            "host_legitimate_rd",
-            row.get("host_referring_domains", feats.get("host_legitimate_rd")),
-        ),
-        0.0,
+    referring_domains = (
+        row.get("referring_domains")
+        or feats.get("referring_domains")
+        or row.get("host_referring_domains")
     )
+    if isinstance(referring_domains, (list, tuple, set)):
+        host_rd = legitimate_referring_domain_count(referring_domains)
+    else:
+        host_rd = _f(
+            row.get(
+                "host_legitimate_rd",
+                row.get("host_referring_domains", feats.get("host_legitimate_rd")),
+            ),
+            0.0,
+        )
     weakest_rd = _f(row.get("weakest_top10_rd", feats.get("weakest_top10_rd")), 0.0)
     authority_source = "provided"
     if host_rd > 0 and weakest_rd > 0:
