@@ -72,11 +72,13 @@ from fleet_state import (
     extract_route_family,
     gsc_snapshot_fresh,
     inspection_calls_remaining,
+    load_cached_serp_volumes,
     load_cached_serps,
     load_gsc_snapshot,
     load_url_inspections,
     record_inspection_calls,
     save_gsc_snapshot,
+    save_serp_volumes,
     save_url_inspections,
     upsert_serp_cache,
 )
@@ -1216,6 +1218,74 @@ def cosine(counter_a: Counter, counter_b: Counter) -> float:
     return dot / (norm_a * norm_b)
 
 
+def load_or_fetch_search_volumes(
+    state_conn: Any,
+    queries: list[str],
+    client: Any = None,
+    *,
+    max_keywords: int = 200,
+    allow_live: bool = True,
+) -> dict[str, float]:
+    """Return cached DataForSEO volumes; price only the missing queries.
+
+    The 30-day cache is the primary source, so repeated skill invocations never
+    re-bill the same keyword.  No GSC history is required; this is the
+    cold-start demand signal for a brand-new domain.
+    """
+    if state_conn is None:
+        return {}
+    volumes = load_cached_serp_volumes(state_conn, queries)
+    missing = [query for query in queries if query not in volumes]
+    if client is None or not missing or not allow_live:
+        return volumes
+    missing = missing[: max(0, int(max_keywords))]
+    try:
+        fetched = client.keyword_search_volume_live(missing)
+    except Exception:  # noqa: BLE001 - volume is additive; cache still wins
+        return volumes
+    if fetched:
+        save_serp_volumes(state_conn, fetched)
+        volumes.update({str(k): float(v) for k, v in fetched.items()})
+    return volumes
+
+
+def max_sibling_similarity(
+    query: str,
+    page: str,
+    sitemap_urls: list[str] | None,
+) -> float:
+    """Largest token-Jaccard against same-family sitemap routes.
+
+    A new country/service route that only adds one token to an existing
+    sibling ("receive sms us" -> "receive sms us whatsapp") scores high and is
+    correctly treated as a duplicate intent.  No historical performance data
+    is used: the comparison is against the live sitemap vocabulary.
+    """
+    if not sitemap_urls:
+        return 1.0  # cannot prove uniqueness -> fail closed
+    from urllib.parse import urlparse
+
+    family = extract_route_family(page)
+    query_tokens = set(tokenize(query))
+    if not query_tokens:
+        return 1.0
+    best = 0.0
+    for sibling in sitemap_urls:
+        if not sibling or sibling.rstrip("/") == page.rstrip("/"):
+            continue
+        if extract_route_family(sibling) != family:
+            continue
+        # Compare the route path, not the hostname: "https" / "example" /
+        # "com" would otherwise dilute every similarity score.
+        sibling_tokens = set(tokenize(urlparse(sibling).path))
+        if not sibling_tokens:
+            continue
+        overlap = len(query_tokens & sibling_tokens)
+        union = len(query_tokens | sibling_tokens)
+        best = max(best, overlap / max(1, union))
+    return round(best, 4)
+
+
 FORUM_HINTS = (
     "reddit",
     "quora",
@@ -1431,6 +1501,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hub-links", help="CSV export: url_prefix,internal_links")
     parser.add_argument("--output", default="data/ltr_features.json")
     parser.add_argument("--max-serp-cost", type=float, default=5.0, help="USD cap")
+    parser.add_argument(
+        "--max-volume-keywords",
+        type=int,
+        default=200,
+        help="max missing keywords to price via one cached Keywords-Data batch",
+    )
+    parser.add_argument(
+        "--no-volume",
+        action="store_true",
+        help="skip Keywords-Data search-volume enrichment (cached volumes still load)",
+    )
     parser.add_argument(
         "--queue-wait-mins",
         type=int,
@@ -1863,6 +1944,23 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("[2/3] Skipping DataForSEO enrichment (GSC-only mode).")
 
+    # Search volume is the demand signal the launch gate needs on a brand-new
+    # domain.  It is cached on the same 30-day SERP row as the result set and
+    # reused across every skill invocation; only missing queries are priced.
+    volume_by_query: dict[str, float] = {}
+    if state_conn is not None:
+        queries = [c["query"] for c in candidates]
+        volume_by_query = load_or_fetch_search_volumes(
+            state_conn,
+            queries,
+            client,
+            max_keywords=args.max_volume_keywords,
+            allow_live=not args.no_volume,
+        )
+        print(
+            f"      Search volume available for {len(volume_by_query)}/{len(queries)} candidates (30d cache)."
+        )
+
     print("[3/3] Computing 8-feature matrix ...")
     feature_rows: list[dict[str, Any]] = []
     for cand in candidates:
@@ -1876,13 +1974,14 @@ def main(argv: list[str] | None = None) -> int:
                 "serp_pixel_crowding": 0.0,
             }
         )
-        volume = None
-        for item in serp_items:
-            if item.get("type") == "keyword_info" or "keyword_volume" in item:
-                volume = (
-                    float(item.get("keyword_volume") or item.get("vol") or 0) or None
-                )
-                break
+        volume = volume_by_query.get(cand["query"])
+        if volume is None:
+            for item in serp_items:
+                if item.get("type") == "keyword_info" or "keyword_volume" in item:
+                    volume = (
+                        float(item.get("keyword_volume") or item.get("vol") or 0) or None
+                    )
+                    break
         volume_log = (
             math.log10(volume + 1)
             if volume
@@ -1896,6 +1995,18 @@ def main(argv: list[str] | None = None) -> int:
             prefix, hub_links.get(cand["page"].rstrip("/").lower(), 0.0)
         )
 
+        sitemap_for_similarity = (
+            sitemap_urls if "sitemap_urls" in locals() else []
+        )
+        sibling_similarity = max_sibling_similarity(
+            cand["query"], cand["page"], sitemap_for_similarity
+        )
+        unique_data_fields = float(
+            cand.get("unique_data_fields")
+            or cand.get("data_fields")
+            or cand.get("live_data_fields")
+            or 0
+        )
         feature_rows.append(
             {
                 "query": cand["query"],
@@ -1908,6 +2019,18 @@ def main(argv: list[str] | None = None) -> int:
                 "source": cand.get("source", "gsc"),
                 "coverage_state": cand.get("coverage_state"),
                 "actions": cand.get("actions"),
+                # Launch-gate evidence derived without any historical outcome
+                # labels: live sitemap vocabulary, live hub links, real
+                # Keywords-Data volume, and the page's own data contract.
+                "sibling_similarity": sibling_similarity,
+                "inlinks_from_indexed": float(hub_count),
+                "unique_data_fields": unique_data_fields,
+                "required_data_fields": float(
+                    cand.get("required_data_fields")
+                    or cand.get("required_live_records")
+                    or 3
+                ),
+                "template_index_rate": float(cand.get("template_index_rate") or 0.5),
                 "serp_meta": serp_item_metadata(
                     {"item_types": item_types_by_query.get(cand["query"], [])},
                     serp_items,

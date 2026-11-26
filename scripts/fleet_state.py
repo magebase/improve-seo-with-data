@@ -446,7 +446,14 @@ def upsert_serp_cache(
 ) -> None:
     stamp = _utc_now(now)
     conn.execute(
-        "INSERT OR REPLACE INTO dfs_serp_cache (query, fetched_at, items_json, item_types) VALUES (?, ?, ?, ?)",
+        """
+        INSERT INTO dfs_serp_cache (query, fetched_at, items_json, item_types)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(query) DO UPDATE SET
+            fetched_at = excluded.fetched_at,
+            items_json = excluded.items_json,
+            item_types = excluded.item_types
+        """,
         (query, _iso(stamp), json.dumps(items), json.dumps(item_types)),
     )
     conn.commit()
@@ -461,16 +468,54 @@ def queries_missing_volume(conn: sqlite3.Connection, limit: int = 1000) -> list:
     return [row[0] for row in rows]
 
 
+def load_cached_serp_volumes(
+    conn: sqlite3.Connection,
+    queries: list,
+    max_age_days: int = SERP_CACHE_TTL_DAYS,
+    now: datetime | None = None,
+) -> dict:
+    """Fresh cached search volumes, so a paid Keywords-Data call is reused.
+
+    The volume is stored on the same 30-day SERP cache row as the fetched
+    result; it is never inferred from GSC impressions.
+    """
+    stamp = _utc_now(now)
+    cutoff = stamp - timedelta(days=max_age_days)
+    volumes: dict[str, float] = {}
+    for query in queries:
+        row = conn.execute(
+            "SELECT search_volume, fetched_at FROM dfs_serp_cache WHERE query = ?",
+            (query,),
+        ).fetchone()
+        if not row or row[0] is None:
+            continue
+        try:
+            fetched = datetime.fromisoformat(row[1])
+        except (TypeError, ValueError):
+            continue
+        if fetched.tzinfo is None:
+            fetched = fetched.replace(tzinfo=timezone.utc)
+        if fetched >= cutoff:
+            volumes[query] = float(row[0])
+    return volumes
+
+
 def save_serp_volumes(conn: sqlite3.Connection, volumes: dict) -> int:
     """Writes Keywords-Data volumes back into dfs_serp_cache (surrogate head)."""
     updated = 0
+    stamp = _iso(_utc_now(None))
     for keyword, volume in (volumes or {}).items():
         if volume is None:
             continue
         for candidate in (str(keyword), str(keyword).strip().lower()):
             cur = conn.execute(
-                "UPDATE dfs_serp_cache SET search_volume = ? WHERE query = ?",
-                (float(volume), candidate),
+                """
+                INSERT INTO dfs_serp_cache
+                    (query, fetched_at, items_json, item_types, search_volume)
+                VALUES (?, ?, '[]', '[]', ?)
+                ON CONFLICT(query) DO UPDATE SET search_volume = excluded.search_volume
+                """,
+                (candidate, stamp, float(volume)),
             )
             updated += cur.rowcount
             if cur.rowcount:

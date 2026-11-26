@@ -62,16 +62,16 @@ FEATURE_NAMES = [
 # without demand, data, links, or uniqueness.  Once >= MIN_TRAINING_ROWS
 # labelled outcomes exist, ``fit`` replaces these coefficients with the
 # empirical model.
-PRIOR_INTERCEPT = -5.0
+PRIOR_INTERCEPT = -4.0
 PRIOR_COEFFICIENTS = np.array(
     [
-        0.35,   # search_volume_log
+        0.70,   # search_volume_log: DataForSEO demand is the primary cold signal
         0.50,   # impressions_log
         0.50,   # position_strength
         2.00,   # template_index_rate
-        0.35,   # unique_data_fields
-        -3.00,  # sibling_similarity
-        0.25,   # inlinks_from_indexed
+        0.50,   # unique_data_fields
+        -2.50,  # sibling_similarity
+        0.40,   # inlinks_from_indexed
         0.10,   # freshness_days_log
         0.30,   # serp_forum_ratio
         -0.20,  # title_exact_match_rate

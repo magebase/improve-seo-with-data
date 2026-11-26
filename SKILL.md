@@ -129,7 +129,7 @@ Position 90+ is a demand-absence signal, not demand. The skill therefore no long
 5. **Unclaimed intent** — no existing page already owns the query.
 6. **Calibrated probability floor** — `P(indexed within 28d) >= 0.80` with an 80% lower bound `>= 0.70`, and `P(indexed within 56d) >= 0.85` with a lower bound `>= 0.70`.
 
-The model is trained on `page_launch_outcomes` (URL Inspection coverage state + GSC, recorded at launch and updated at 7/28/56 days). The transparent prior is used until at least 20 labelled outcomes exist. No page-count cap is applied: every candidate that clears the gate may launch; candidates that fail are discarded, not replaced with synthetic filler.
+The model is trained on `page_launch_outcomes` (URL Inspection coverage state + GSC, recorded at launch and updated at 7/28/56 days). The transparent prior is used until at least 20 labelled outcomes exist, so the gate works on a brand-new domain with zero historical indexation data. DataForSEO supplies the cold-start demand/competition evidence: Keywords-Data search volume plus cached SERP features (forum ratio, exact-match rate, pixel crowding). Volumes are stored on the same 30-day `dfs_serp_cache` row as the SERP result and reused across invocations; only missing queries are priced. No page-count cap is applied: every candidate that clears the gate may launch; candidates that fail are discarded, not replaced with synthetic filler.
 
 ```bash
 # Record/fit/backtest the indexation model
