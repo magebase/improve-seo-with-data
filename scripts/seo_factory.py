@@ -309,7 +309,8 @@ def validate_page_contract(contract: dict[str, Any]) -> dict[str, Any]:
         reasons.append("missing_data_source_hash")
     if int(contract.get("unique_data_fields") or 0) < MIN_UNIQUE_DATA_FIELDS:
         reasons.append("insufficient_unique_data_fields")
-    if float(contract.get("stripped_overlap_score") or 1.0) > MAX_STRIPPED_OVERLAP:
+    overlap_value = contract.get("stripped_overlap_score")
+    if float(1.0 if overlap_value is None else overlap_value) > MAX_STRIPPED_OVERLAP:
         reasons.append("entity_stripped_overlap_too_high")
     if int(contract.get("planned_indexed_inlinks") or 0) < MIN_PLANNED_INLINKS:
         reasons.append("insufficient_planned_inlinks")

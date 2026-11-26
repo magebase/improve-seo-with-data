@@ -214,6 +214,12 @@ python scripts/seo_factory.py discover --seeds "bin lookup,iban validator" \
     --niche finance --domain binvalidator.com \
     --contracts-output data/draft_contracts.json --output data/cluster.json
 
+# Track 2: collect live first-party benchmark telemetry into contracts
+python scripts/collect_live_benchmarks.py \
+    --sitemap https://gameservers.adstim.net/sitemap.xml \
+    --cluster-id cl_xxx --domain gameservers.adstim.net \
+    --state-db ~/.seo_fleet/fleet_state.db --output data/pilot_contracts.json
+
 python scripts/seo_factory.py cluster-check --input cluster.json
 
 # Pilot lifecycle
