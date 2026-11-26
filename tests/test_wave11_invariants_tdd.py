@@ -33,6 +33,12 @@ def test_unbuilt_routes_collapse_triplets():
             "unique_data_fields": 8,
             "sibling_similarity": 0.2,
             "inlinks_from_indexed": 5,
+            "planned_indexed_inlinks": 5,
+            "non_boilerplate_ratio": 0.8,
+            "candidate_kind": "new_route",
+            "serp_fetched": True,
+            "serp_item_types": ["organic"],
+            "intent_match": True,
         }
     ]
 

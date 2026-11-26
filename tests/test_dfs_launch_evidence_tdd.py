@@ -57,6 +57,12 @@ def test_dataforseo_evidence_alone_can_clear_the_cold_start_gate():
         "unique_data_fields": 5,
         "sibling_similarity": 0.18,
         "inlinks_from_indexed": 4,
+        "planned_indexed_inlinks": 4,
+        "non_boilerplate_ratio": 0.8,
+        "candidate_kind": "new_route",
+        "serp_fetched": True,
+        "serp_item_types": ["organic"],
+        "intent_match": True,
     }
     decision = evaluate_launch_candidate(candidate)
     assert decision.eligible is True, decision.reasons

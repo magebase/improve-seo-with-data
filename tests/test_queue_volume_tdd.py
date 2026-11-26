@@ -823,6 +823,12 @@ def test_compile_wave_backlog_fills_target_with_distinct_atomic_tasks():
             unique_data_fields=8,
             sibling_similarity=0.2,
             inlinks_from_indexed=5,
+            planned_indexed_inlinks=5,
+            non_boilerplate_ratio=0.8,
+            candidate_kind="new_route",
+            serp_fetched=True,
+            serp_item_types=["organic"],
+            intent_match=True,
         ),
     ]
     tasks = compile_wave_backlog(rows, shipped_ledger=set(), target_wave_size=8)

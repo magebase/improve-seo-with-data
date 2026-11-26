@@ -19,6 +19,12 @@ def _row(**overrides):
         "unique_data_fields": 8,
         "sibling_similarity": 0.18,
         "inlinks_from_indexed": 5,
+        "planned_indexed_inlinks": 5,
+        "non_boilerplate_ratio": 0.82,
+        "candidate_kind": "new_route",
+        "serp_fetched": True,
+        "serp_item_types": ["organic", "people_also_ask"],
+        "intent_match": True,
         "features": {
             "title_exact_match_rate": 0.9,
             "parent_hub_internal_links": 5.0,
@@ -74,7 +80,9 @@ def test_existing_owner_blocks_the_route():
 
 
 def test_zero_inlinks_blocks_the_route():
-    tasks = compile_wave_backlog([_row(inlinks_from_indexed=0)], target_wave_size=10)
+    tasks = compile_wave_backlog(
+        [_row(inlinks_from_indexed=0, planned_indexed_inlinks=0)], target_wave_size=10
+    )
     assert tasks == []
 
 

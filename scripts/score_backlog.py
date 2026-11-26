@@ -39,10 +39,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from bootstrap_labels import generate_bootstrap_grades
 from indexation_forecast import MODEL_PATH as INDEXATION_MODEL_PATH
-from indexation_forecast import IndexationModel, record_launches_from_tasks
+from indexation_forecast import (
+    IndexationModel,
+    build_canary_cohort,
+    record_launches_from_tasks,
+)
 from fleet_state import (
     DEFAULT_TYPE_CAPS,
     DEFAULT_TYPE_CAP_FALLBACK,
+    connect_state_db,
     enqueue_tasks,
     lease_tasks,
     pending_count,
@@ -111,13 +116,16 @@ def _train_on_the_fly(rows: list[dict[str, Any]], models_dir: str) -> dict[str, 
 @dataclass
 class EconomicConfig:
     """Configurable economic and Bayesian calibration parameters (v2.2)."""
-    labor_hourly_rate: float = 50.0           # Normalized labor cost $/hour
-    value_per_conversion: float = 10.0        # Expected dollar value per conversion
+
+    labor_hourly_rate: float = 50.0  # Normalized labor cost $/hour
+    value_per_conversion: float = 10.0  # Expected dollar value per conversion
     currency: str = "USD"
-    time_horizon_days: int = 90               # Economic time horizon for payback (days)
-    cold_start_alpha: float = 1.5             # Prior alpha for Beta(1.5, 3.5) -> mean 0.30
-    cold_start_beta: float = 3.5              # Prior beta
-    success_click_growth_threshold: float = 0.10  # Minimum 10% lift for organic intervention success
+    time_horizon_days: int = 90  # Economic time horizon for payback (days)
+    cold_start_alpha: float = 1.5  # Prior alpha for Beta(1.5, 3.5) -> mean 0.30
+    cold_start_beta: float = 3.5  # Prior beta
+    success_click_growth_threshold: float = (
+        0.10  # Minimum 10% lift for organic intervention success
+    )
 
 
 DEFAULT_ECONOMICS_PATH = "~/.seo_fleet/economics.json"
@@ -206,23 +214,33 @@ def compute_opportunity_intelligence(
     if conn and domain:
         try:
             from fleet_state import get_action_effectiveness
+
             eff = get_action_effectiveness(conn, domain, action, route_family)
             if eff.get("has_empirical_evidence"):
                 p_success = float(eff.get("smoothed_win_rate", 0.30))
                 conf_stat = float(eff.get("confidence_weight", 0.0))
                 is_cold_start = False
-                alpha_post = float(eff.get("alpha_prior", cfg.cold_start_alpha)) + float(eff.get("success_count", 0.0))
-                beta_post = float(eff.get("beta_prior", cfg.cold_start_beta)) + float(eff.get("failure_count", 0.0))
+                alpha_post = float(
+                    eff.get("alpha_prior", cfg.cold_start_alpha)
+                ) + float(eff.get("success_count", 0.0))
+                beta_post = float(eff.get("beta_prior", cfg.cold_start_beta)) + float(
+                    eff.get("failure_count", 0.0)
+                )
             else:
                 # Cross-fleet prior pooling
                 from fleet_state import get_fleet_action_effectiveness
+
                 fleet_eff = get_fleet_action_effectiveness(conn, action, route_family)
                 if fleet_eff.get("total_experiments", 0) > 0:
                     p_success = float(fleet_eff.get("smoothed_win_rate", 0.30))
                     conf_stat = float(fleet_eff.get("confidence_weight", 0.0)) * 0.70
                     is_cold_start = False
-                    alpha_post = float(fleet_eff.get("alpha_prior", cfg.cold_start_alpha)) + float(fleet_eff.get("success_count", 0.0))
-                    beta_post = float(fleet_eff.get("beta_prior", cfg.cold_start_beta)) + float(fleet_eff.get("failure_count", 0.0))
+                    alpha_post = float(
+                        fleet_eff.get("alpha_prior", cfg.cold_start_alpha)
+                    ) + float(fleet_eff.get("success_count", 0.0))
+                    beta_post = float(
+                        fleet_eff.get("beta_prior", cfg.cold_start_beta)
+                    ) + float(fleet_eff.get("failure_count", 0.0))
         except Exception:
             pass
 
@@ -240,7 +258,7 @@ def compute_opportunity_intelligence(
     # 2. Uncertainty: 95% Bayesian Credible Interval
     beta_total = max(alpha_post + beta_post, 1.0)
     mean_p = alpha_post / beta_total
-    var_p = (alpha_post * beta_post) / ((beta_total ** 2) * max(beta_total + 1.0, 1.0))
+    var_p = (alpha_post * beta_post) / ((beta_total**2) * max(beta_total + 1.0, 1.0))
     sigma_p = math.sqrt(max(var_p, 1e-6))
     ci_lower = max(0.0, mean_p - 1.96 * sigma_p)
     ci_upper = min(1.0, mean_p + 1.96 * sigma_p)
@@ -270,7 +288,9 @@ def compute_opportunity_intelligence(
 
     # Incremental business value over configurable economic time horizon
     time_factor = cfg.time_horizon_days / 90.0
-    incremental_business_value = delta_clicks * p_conv * cfg.value_per_conversion * time_factor
+    incremental_business_value = (
+        delta_clicks * p_conv * cfg.value_per_conversion * time_factor
+    )
 
     # 5. Implementation Cost in resource value ($)
     labor_rate = cfg.labor_hourly_rate
@@ -289,6 +309,7 @@ def compute_opportunity_intelligence(
     if conn and domain:
         try:
             from fleet_state import get_query_owner
+
             owner_info = get_query_owner(conn, domain, query, candidate_page=page)
             if owner_info:
                 cann_risk = float(owner_info.get("cannibalization_risk", 0.0))
@@ -299,7 +320,11 @@ def compute_opportunity_intelligence(
     expected_risk_cost = cann_risk * (clicks * 1.0)
 
     # 7. Economic Expected Value EV(a)
-    ev = (p_success * incremental_business_value) - implementation_cost - expected_risk_cost
+    ev = (
+        (p_success * incremental_business_value)
+        - implementation_cost
+        - expected_risk_cost
+    )
 
     # EV Decomposition (v2.2.1 P0.2)
     ev_decomposition = {
@@ -328,7 +353,11 @@ def compute_opportunity_intelligence(
     decision_confidence = min(1.0, telemetry_conf + 0.15 * conf_stat)
 
     # 9. Priority Score
-    priority_score = (max(0.01, ev if ev > 0 else (delta_clicks * p_success)) * (1.0 - cann_risk) * decision_confidence) / (implementation_cost / 50.0)
+    priority_score = (
+        max(0.01, ev if ev > 0 else (delta_clicks * p_success))
+        * (1.0 - cann_risk)
+        * decision_confidence
+    ) / (implementation_cost / 50.0)
 
     # 10. Explicit Decision Classes: SHIP, EXPERIMENT, OBSERVE, NO_ACTION
     if cann_risk >= 0.75:
@@ -372,8 +401,12 @@ def compute_opportunity_intelligence(
         "is_cold_start": is_cold_start,
         "credible_interval_95": [round(ci_lower, 4), round(ci_upper, 4)],
         "evidence_weight": round(conf_stat, 4),
-        "model_type": "bayesian_smoothed_empirical" if not is_cold_start else "bayesian_cold_start_prior",
-        "calibration_status": "EMPIRICALLY_ESTIMATED" if not is_cold_start else "AWAITING_HOLDOUT_TEST",
+        "model_type": "bayesian_smoothed_empirical"
+        if not is_cold_start
+        else "bayesian_cold_start_prior",
+        "calibration_status": "EMPIRICALLY_ESTIMATED"
+        if not is_cold_start
+        else "AWAITING_HOLDOUT_TEST",
         "currency": cfg.currency,
         "ev_decomposition": ev_decomposition,
     }
@@ -475,9 +508,10 @@ def evaluate_temporal_holdout_calibration(
         base_c = float(base_clicks or 0.0)
         post_c = float(post_clicks or 0.0)
 
-        is_success = (
-            did_class == "STATISTICALLY_SIGNIFICANT_LIFT"
-            or (post_c > base_c and (post_c - base_c) / max(base_c, 1.0) >= cfg.success_click_growth_threshold)
+        is_success = did_class == "STATISTICALLY_SIGNIFICANT_LIFT" or (
+            post_c > base_c
+            and (post_c - base_c) / max(base_c, 1.0)
+            >= cfg.success_click_growth_threshold
         )
         y_all.append(1 if is_success else 0)
 
@@ -513,16 +547,26 @@ def evaluate_temporal_holdout_calibration(
         bins_def = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0)]
         reliability_bins = []
         for low, high in bins_def:
-            b_idx = [i for i, p in enumerate(p_all) if (low <= p < high) or (high == 1.0 and p == 1.0)]
-            mean_p = sum(p_all[i] for i in b_idx) / len(b_idx) if b_idx else (low + high) / 2.0
+            b_idx = [
+                i
+                for i, p in enumerate(p_all)
+                if (low <= p < high) or (high == 1.0 and p == 1.0)
+            ]
+            mean_p = (
+                sum(p_all[i] for i in b_idx) / len(b_idx)
+                if b_idx
+                else (low + high) / 2.0
+            )
             obs_w = sum(y_all[i] for i in b_idx) / len(b_idx) if b_idx else 0.0
-            reliability_bins.append({
-                "bin_range": [low, high],
-                "count": len(b_idx),
-                "mean_predicted": round(mean_p, 4),
-                "observed_win_rate": round(obs_w, 4),
-                "calibration_error": round(abs(mean_p - obs_w), 4),
-            })
+            reliability_bins.append(
+                {
+                    "bin_range": [low, high],
+                    "count": len(b_idx),
+                    "mean_predicted": round(mean_p, 4),
+                    "observed_win_rate": round(obs_w, 4),
+                    "calibration_error": round(abs(mean_p - obs_w), 4),
+                }
+            )
         return {
             "status": "INSUFFICIENT_SAMPLE",
             "maturity_classification": "PRIOR_ONLY",
@@ -530,7 +574,9 @@ def evaluate_temporal_holdout_calibration(
             "total_matured_experiments": n_total,
             "min_sample_size_required": min_sample_size,
             "brier_score": round(brier_score, 4),
-            "brier_skill_score": round(1.0 - (brier_score / max(bs_baseline, 1e-6)), 4) if bs_baseline > 1e-6 else 0.0,
+            "brier_skill_score": round(1.0 - (brier_score / max(bs_baseline, 1e-6)), 4)
+            if bs_baseline > 1e-6
+            else 0.0,
             "baseline_brier_score": round(bs_baseline, 4),
             "log_loss": round(log_loss, 4),
             "baseline_log_loss": round(ll_baseline, 4),
@@ -552,8 +598,12 @@ def evaluate_temporal_holdout_calibration(
     frozen_base_rate = sum(y_train) / max(len(y_train), 1)
 
     # 2. Holdout performance evaluation
-    brier_score = sum((p - y) ** 2 for p, y in zip(p_holdout, y_holdout)) / max(n_holdout, 1)
-    bs_baseline = sum((frozen_base_rate - y) ** 2 for y in y_holdout) / max(n_holdout, 1)
+    brier_score = sum((p - y) ** 2 for p, y in zip(p_holdout, y_holdout)) / max(
+        n_holdout, 1
+    )
+    bs_baseline = sum((frozen_base_rate - y) ** 2 for y in y_holdout) / max(
+        n_holdout, 1
+    )
 
     eps = 1e-15
     log_loss = -sum(
@@ -561,7 +611,8 @@ def evaluate_temporal_holdout_calibration(
         for p, y in zip(p_holdout, y_holdout)
     ) / max(n_holdout, 1)
     ll_baseline = -sum(
-        y * math.log(max(frozen_base_rate, eps)) + (1 - y) * math.log(max(1.0 - frozen_base_rate, eps))
+        y * math.log(max(frozen_base_rate, eps))
+        + (1 - y) * math.log(max(1.0 - frozen_base_rate, eps))
         for y in y_holdout
     ) / max(n_holdout, 1)
 
@@ -573,9 +624,19 @@ def evaluate_temporal_holdout_calibration(
     # Calibration intercept (a) and slope (b) on holdout with standard errors
     cal_a, cal_b = 0.0, 1.0
     se_a, se_b = 0.0, 0.0
-    if n_holdout >= 5 and 0.0 < frozen_base_rate < 1.0 and sum(y_holdout) > 0 and sum(y_holdout) < n_holdout:
+    if (
+        n_holdout >= 5
+        and 0.0 < frozen_base_rate < 1.0
+        and sum(y_holdout) > 0
+        and sum(y_holdout) < n_holdout
+    ):
         try:
-            logits = [math.log(max(min(p, 1.0 - eps), eps) / max(min(1.0 - p, 1.0 - eps), eps)) for p in p_holdout]
+            logits = [
+                math.log(
+                    max(min(p, 1.0 - eps), eps) / max(min(1.0 - p, 1.0 - eps), eps)
+                )
+                for p in p_holdout
+            ]
             beta = np.array([0.0, 1.0])
             X_mat = np.array([[1.0, z] for z in logits])
             Y_vec = np.array(y_holdout, dtype=float)
@@ -601,34 +662,53 @@ def evaluate_temporal_holdout_calibration(
 
     # Multi-baseline Brier Skill Scores
     bs_null_uniform = sum((0.5 - y) ** 2 for y in y_holdout) / max(n_holdout, 1)
-    bss_null_uniform = round(1.0 - (brier_score / max(bs_null_uniform, 1e-6)), 4) if bs_null_uniform > 1e-6 else 0.0
+    bss_null_uniform = (
+        round(1.0 - (brier_score / max(bs_null_uniform, 1e-6)), 4)
+        if bs_null_uniform > 1e-6
+        else 0.0
+    )
 
     # 5 Reliability bins on holdout with bin uncertainty standard errors
     bins_def = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0)]
     reliability_bins = []
     all_bins_occupied = True
     for low, high in bins_def:
-        b_idx = [i for i, p in enumerate(p_holdout) if (low <= p < high) or (high == 1.0 and p == 1.0)]
+        b_idx = [
+            i
+            for i, p in enumerate(p_holdout)
+            if (low <= p < high) or (high == 1.0 and p == 1.0)
+        ]
         if not b_idx:
             all_bins_occupied = False
-        mean_p = sum(p_holdout[i] for i in b_idx) / len(b_idx) if b_idx else (low + high) / 2.0
+        mean_p = (
+            sum(p_holdout[i] for i in b_idx) / len(b_idx)
+            if b_idx
+            else (low + high) / 2.0
+        )
         obs_w = sum(y_holdout[i] for i in b_idx) / len(b_idx) if b_idx else 0.0
         n_bin = len(b_idx)
         bin_se = math.sqrt(obs_w * (1.0 - obs_w) / max(1, n_bin)) if n_bin > 0 else 0.0
-        reliability_bins.append({
-            "bin_range": [low, high],
-            "count": n_bin,
-            "mean_predicted": round(mean_p, 4),
-            "observed_win_rate": round(obs_w, 4),
-            "bin_standard_error": round(bin_se, 4),
-            "calibration_error": round(abs(mean_p - obs_w), 4),
-        })
+        reliability_bins.append(
+            {
+                "bin_range": [low, high],
+                "count": n_bin,
+                "mean_predicted": round(mean_p, 4),
+                "observed_win_rate": round(obs_w, 4),
+                "bin_standard_error": round(bin_se, 4),
+                "calibration_error": round(abs(mean_p - obs_w), 4),
+            }
+        )
 
     # Maturity classification: PRIOR_ONLY -> PRELIMINARILY_CALIBRATED -> WELL_CALIBRATED
     if n_total < min_sample_size or n_holdout < 10:
         maturity = "PRIOR_ONLY"
         verdict = f"INSUFFICIENT_SAMPLE_SIZE_FOR_CALIBRATION: N={n_total} < {min_sample_size} minimum matured experiments."
-    elif brier_skill_score > 0.0 and brier_score <= 0.25 and all_bins_occupied and (0.7 <= cal_b <= 1.3):
+    elif (
+        brier_skill_score > 0.0
+        and brier_score <= 0.25
+        and all_bins_occupied
+        and (0.7 <= cal_b <= 1.3)
+    ):
         maturity = "WELL_CALIBRATED"
         verdict = "WELL_CALIBRATED"
     elif brier_skill_score > 0.0:
@@ -655,9 +735,15 @@ def evaluate_temporal_holdout_calibration(
         "log_loss": round(log_loss, 4),
         "baseline_log_loss": round(ll_baseline, 4),
         "calibration_intercept": round(cal_a, 4),
-        "calibration_intercept_ci_95": [round(cal_a - 1.96 * se_a, 4), round(cal_a + 1.96 * se_a, 4)],
+        "calibration_intercept_ci_95": [
+            round(cal_a - 1.96 * se_a, 4),
+            round(cal_a + 1.96 * se_a, 4),
+        ],
         "calibration_slope": round(cal_b, 4),
-        "calibration_slope_ci_95": [round(cal_b - 1.96 * se_b, 4), round(cal_b + 1.96 * se_b, 4)],
+        "calibration_slope_ci_95": [
+            round(cal_b - 1.96 * se_b, 4),
+            round(cal_b + 1.96 * se_b, 4),
+        ],
         "reliability_bins": reliability_bins,
         "reliability_diagram_bins": reliability_bins,
         "verdict": verdict,
@@ -684,10 +770,26 @@ def compute_prior_sensitivity_analysis(
     n = max(k, int(mature_trials))
 
     priors: dict[str, dict[str, Any]] = {
-        "UNIFORM": {"alpha": 1.0, "beta": 1.0, "description": "Flat uninformative prior Beta(1,1)"},
-        "JEFFREYS": {"alpha": 0.5, "beta": 0.5, "description": "Jeffreys objective invariant prior Beta(0.5,0.5)"},
-        "DOMAIN_INFORMATIVE": {"alpha": 1.5, "beta": 3.5, "description": "Historical SEO industry success prior Beta(1.5,3.5)"},
-        "EMPIRICAL_HIERARCHICAL": {"alpha": 2.0, "beta": 5.0, "description": "Fleet hierarchical pooled prior Beta(2.0,5.0)"},
+        "UNIFORM": {
+            "alpha": 1.0,
+            "beta": 1.0,
+            "description": "Flat uninformative prior Beta(1,1)",
+        },
+        "JEFFREYS": {
+            "alpha": 0.5,
+            "beta": 0.5,
+            "description": "Jeffreys objective invariant prior Beta(0.5,0.5)",
+        },
+        "DOMAIN_INFORMATIVE": {
+            "alpha": 1.5,
+            "beta": 3.5,
+            "description": "Historical SEO industry success prior Beta(1.5,3.5)",
+        },
+        "EMPIRICAL_HIERARCHICAL": {
+            "alpha": 2.0,
+            "beta": 5.0,
+            "description": "Fleet hierarchical pooled prior Beta(2.0,5.0)",
+        },
     }
 
     results = {}
@@ -793,7 +895,11 @@ def score_rows(
             )
 
         # Outcome-Driven Opportunity Intelligence v2
-        row_domain = domain or row.get("domain") or (feats.get("domain") if isinstance(feats, dict) else None)
+        row_domain = (
+            domain
+            or row.get("domain")
+            or (feats.get("domain") if isinstance(feats, dict) else None)
+        )
         intel = compute_opportunity_intelligence(row, conn=conn, domain=row_domain)
         row.update(intel)
     return {"mode": "trained_model", "label_mode": label_mode, "rows": rows}
@@ -803,7 +909,9 @@ def extract_top_shap_string(task: dict[str, Any], top_n: int = 3) -> str:
     """Extracts or formats top SHAP driver features for display."""
     shap = task.get("shap")
     if isinstance(shap, dict) and shap:
-        sorted_feats = sorted(shap.items(), key=lambda kv: abs(float(kv[1])), reverse=True)
+        sorted_feats = sorted(
+            shap.items(), key=lambda kv: abs(float(kv[1])), reverse=True
+        )
         parts = []
         for feat, val in sorted_feats[:top_n]:
             sign = "+" if val >= 0 else ""
@@ -811,7 +919,9 @@ def extract_top_shap_string(task: dict[str, Any], top_n: int = 3) -> str:
         return ", ".join(parts)
 
     target_comp = task.get("target_component")
-    if target_comp and any(c in str(target_comp) for c in ("+", "-", "imp", "pos", "shap")):
+    if target_comp and any(
+        c in str(target_comp) for c in ("+", "-", "imp", "pos", "shap")
+    ):
         return str(target_comp)
 
     action = str(task.get("action_code") or task.get("prescribed_action") or "").upper()
@@ -832,32 +942,25 @@ def extract_selection_rationale(task: dict[str, Any]) -> str:
     """Explains why the ML ranker and engine selected this specific task."""
     action = str(task.get("action_code") or task.get("prescribed_action") or "").upper()
     query = str(task.get("query") or "")
-    score = float(task.get("priority_score") or task.get("rank_score") or task.get("lgbm_score") or 0.0)
+    score = float(
+        task.get("priority_score")
+        or task.get("rank_score")
+        or task.get("lgbm_score")
+        or 0.0
+    )
     ev = float(task.get("expected_value") or 0.0)
 
     if "TITLE" in action or "H2" in action:
-        return (
-            f"Prioritized striking-distance query '{query}'; title/H2 token match deficit yields high expected CTR lift."
-        )
+        return f"Prioritized striking-distance query '{query}'; title/H2 token match deficit yields high expected CTR lift."
     elif "TABLE" in action or "SPEC" in action:
-        return (
-            f"Competitor DOM analysis indicates structured data table deficit for '{query}'; prioritized for search conversion."
-        )
+        return f"Competitor DOM analysis indicates structured data table deficit for '{query}'; prioritized for search conversion."
     elif "INLINK" in action or "HUB" in action or "CLUSTER" in action:
-        return (
-            f"Negative hub internal linking attribution detected; contextual link injection elevates PageRank equity."
-        )
+        return f"Negative hub internal linking attribution detected; contextual link injection elevates PageRank equity."
     elif "CTR" in action or "SCHEMA" in action:
-        return (
-            f"High impressions with zero clicks indicates snippet presentation failure for '{query}'; hook rewrite unlocks CTR."
-        )
+        return f"High impressions with zero clicks indicates snippet presentation failure for '{query}'; hook rewrite unlocks CTR."
     elif "ROUTE" in action or "PROGRAMMATIC" in action:
-        return (
-            f"Uncaptured search demand on query '{query}' with absent canonical route; prioritized dedicated route creation."
-        )
-    return (
-        f"Selected based on composite ML rank score ({score:.2f}) and expected value (${ev:.2f})."
-    )
+        return f"Uncaptured search demand on query '{query}' with absent canonical route; prioritized dedicated route creation."
+    return f"Selected based on composite ML rank score ({score:.2f}) and expected value (${ev:.2f})."
 
 
 def format_model_decision_summary(
@@ -888,9 +991,14 @@ def format_model_decision_summary(
     lines.append("-" * 100)
     for t in items:
         tid = str(t.get("id") or t.get("task_id") or "-")
-        slot = str(t.get("slot") or ("exploit" if float(t.get("priority_score", 0)) > 1.0 else "explore"))
+        slot = str(
+            t.get("slot")
+            or ("exploit" if float(t.get("priority_score", 0)) > 1.0 else "explore")
+        )
         action = str(t.get("action_code") or t.get("prescribed_action") or "")[:32]
-        score = float(t.get("priority_score") or t.get("rank_score") or t.get("lgbm_score") or 0.0)
+        score = float(
+            t.get("priority_score") or t.get("rank_score") or t.get("lgbm_score") or 0.0
+        )
         ev = float(t.get("expected_value") or 0.0)
         shap_str = extract_top_shap_string(t)[:30]
         rationale = extract_selection_rationale(t)
@@ -933,6 +1041,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--models-dir", default="models/")
     parser.add_argument("--output", default="data/action_queue.json")
     parser.add_argument("--queue-size", type=int, default=20)
+    parser.add_argument(
+        "--canary-size",
+        type=int,
+        default=0,
+        help="emit a 10-20 URL canary cohort for a single template before scaling",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--ledger",
@@ -1030,7 +1144,9 @@ def main(argv: list[str] | None = None) -> int:
 
         domain = args.domain or None
         fast_conn = _connect(args.state_db)
-        if _pending(fast_conn, domain=domain) >= max(args.replenish_below, args.lease_size):
+        if _pending(fast_conn, domain=domain) >= max(
+            args.replenish_below, args.lease_size
+        ):
             # Pre-lease hygiene: junk queries -> REJECTED (terminal), intent
             # tasks already covered by the route/country maps -> SHIPPED,
             # other worktrees' locked prefixes -> skipped this invocation.
@@ -1080,7 +1196,11 @@ def main(argv: list[str] | None = None) -> int:
                     f"  LEASED {task['action_code']} -> {task['page']}"
                     + (f" ({task['file_target']})" if task.get("file_target") else "")
                 )
-            print(format_model_decision_summary(leased, model_mode="cached_bundle_fast_path"))
+            print(
+                format_model_decision_summary(
+                    leased, model_mode="cached_bundle_fast_path"
+                )
+            )
             fast_conn.close()
             return 0
         fast_conn.close()
@@ -1175,6 +1295,15 @@ def main(argv: list[str] | None = None) -> int:
             f"Indexation launch gate: removed {len(launch_blocked)} queue task(s) "
             "without demand/data/uniqueness/link evidence."
         )
+    canary = (
+        build_canary_cohort(demand_scored, size=args.canary_size, model=launch_model)
+        if args.canary_size
+        else []
+    )
+    if canary:
+        print(
+            f"Canary cohort: {len(canary)} URL(s) selected; do not scale before 80% indexation."
+        )
     print(
         f"Demand/route-rescue partition: {len(demand_rows)} demand rows, "
         f"{len(rescue_rows)} route-rescue rows (rescue rows never take a queue slot)."
@@ -1254,6 +1383,7 @@ def main(argv: list[str] | None = None) -> int:
                 "route_rescue": rescue_rows[:50],
                 "consolidation": consolidation_tasks,
                 "wave_tasks": wave_tasks,
+                "canary": canary,
             },
             fh,
             indent=2,
@@ -1263,8 +1393,6 @@ def main(argv: list[str] | None = None) -> int:
     # --lease-size tasks so the next invocations lease fresh work (#36-70,
     # #71-105, ...) instead of draining the cursor dry.
     if args.state_db:
-        from fleet_state import connect_state_db
-
         conn = connect_state_db(args.state_db)
         pending = full_backlog + queue if args.compile_wave > 0 else queue
         added = enqueue_tasks(conn, pending)
@@ -1329,7 +1457,11 @@ def main(argv: list[str] | None = None) -> int:
             task["top_shap_drivers"] = extract_top_shap_string(task)
             task["selection_rationale"] = extract_selection_rationale(task)
         merge_leased_into_output(args.output, leased, hygiene)
-        print(format_model_decision_summary(leased, queue=queue, model_mode=result["mode"]))
+        print(
+            format_model_decision_summary(
+                leased, queue=queue, model_mode=result["mode"]
+            )
+        )
         conn.close()
     else:
         print(format_model_decision_summary([], queue=queue, model_mode=result["mode"]))

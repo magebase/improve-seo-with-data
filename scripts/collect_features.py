@@ -216,7 +216,8 @@ def three_way_matrix_from_sitemap(
     prefix = family_prefix.strip("/")
     pair_separator = PAIR_ROUTE_SEPARATORS.get(prefix.lower(), "-to-")
     pair_pattern = re.compile(
-        rf"/{re.escape(prefix)}/([a-z0-9-]+){re.escape(pair_separator)}([a-z0-9-]+)/", re.IGNORECASE
+        rf"/{re.escape(prefix)}/([a-z0-9-]+){re.escape(pair_separator)}([a-z0-9-]+)/",
+        re.IGNORECASE,
     )
     single_pattern = re.compile(rf"/{re.escape(prefix)}/([a-z0-9-]+)/", re.IGNORECASE)
     # entity slug -> (human phrase, existing owner route)
@@ -225,7 +226,9 @@ def three_way_matrix_from_sitemap(
         pair = pair_pattern.search(url)
         if pair:
             slug = f"{pair.group(1).lower()}{pair_separator}{pair.group(2).lower()}"
-            phrase = slug.replace(pair_separator, " to " if pair_separator == "-to-" else " vs ")
+            phrase = slug.replace(
+                pair_separator, " to " if pair_separator == "-to-" else " vs "
+            )
             entities[slug] = (phrase, url)
             continue
         single = single_pattern.search(url)
@@ -394,7 +397,8 @@ def pairwise_matrix_from_sitemap(
     vocab: list[str] = []
     pair_separator = PAIR_ROUTE_SEPARATORS.get(prefix.lower(), "-to-")
     pair_pattern = re.compile(
-        rf"/{re.escape(prefix)}/([a-z0-9-]+){re.escape(pair_separator)}([a-z0-9-]+)/", re.IGNORECASE
+        rf"/{re.escape(prefix)}/([a-z0-9-]+){re.escape(pair_separator)}([a-z0-9-]+)/",
+        re.IGNORECASE,
     )
     single_pattern = re.compile(rf"/{re.escape(prefix)}/([a-z0-9-]+)/", re.IGNORECASE)
     existing_pairs: set = set()
@@ -587,7 +591,9 @@ def mine_paa_and_related_from_cache(
             pass
 
         try:
-            for sq, items_str in cur.execute("SELECT query, items_json FROM dfs_serp_cache"):
+            for sq, items_str in cur.execute(
+                "SELECT query, items_json FROM dfs_serp_cache"
+            ):
                 cache_rows.append((sq, items_str))
         except Exception:  # noqa: BLE001
             pass
@@ -605,7 +611,10 @@ def mine_paa_and_related_from_cache(
             try:
                 temp_conn = sqlite3.connect(conn_or_cache)
                 return mine_paa_and_related_from_cache(
-                    temp_conn, clean_domain, sitemap_urls=sitemap_urls, max_candidates=max_candidates
+                    temp_conn,
+                    clean_domain,
+                    sitemap_urls=sitemap_urls,
+                    max_candidates=max_candidates,
                 )
             except Exception:  # noqa: BLE001
                 pass
@@ -615,7 +624,10 @@ def mine_paa_and_related_from_cache(
                     data = json.load(fh)
                 if isinstance(data, dict):
                     return mine_paa_and_related_from_cache(
-                        data, clean_domain, sitemap_urls=sitemap_urls, max_candidates=max_candidates
+                        data,
+                        clean_domain,
+                        sitemap_urls=sitemap_urls,
+                        max_candidates=max_candidates,
                     )
             except Exception:  # noqa: BLE001
                 pass
@@ -624,9 +636,27 @@ def mine_paa_and_related_from_cache(
         return []
 
     generic_web_tokens = {
-        "free", "online", "download", "tool", "tools", "app", "apps",
-        "best", "near", "service", "services", "web", "site", "page",
-        "guide", "overview", "list", "top", "how", "what", "calculator",
+        "free",
+        "online",
+        "download",
+        "tool",
+        "tools",
+        "app",
+        "apps",
+        "best",
+        "near",
+        "service",
+        "services",
+        "web",
+        "site",
+        "page",
+        "guide",
+        "overview",
+        "list",
+        "top",
+        "how",
+        "what",
+        "calculator",
     }
 
     candidates: list[dict[str, Any]] = []
@@ -645,7 +675,9 @@ def mine_paa_and_related_from_cache(
 
         serp_q_clean = str(serp_q).lower().strip()
         serp_toks = set(tokenize(serp_q_clean))
-        is_known_query = (serp_q_clean in domain_queries) or isinstance(conn_or_cache, dict)
+        is_known_query = (serp_q_clean in domain_queries) or isinstance(
+            conn_or_cache, dict
+        )
         # Multi-tenant fleet barrier: only mine cached SERPs for queries verified to belong to this domain
         if not is_known_query:
             continue
@@ -656,13 +688,13 @@ def mine_paa_and_related_from_cache(
             t = it.get("type")
             extracted: list[tuple[str, str]] = []
             if t == "people_also_ask":
-                for elem in (it.get("items") or []):
+                for elem in it.get("items") or []:
                     if isinstance(elem, dict):
                         title = elem.get("title") or elem.get("keyword")
                         if title:
                             extracted.append(("paa", str(title)))
             elif t in ("related_searches", "people_also_search"):
-                for elem in (it.get("items") or []):
+                for elem in it.get("items") or []:
                     if isinstance(elem, str):
                         extracted.append(("related_search", elem))
                     elif isinstance(elem, dict):
@@ -698,9 +730,18 @@ def mine_paa_and_related_from_cache(
                             best_overlap = ov
                             best_url = u
 
+                query_intent = classify_query_intent(clean_text)
+                candidate_kind = "existing_page" if best_url else "new_route"
+                if best_url and not intent_matches(best_url, clean_text):
+                    # Do not attach a consumer verification query to a
+                    # comparison/troubleshooting URL just because tokens
+                    # overlap.  Re-route it to its own intent family.
+                    best_url = None
+                    candidate_kind = "new_route"
                 if not best_url:
-                    slug = "-".join(list(tokenize(clean_text).keys())) or "guide"
-                    best_url = f"https://{clean_domain}/{slug}/"
+                    best_url, query_intent = proposed_route_for_query(
+                        clean_text, clean_domain
+                    )
 
                 key = (clean_text.lower(), best_url.lower().rstrip("/"))
                 if key in seen:
@@ -716,7 +757,11 @@ def mine_paa_and_related_from_cache(
                         "current_pos": 100.0,
                         "ctr": 0.0,
                         "window_days": 0,
-                        "source": f"{kind}_expansion",
+                        "source": f"{kind}_{'expansion' if candidate_kind == 'existing_page' else 'new_route'}",
+                        "candidate_kind": candidate_kind,
+                        "page_intent": classify_page_intent(best_url),
+                        "query_intent": query_intent,
+                        "intent_match": True,
                     }
                 )
                 if len(candidates) >= max_candidates:
@@ -733,6 +778,7 @@ def auto_expand_candidates_if_depleted(
     pending_threshold: int = 15,
     min_rows: int = 150,
     force: bool = False,
+    allow_synthetic: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Auto-triggers Tier-2/Tier-3 expansion when domain pending task backlog < threshold.
 
@@ -756,7 +802,9 @@ def auto_expand_candidates_if_depleted(
         except Exception:
             pending = 0
 
-    should_expand = force or (pending < pending_threshold) or (len(candidates) < min_rows)
+    should_expand = (
+        force or (pending < pending_threshold) or (len(candidates) < min_rows)
+    )
     if not should_expand:
         return candidates, {
             "expanded": False,
@@ -767,7 +815,10 @@ def auto_expand_candidates_if_depleted(
 
     expanded: list[dict[str, Any]] = list(candidates)
     seen_keys: set[tuple[str, str]] = {
-        (str(c.get("query", "")).lower().strip(), str(c.get("page", "")).lower().rstrip("/"))
+        (
+            str(c.get("query", "")).lower().strip(),
+            str(c.get("page", "")).lower().rstrip("/"),
+        )
         for c in expanded
     }
 
@@ -806,8 +857,9 @@ def auto_expand_candidates_if_depleted(
                 expanded.append(m)
                 report["mined_paa_added"] += 1
 
-    # Tier 3: Combinatorial entity pairwise & three-way modifier matrices
-    if sitemap_urls:
+    # Tier 3 is opt-in only.  Synthetic pairwise/three-way matrices are the
+    # exact source of the doorway pages Google declined to index.
+    if sitemap_urls and allow_synthetic:
         family_counts: Counter = Counter()
         for u in sitemap_urls:
             fam = extract_route_family(u)
@@ -825,9 +877,14 @@ def auto_expand_candidates_if_depleted(
             else:
                 templates = [f"{fam} {{entity}}", f"{{entity}} {fam}"]
 
-            pairs = pairwise_matrix_from_sitemap(sitemap_urls, fam, templates, max_pairs=30)
+            pairs = pairwise_matrix_from_sitemap(
+                sitemap_urls, fam, templates, max_pairs=30
+            )
             for p in pairs:
-                k = (str(p["query"]).lower().strip(), str(p["page"]).lower().rstrip("/"))
+                k = (
+                    str(p["query"]).lower().strip(),
+                    str(p["page"]).lower().rstrip("/"),
+                )
                 if k not in seen_keys:
                     seen_keys.add(k)
                     expanded.append(p)
@@ -842,7 +899,10 @@ def auto_expand_candidates_if_depleted(
                 max_rows=20,
             )
             for tw in three_way:
-                k = (str(tw["query"]).lower().strip(), str(tw["page"]).lower().rstrip("/"))
+                k = (
+                    str(tw["query"]).lower().strip(),
+                    str(tw["page"]).lower().rstrip("/"),
+                )
                 if k not in seen_keys:
                     seen_keys.add(k)
                     expanded.append(tw)
@@ -1033,7 +1093,17 @@ def synthesize_orphan_rows(
         # Never synthesize 1-word queries from hub/category slugs (e.g., /compare/ or /niche/insurance/)
         first_segment = rel_path.strip("/").split("/")[0] if rel_path.strip("/") else ""
         if (
-            first_segment in {"compare", "calculators", "articles", "tools", "niche", "convert", "studio", "guides"}
+            first_segment
+            in {
+                "compare",
+                "calculators",
+                "articles",
+                "tools",
+                "niche",
+                "convert",
+                "studio",
+                "guides",
+            }
             and len(slug_tokens) < 2
         ):
             continue
@@ -1095,7 +1165,11 @@ def gsc_candidates_with_fallback(
     the same primitive the backfill and recrawl-verification paths use.
     Returns (candidates, mode) where mode is "report" or "gsc_window".
     """
-    gsc_property = site if (site.startswith("http") or site.startswith("sc-domain:")) else f"sc-domain:{site}"
+    gsc_property = (
+        site
+        if (site.startswith("http") or site.startswith("sc-domain:"))
+        else f"sc-domain:{site}"
+    )
     report = (run_report_fn or run_seo_report)(report_id, gsc_property)
     if not report.get("ok", True) and "error" in report:
         print(
@@ -1121,14 +1195,18 @@ def gsc_candidates_with_fallback(
             site, start_90.isoformat(), end.isoformat()
         )
     if not window_rows and window_days < 180:
-        print("      90d window carried no performance rows; falling back to 180d window.")
+        print(
+            "      90d window carried no performance rows; falling back to 180d window."
+        )
         start_180 = end - timedelta(days=180)
         window_rows = (pull_window_fn or pull_gsc_window)(
             site, start_180.isoformat(), end.isoformat()
         )
     if not window_rows:
         if allow_empty:
-            print("      no GSC candidates found in report or window; continuing with empty GSC rows.")
+            print(
+                "      no GSC candidates found in report or window; continuing with empty GSC rows."
+            )
             return [], "empty"
         raise RuntimeError(
             "no GSC candidates from either the report or the gsc-query window"
@@ -1226,16 +1304,24 @@ def load_or_fetch_search_volumes(
     max_keywords: int = 200,
     allow_live: bool = True,
 ) -> dict[str, float]:
-    """Return cached DataForSEO volumes; price only the missing queries.
+    """Return cached DataForSEO volumes keyed by normalised query.
 
-    The 30-day cache is the primary source, so repeated skill invocations never
-    re-bill the same keyword.  No GSC history is required; this is the
-    cold-start demand signal for a brand-new domain.
+    A missing key is absent, never imputed from impressions or another row.
+    Only queries with no cached volume are priced, and the result is written
+    back under the same normalised key so later runs reuse the paid call.
     """
     if state_conn is None:
         return {}
-    volumes = load_cached_serp_volumes(state_conn, queries)
-    missing = [query for query in queries if query not in volumes]
+    normalised: dict[str, str] = {}
+    for query in queries:
+        key = str(query).strip().lower()
+        if key and key not in normalised:
+            normalised[key] = str(query)
+    volumes: dict[str, float] = {}
+    cached = load_cached_serp_volumes(state_conn, list(normalised.values()))
+    for query, value in cached.items():
+        volumes[str(query).strip().lower()] = float(value)
+    missing = [query for key, query in normalised.items() if key not in volumes]
     if client is None or not missing or not allow_live:
         return volumes
     missing = missing[: max(0, int(max_keywords))]
@@ -1245,8 +1331,170 @@ def load_or_fetch_search_volumes(
         return volumes
     if fetched:
         save_serp_volumes(state_conn, fetched)
-        volumes.update({str(k): float(v) for k, v in fetched.items()})
+        for keyword, value in fetched.items():
+            volumes[str(keyword).strip().lower()] = float(value)
     return volumes
+
+
+PAGE_INTENT_PREFIXES = (
+    ("/compare/", "comparison"),
+    ("/troubleshooting/", "troubleshooting"),
+    ("/developer/", "developer"),
+    ("/tools/", "tool"),
+    ("/verify/", "verification"),
+    ("/receive-sms/", "inbox"),
+    ("/guides/", "guide"),
+)
+
+ALLOWED_QUERY_INTENTS = {
+    "root": {
+        "inbox",
+        "verification",
+        "guide",
+        "tool",
+        "comparison",
+        "developer",
+        "troubleshooting",
+    },
+    "inbox": {"inbox", "verification", "guide"},
+    "verification": {"verification", "inbox", "guide"},
+    "comparison": {"comparison", "developer"},
+    "developer": {"developer", "comparison", "tool"},
+    "troubleshooting": {"troubleshooting", "guide"},
+    "tool": {"tool", "verification", "inbox"},
+    "guide": {"guide", "inbox", "verification", "troubleshooting", "tool"},
+}
+
+
+def classify_query_intent(query: str) -> str:
+    """Classify the searcher's job, not just the topic.
+
+    A comparison page must not be scored against a consumer "receive SMS"
+    query; the intent mismatch makes every downstream ranking estimate
+    meaningless even when the tokens overlap.
+    """
+    text = " " + str(query).strip().lower() + " "
+    if " vs " in text or " versus " in text or "compare" in text:
+        return "comparison"
+    if any(
+        term in text
+        for term in (
+            "not working",
+            "blocked",
+            "error",
+            "troubleshoot",
+            "fix ",
+            "fails",
+            "failure",
+        )
+    ):
+        return "troubleshooting"
+    if any(
+        term in text
+        for term in ("pricing", "api", "developer", "sdk", "integration", "docs")
+    ):
+        return "developer"
+    if any(
+        term in text
+        for term in ("verify", "verification", "otp", "one time code", "code online")
+    ):
+        return "verification"
+    if any(
+        term in text
+        for term in (
+            "receive sms",
+            "sms receive",
+            "temp number",
+            "temporary number",
+            "virtual number",
+            "phone number",
+            "inbox",
+        )
+    ):
+        return "inbox"
+    if any(
+        term in text
+        for term in (
+            "calculator",
+            "validator",
+            "lookup",
+            "formatter",
+            "generator",
+            "checker",
+        )
+    ):
+        return "tool"
+    return "guide"
+
+
+def classify_page_intent(page: str) -> str:
+    path = "/" + str(page).split("://", 1)[-1].split("?", 1)[0].split("/", 1)[-1]
+    for prefix, intent in PAGE_INTENT_PREFIXES:
+        if path.startswith(prefix):
+            return intent
+    return "root"
+
+
+def intent_matches(page: str, query: str, explicit: Any = None) -> bool:
+    if explicit is not None:
+        return bool(explicit)
+    return classify_query_intent(query) in ALLOWED_QUERY_INTENTS.get(
+        classify_page_intent(page), {"guide", "inbox", "verification"}
+    )
+
+
+def proposed_route_for_query(query: str, domain: str) -> tuple[str, str]:
+    intent = classify_query_intent(query)
+    prefix = {
+        "comparison": "compare",
+        "troubleshooting": "troubleshooting",
+        "developer": "developer",
+        "verification": "verify",
+        "inbox": "receive-sms",
+        "tool": "tools",
+        "guide": "guides",
+    }[intent]
+    slug = "-".join(tokenize(query).keys()) or "guide"
+    return f"https://{domain}/{prefix}/{slug}/", intent
+
+
+def load_page_contracts(path: str | None) -> dict[str, dict[str, Any]]:
+    """Loads the pre-build viability contract keyed by page or route family.
+
+    The contract is produced from the dry-run payload, not the live DOM:
+    ``unique_data_fields``, ``planned_indexed_inlinks``, ``intent_match`` and
+    ``non_boilerplate_ratio`` are exactly the fields a page will have *after*
+    it exists, so a new route can be judged before creation.
+    """
+    if not path:
+        return {}
+    with open(path, encoding="utf-8") as fh:
+        raw = json.load(fh)
+    if not isinstance(raw, dict):
+        raise ValueError("page contracts must be a JSON object")
+    contracts: dict[str, dict[str, Any]] = {}
+    for key, value in raw.items():
+        if isinstance(value, dict):
+            contracts[str(key).strip().lower()] = value
+    return contracts
+
+
+def contract_for_page(
+    page: str,
+    contracts: dict[str, dict[str, Any]] | None,
+) -> dict[str, Any]:
+    if not contracts:
+        return {}
+    candidates = [
+        str(page).strip().lower(),
+        str(page).strip().lower().rstrip("/") + "/",
+        extract_route_family(page).strip().lower(),
+        "default",
+    ]
+    for key in candidates:
+        if key and key in contracts:
+            return contracts[key]
+    return {}
 
 
 def max_sibling_similarity(
@@ -1500,6 +1748,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--hub-links", help="CSV export: url_prefix,internal_links")
     parser.add_argument("--output", default="data/ltr_features.json")
+    parser.add_argument(
+        "--page-contracts",
+        help="JSON viability contracts for dry-run payloads: "
+        "unique_data_fields, planned_indexed_inlinks, non_boilerplate_ratio",
+    )
     parser.add_argument("--max-serp-cost", type=float, default=5.0, help="USD cap")
     parser.add_argument(
         "--max-volume-keywords",
@@ -1581,6 +1834,11 @@ def main(argv: list[str] | None = None) -> int:
         default=15,
         help="backlog replenishment threshold: when domain pending task count "
         "falls below this (default 15), triggers Tier-2/Tier-3 candidate expansion",
+    )
+    parser.add_argument(
+        "--allow-synthetic",
+        action="store_true",
+        help="allow opt-in pairwise/three-way matrix candidates (off by default)",
     )
     parser.add_argument(
         "--force-expand",
@@ -1706,8 +1964,10 @@ def main(argv: list[str] | None = None) -> int:
     # Tier-2/Tier-3 auto-expansion when domain pending task backlog < threshold
     if state_conn is not None or args.force_expand:
         try:
-            cur_sitemaps = sitemap_urls if not args.no_orphans and "sitemap_urls" in locals() else (
-                fetch_sitemap_urls(args.site) if not args.no_orphans else []
+            cur_sitemaps = (
+                sitemap_urls
+                if not args.no_orphans and "sitemap_urls" in locals()
+                else (fetch_sitemap_urls(args.site) if not args.no_orphans else [])
             )
             candidates, exp_report = auto_expand_candidates_if_depleted(
                 domain=args.site,
@@ -1717,6 +1977,7 @@ def main(argv: list[str] | None = None) -> int:
                 pending_threshold=args.pending_threshold,
                 min_rows=args.top,
                 force=args.force_expand,
+                allow_synthetic=args.allow_synthetic,
             )
             if exp_report.get("expanded"):
                 print(
@@ -1824,7 +2085,7 @@ def main(argv: list[str] | None = None) -> int:
         except RuntimeError as exc:
             print(
                 f"[2/3] DataForSEO unavailable ({exc}) -> GSC-only mode "
-                "(SERP features fall back to neutral 0.0, volume falls back to impressions)."
+                "(SERP features stay unscored and volume stays missing; no synthetic demand)."
             )
     client = DataForSEOClient(login, password) if login and password else None
 
@@ -1961,6 +2222,7 @@ def main(argv: list[str] | None = None) -> int:
             f"      Search volume available for {len(volume_by_query)}/{len(queries)} candidates (30d cache)."
         )
 
+    contracts = load_page_contracts(args.page_contracts)
     print("[3/3] Computing 8-feature matrix ...")
     feature_rows: list[dict[str, Any]] = []
     for cand in candidates:
@@ -1975,14 +2237,10 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
         # Only the cached Keywords-Data volume is a real demand signal.
-        # SERP items can contain unrelated Labs keyword_info blocks; using the
-        # first one leaked high volumes onto unrelated queries.
-        volume = volume_by_query.get(cand["query"])
-        volume_log = (
-            math.log10(volume + 1)
-            if volume
-            else math.log10(cand["impressions"] + 1) * 2.0
-        )
+        # A missing volume is stored as missing; impressions are a separate
+        # feature and must never be transformed into a fake search volume.
+        volume = volume_by_query.get(str(cand["query"]).strip().lower())
+        volume_log = math.log10(volume + 1) if volume and volume > 0 else 0.0
 
         cluster_path = cand["page"].split("://", 1)[-1].split("/")
         cluster_id = cluster_path[1] if len(cluster_path) > 1 else "root"
@@ -1991,17 +2249,56 @@ def main(argv: list[str] | None = None) -> int:
             prefix, hub_links.get(cand["page"].rstrip("/").lower(), 0.0)
         )
 
-        sitemap_for_similarity = (
-            sitemap_urls if "sitemap_urls" in locals() else []
-        )
+        sitemap_for_similarity = sitemap_urls if "sitemap_urls" in locals() else []
         sibling_similarity = max_sibling_similarity(
             cand["query"], cand["page"], sitemap_for_similarity
         )
+        contract = contract_for_page(cand["page"], contracts)
+        candidate_kind = str(
+            cand.get("candidate_kind")
+            or (
+                "existing_page"
+                if cand["page"] in sitemap_for_similarity
+                else "new_route"
+            )
+        )
+        query_intent = str(
+            cand.get("query_intent") or classify_query_intent(cand["query"])
+        )
+        page_intent = str(cand.get("page_intent") or classify_page_intent(cand["page"]))
+        intent_ok = (
+            bool(cand["intent_match"])
+            if "intent_match" in cand
+            else intent_matches(cand["page"], cand["query"])
+        )
+        serp_types = item_types_by_query.get(cand["query"], []) or []
+        serp_fetched = (
+            bool(cand.get("serp_fetched")) or bool(serp_types) or bool(serp_items)
+        )
         unique_data_fields = float(
-            cand.get("unique_data_fields")
+            contract.get("unique_data_fields")
+            or cand.get("unique_data_fields")
             or cand.get("data_fields")
             or cand.get("live_data_fields")
             or 0
+        )
+        planned_inlinks = float(
+            contract.get("planned_indexed_inlinks")
+            or cand.get("planned_indexed_inlinks")
+            or 0
+        )
+        effective_inlinks = (
+            float(hub_count) if candidate_kind == "existing_page" else planned_inlinks
+        )
+        non_boilerplate_ratio = float(
+            contract.get("non_boilerplate_ratio")
+            or cand.get("non_boilerplate_ratio")
+            or 0
+        )
+        has_existing_owner = bool(cand.get("has_existing_owner")) or any(
+            sibling.rstrip("/") != cand["page"].rstrip("/")
+            and tokenize(sibling) == tokenize(cand["page"])
+            for sibling in sitemap_for_similarity
         )
         feature_rows.append(
             {
@@ -2015,20 +2312,37 @@ def main(argv: list[str] | None = None) -> int:
                 "source": cand.get("source", "gsc"),
                 "coverage_state": cand.get("coverage_state"),
                 "actions": cand.get("actions"),
+                "candidate_kind": candidate_kind,
+                "page_intent": page_intent,
+                "query_intent": query_intent,
+                "intent_match": intent_ok,
+                "serp_fetched": serp_fetched,
+                "serp_item_types": serp_types,
+                "search_volume": volume,
+                "search_volume_log": round(volume_log, 6),
+                "demand_source": "keywords_data" if volume else "none",
+                "non_boilerplate_ratio": non_boilerplate_ratio,
+                "has_existing_owner": has_existing_owner,
                 # Launch-gate evidence derived without any historical outcome
                 # labels: live sitemap vocabulary, live hub links, real
                 # Keywords-Data volume, and the page's own data contract.
                 "sibling_similarity": sibling_similarity,
-                "inlinks_from_indexed": float(hub_count),
+                "inlinks_from_indexed": effective_inlinks,
+                "planned_indexed_inlinks": planned_inlinks,
                 "unique_data_fields": unique_data_fields,
                 "required_data_fields": float(
-                    cand.get("required_data_fields")
+                    contract.get("required_data_fields")
+                    or cand.get("required_data_fields")
                     or cand.get("required_live_records")
                     or 3
                 ),
-                "template_index_rate": float(cand.get("template_index_rate") or 0.5),
+                "template_index_rate": float(
+                    contract.get("template_index_rate")
+                    or cand.get("template_index_rate")
+                    or 0.5
+                ),
                 "serp_meta": serp_item_metadata(
-                    {"item_types": item_types_by_query.get(cand["query"], [])},
+                    {"item_types": serp_types},
                     serp_items,
                     cand["query"],
                 ),

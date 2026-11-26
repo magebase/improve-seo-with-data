@@ -11,6 +11,9 @@ from fleet_state import connect_state_db
 from indexation_forecast import (
     IndexationModel,
     backtest,
+    build_canary_cohort,
+    canary_sitemap,
+    evaluate_canary_outcomes,
     evaluate_launch_candidate,
     extract_launch_features,
     labels_from_outcomes,
@@ -32,6 +35,12 @@ def _strong_candidate() -> dict:
         "unique_data_fields": 7,
         "sibling_similarity": 0.18,
         "inlinks_from_indexed": 5,
+        "planned_indexed_inlinks": 5,
+        "non_boilerplate_ratio": 0.82,
+        "candidate_kind": "new_route",
+        "serp_fetched": True,
+        "serp_item_types": ["organic", "people_also_ask"],
+        "intent_match": True,
     }
 
 
@@ -43,16 +52,18 @@ def _synthetic_pair() -> dict:
         "impressions": 0.0,
         "clicks_30d": 0.0,
         "source": "catalog_matrix",
+        "candidate_kind": "new_route",
     }
 
 
 def test_synthetic_matrix_pair_never_clears_the_launch_gate():
     decision = evaluate_launch_candidate(_synthetic_pair())
     assert decision.eligible is False
-    assert "no_demand_evidence" in decision.reasons
-    assert "insufficient_unique_data" in decision.reasons
+    assert decision.status == "unscored_missing_serp"
+    assert "serp_features" in decision.reasons
+    assert "unique_data_fields" in decision.reasons
     assert "sibling_similarity_too_high" in decision.reasons
-    assert "insufficient_indexed_inlinks" in decision.reasons
+    assert "planned_indexed_inlinks" in decision.reasons
 
 
 def test_evidence_backed_candidate_clears_the_launch_gate():
@@ -86,7 +97,7 @@ def test_missing_data_fields_block_a_demand_backed_candidate():
     candidate["unique_data_fields"] = 1
     decision = evaluate_launch_candidate(candidate)
     assert decision.eligible is False
-    assert "insufficient_unique_data" in decision.reasons
+    assert "unique_data_fields" in decision.reasons
 
 
 def test_launch_model_persists_and_round_trips(tmp_path):
@@ -226,7 +237,9 @@ def test_outcome_ledger_labels_positive_negative_and_censors_recent_launches():
     )
 
     labels = labels_from_outcomes(conn)
-    by_url = {(record["url"], record["horizon_days"]): record["label"] for record in labels}
+    by_url = {
+        (record["url"], record["horizon_days"]): record["label"] for record in labels
+    }
     assert by_url[("https://example.com/indexed/", 28)] == 1
     assert by_url[("https://example.com/indexed/", 56)] == 1
     assert by_url[("https://example.com/rejected/", 28)] == 0
@@ -322,9 +335,50 @@ def test_backtest_refuses_to_claim_metrics_from_too_few_records():
 
 
 def test_feature_extraction_is_pessimistic_when_evidence_is_missing():
-    features = extract_launch_features({"page": "https://example.com/new/", "current_pos": 100})
+    features = extract_launch_features(
+        {"page": "https://example.com/new/", "current_pos": 100}
+    )
     assert features["sibling_similarity"] == 1.0
     assert features["inlinks_from_indexed"] == 0.0
     assert features["unique_data_fields"] == 0.0
     assert features["search_volume_log"] == 0.0
     assert features["has_existing_owner"] == 0.0
+
+
+def test_canary_cohort_is_small_family_diverse_and_gated():
+    rows = []
+    for index in range(8):
+        row = _strong_candidate()
+        row["page"] = f"https://example.com/receive-sms/c{index}/"
+        row["query"] = f"receive sms c{index}"
+        rows.append(row)
+    for index in range(8):
+        row = _strong_candidate()
+        row["page"] = f"https://example.com/verify/app{index}/"
+        row["query"] = f"verify app{index}"
+        rows.append(row)
+    cohort = build_canary_cohort(rows, size=10, max_per_family=5)
+    assert len(cohort) == 10
+    assert {row["template_family"] for row in cohort} == {"receive-sms", "verify"}
+    assert all(row["canary"] is True for row in cohort)
+
+
+def test_canary_scaling_requires_eighty_percent_indexed_and_impressions():
+    good = [
+        {"coverage_state": "Submitted and indexed", "impressions": 1.0}
+        for _ in range(8)
+    ] + [
+        {"coverage_state": "Crawled - currently not indexed", "impressions": 0.0}
+        for _ in range(2)
+    ]
+    assert evaluate_canary_outcomes(good)["scale_allowed"] is True
+    bad = good[:7] + good[8:]
+    result = evaluate_canary_outcomes(bad)
+    assert result["scale_allowed"] is False
+    assert "indexed_rate_below_floor" in result["reasons"]
+
+
+def test_canary_sitemap_isolates_the_cohort():
+    xml = canary_sitemap(["https://example.com/a/"], base_url="https://example.com")
+    assert "<loc>https://example.com/a/</loc>" in xml
+    assert xml.startswith("<?xml")

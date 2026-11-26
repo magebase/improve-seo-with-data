@@ -35,7 +35,8 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 import numpy as np
 
@@ -65,19 +66,19 @@ FEATURE_NAMES = [
 PRIOR_INTERCEPT = -4.0
 PRIOR_COEFFICIENTS = np.array(
     [
-        0.70,   # search_volume_log: DataForSEO demand is the primary cold signal
-        0.50,   # impressions_log
-        0.50,   # position_strength
-        2.00,   # template_index_rate
-        0.50,   # unique_data_fields
+        0.70,  # search_volume_log: DataForSEO demand is the primary cold signal
+        0.50,  # impressions_log
+        0.50,  # position_strength
+        2.00,  # template_index_rate
+        0.50,  # unique_data_fields
         -2.50,  # sibling_similarity
-        0.40,   # inlinks_from_indexed
-        0.10,   # freshness_days_log
-        0.30,   # serp_forum_ratio
+        0.40,  # inlinks_from_indexed
+        0.10,  # freshness_days_log
+        0.30,  # serp_forum_ratio
         -0.20,  # title_exact_match_rate
         -2.00,  # has_existing_owner
-        0.10,   # page_age_days_log
-        0.20,   # horizon_days_norm
+        0.10,  # page_age_days_log
+        0.20,  # horizon_days_norm
     ],
     dtype=float,
 )
@@ -130,6 +131,53 @@ def _nested_value(row: dict[str, Any], keys: Iterable[str], default: Any = None)
     return default if value is None else value
 
 
+def ranking_potential(row: dict[str, Any]) -> dict[str, Any] | None:
+    """Winnability estimate, only when SERP evidence actually exists.
+
+    This is deliberately separate from P(indexed): a page can be indexable and
+    still belong to a SERP dominated by authoritative docs.  Missing SERP
+    features return ``None`` rather than a fabricated score.
+    """
+    features = extract_launch_features(row)
+    if features["serp_fetched"] <= 0.0:
+        return None
+    forum = features["serp_forum_ratio"]
+    title_gap = 1.0 - features["title_exact_match_rate"]
+    crowding = _as_float(_nested_value(row, ["serp_pixel_crowding"], 0.0), 0.0)
+    topical = _as_float(_nested_value(row, ["domain_centroid_sim"], 0.0), 0.0)
+    volume = features["search_volume_log"]
+    score = (
+        35.0 * forum
+        + 30.0 * title_gap
+        + 15.0 * max(0.0, min(1.0, topical))
+        + 10.0 * min(1.0, volume / 4.0)
+        - 20.0 * max(0.0, min(1.0, crowding))
+    )
+    score = max(0.0, min(100.0, score))
+    return {
+        "score": round(score, 1),
+        "label": "strong" if score >= 60 else ("moderate" if score >= 40 else "weak"),
+        "components": {
+            "forum_ratio": round(forum, 4),
+            "title_gap": round(title_gap, 4),
+            "topical_fit": round(topical, 4),
+            "crowding": round(crowding, 4),
+            "search_volume_log": round(volume, 4),
+        },
+    }
+
+
+def candidate_kind(row: dict[str, Any]) -> str:
+    explicit = str(_nested_value(row, ["candidate_kind"], "")).strip().lower()
+    if explicit in {"new_route", "existing_page"}:
+        return explicit
+    if _nested_value(row, ["page_exists", "is_existing_page"], False):
+        return "existing_page"
+    if str(_nested_value(row, ["coverage_state"], "")).strip():
+        return "existing_page"
+    return "new_route"
+
+
 def extract_launch_features(row: dict[str, Any]) -> dict[str, float]:
     """Extract the forecast vector from a scored candidate row.
 
@@ -137,27 +185,33 @@ def extract_launch_features(row: dict[str, Any]) -> dict[str, float]:
     than silently imputed upward: missing similarity becomes 1.0 (maximally
     duplicate), missing inlinks becomes 0, and missing data depth becomes 0.
     """
-    impressions = _as_float(_nested_value(row, ["impressions", "total_page_impressions"], 0.0))
+    kind = candidate_kind(row)
+    impressions = _as_float(
+        _nested_value(row, ["impressions", "total_page_impressions"], 0.0)
+    )
     position = _as_float(_nested_value(row, ["current_pos", "position"], 100.0), 100.0)
 
-    search_volume_log = _as_float(
-        _nested_value(row, ["search_volume_log"], 0.0), 0.0
-    )
+    search_volume_log = _as_float(_nested_value(row, ["search_volume_log"], 0.0), 0.0)
     if search_volume_log <= 0.0:
-        volume = _as_float(_nested_value(row, ["search_volume", "volume"], 0.0), 0.0)
+        volume = _as_float(_nested_value(row, ["search_volume"], 0.0), 0.0)
         search_volume_log = math.log1p(max(0.0, volume))
 
     template_index_rate = _as_float(
         _nested_value(row, ["template_index_rate", "family_index_rate"], 0.5), 0.5
     )
     unique_data_fields = _as_float(
-        _nested_value(row, ["unique_data_fields", "data_fields", "live_data_fields"], 0.0),
+        _nested_value(
+            row, ["unique_data_fields", "data_fields", "live_data_fields"], 0.0
+        ),
         0.0,
     )
     sibling_similarity = _as_float(
         _nested_value(row, ["sibling_similarity", "content_similarity"], 1.0), 1.0
     )
-    inlinks = _as_float(
+    planned_inlinks = _as_float(
+        _nested_value(row, ["planned_indexed_inlinks"], 0.0), 0.0
+    )
+    live_inlinks = _as_float(
         _nested_value(
             row,
             ["inlinks_from_indexed", "indexed_inlinks", "parent_hub_internal_links"],
@@ -165,19 +219,26 @@ def extract_launch_features(row: dict[str, Any]) -> dict[str, float]:
         ),
         0.0,
     )
+    inlinks = planned_inlinks if kind == "new_route" else live_inlinks
     freshness_days = _as_float(
         _nested_value(row, ["freshness_days", "data_age_days"], 365.0), 365.0
     )
-    forum_ratio = _as_float(
-        _nested_value(row, ["serp_forum_ratio"], 0.0), 0.0
+    forum_ratio = _as_float(_nested_value(row, ["serp_forum_ratio"], 0.0), 0.0)
+    title_match = _as_float(_nested_value(row, ["title_exact_match_rate"], 1.0), 1.0)
+    existing_owner = (
+        1.0
+        if _nested_value(row, ["has_existing_owner", "existing_owner"], False)
+        else 0.0
     )
-    title_match = _as_float(
-        _nested_value(row, ["title_exact_match_rate"], 1.0), 1.0
-    )
-    existing_owner = 1.0 if _nested_value(row, ["has_existing_owner", "existing_owner"], False) else 0.0
     page_age_days = _as_float(
         _nested_value(row, ["page_age_days", "age_days"], 0.0), 0.0
     )
+    serp_item_types = _nested_value(row, ["serp_item_types"], []) or []
+    serp_fetched = bool(_nested_value(row, ["serp_fetched"], False)) or bool(
+        serp_item_types
+    )
+    intent_match = _nested_value(row, ["intent_match"], None)
+    non_boilerplate = _as_float(_nested_value(row, ["non_boilerplate_ratio"], 0.0), 0.0)
 
     return {
         "search_volume_log": max(0.0, search_volume_log),
@@ -192,13 +253,23 @@ def extract_launch_features(row: dict[str, Any]) -> dict[str, float]:
         "title_exact_match_rate": max(0.0, min(1.0, title_match)),
         "has_existing_owner": existing_owner,
         "page_age_days_log": math.log1p(max(0.0, page_age_days)),
+        # Evidence-presence flags (not model coefficients).
+        "serp_fetched": 1.0 if serp_fetched else 0.0,
+        "intent_match": 1.0 if intent_match is True else 0.0,
+        "intent_evidence": 1.0 if intent_match is not None else 0.0,
+        "planned_indexed_inlinks": max(0.0, planned_inlinks),
+        "non_boilerplate_ratio": max(0.0, min(1.0, non_boilerplate)),
+        "candidate_kind": 1.0 if kind == "existing_page" else 0.0,
     }
 
 
-def vectorize_features(features: dict[str, float], horizon_days: int = 28) -> np.ndarray:
+def vectorize_features(
+    features: dict[str, float], horizon_days: int = 28
+) -> np.ndarray:
     horizon_norm = max(0.0, min(1.0, float(horizon_days) / 56.0))
     return np.array(
-        [float(features.get(name, 0.0)) for name in FEATURE_NAMES[:-1]] + [horizon_norm],
+        [float(features.get(name, 0.0)) for name in FEATURE_NAMES[:-1]]
+        + [horizon_norm],
         dtype=float,
     )
 
@@ -242,10 +313,14 @@ class LaunchDecision:
     features: dict[str, float] = field(default_factory=dict)
     reasons: list[str] = field(default_factory=list)
     evidence: dict[str, Any] = field(default_factory=dict)
+    status: str = "eligible"
+    missing_features: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "eligible": self.eligible,
+            "status": self.status,
+            "missing_features": list(self.missing_features),
             "p_index_28d": round(self.p_index_28d, 4),
             "p_index_56d": round(self.p_index_56d, 4),
             "lower_28d": round(self.lower_28d, 4),
@@ -275,8 +350,14 @@ class IndexationModel:
             else np.asarray(coefficients, dtype=float)
         )
         self.intercept = float(intercept)
-        self.mean = np.zeros(len(FEATURE_NAMES)) if mean is None else np.asarray(mean, dtype=float)
-        self.std = np.ones(len(FEATURE_NAMES)) if std is None else np.asarray(std, dtype=float)
+        self.mean = (
+            np.zeros(len(FEATURE_NAMES))
+            if mean is None
+            else np.asarray(mean, dtype=float)
+        )
+        self.std = (
+            np.ones(len(FEATURE_NAMES)) if std is None else np.asarray(std, dtype=float)
+        )
         # The cold-start prior is a deliberate point estimate, not a noisy
         # sample: keep its 80% band tight enough to be useful while the first
         # real outcomes are collected. Fitted models replace this with the
@@ -294,7 +375,9 @@ class IndexationModel:
         safe_std = np.where(std < 1e-9, 1.0, std)
         return (x - mean) / safe_std
 
-    def _logit(self, features: dict[str, float], horizon_days: int) -> tuple[float, float]:
+    def _logit(
+        self, features: dict[str, float], horizon_days: int
+    ) -> tuple[float, float]:
         x = vectorize_features(features, horizon_days)
         z = self._standardize(x.reshape(1, -1), self.mean, self.std)[0]
         logit = float(self.intercept + np.dot(self.coefficients, z))
@@ -302,7 +385,9 @@ class IndexationModel:
         se = math.sqrt(max(0.0, variance))
         return logit, se
 
-    def predict(self, features: dict[str, float], horizon_days: int = 28) -> dict[str, float]:
+    def predict(
+        self, features: dict[str, float], horizon_days: int = 28
+    ) -> dict[str, float]:
         logit, se = self._logit(features, horizon_days)
         probability = float(_sigmoid(logit))
         lower = float(_sigmoid(logit - 1.2816 * se))  # 80% one-sided lower bound
@@ -320,7 +405,7 @@ class IndexationModel:
         records: list[dict[str, Any]],
         l2: float = 1.0,
         max_iterations: int = 80,
-    ) -> "IndexationModel":
+    ) -> IndexationModel:
         """Fit by IRLS on records with ``features`` / ``label`` / ``horizon_days``."""
         rows: list[np.ndarray] = []
         labels: list[float] = []
@@ -396,13 +481,22 @@ class IndexationModel:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "IndexationModel":
+    def from_dict(cls, payload: dict[str, Any]) -> IndexationModel:
         return cls(
-            coefficients=np.asarray(payload.get("coefficients", PRIOR_COEFFICIENTS), dtype=float),
+            coefficients=np.asarray(
+                payload.get("coefficients", PRIOR_COEFFICIENTS), dtype=float
+            ),
             intercept=float(payload.get("intercept", PRIOR_INTERCEPT)),
-            mean=np.asarray(payload.get("mean", np.zeros(len(FEATURE_NAMES))), dtype=float),
-            std=np.asarray(payload.get("std", np.ones(len(FEATURE_NAMES))), dtype=float),
-            covariance=np.asarray(payload.get("covariance", np.eye(len(FEATURE_NAMES)) * 0.0025), dtype=float),
+            mean=np.asarray(
+                payload.get("mean", np.zeros(len(FEATURE_NAMES))), dtype=float
+            ),
+            std=np.asarray(
+                payload.get("std", np.ones(len(FEATURE_NAMES))), dtype=float
+            ),
+            covariance=np.asarray(
+                payload.get("covariance", np.eye(len(FEATURE_NAMES)) * 0.0025),
+                dtype=float,
+            ),
             n_train=int(payload.get("n_train", 0)),
             fitted=bool(payload.get("fitted", False)),
         )
@@ -414,7 +508,7 @@ class IndexationModel:
         return destination
 
     @classmethod
-    def load(cls, path: str | Path = MODEL_PATH) -> "IndexationModel":
+    def load(cls, path: str | Path = MODEL_PATH) -> IndexationModel:
         source = Path(path).expanduser()
         if not source.exists():
             return cls()
@@ -433,39 +527,102 @@ def evaluate_launch_candidate(
     min_inlinks: float = DEFAULT_MIN_INLINKS,
     min_data_fields: float = DEFAULT_MIN_DATA_FIELDS,
     min_impressions: float = DEFAULT_MIN_IMPRESSIONS,
+    min_non_boilerplate_ratio: float = 0.50,
 ) -> LaunchDecision:
     """Decide whether a candidate deserves a new indexable URL.
 
-    The gate is intentionally evidence-first.  A missing signal is a rejection,
-    not a reason to lower the threshold.  No page-count cap is applied.
+    The gate is intentionally evidence-first.  Missing SERP, volume, data
+    payload, intent, or planned links produces ``unscored_missing_serp`` /
+    ``rejected_missing_evidence`` and no probability is reported.  A missing
+    signal is never silently imputed into a high score.
     """
     model = model or IndexationModel()
     features = extract_launch_features(row)
-    p28 = model.predict(features, horizon_days=28)
-    p56 = model.predict(features, horizon_days=56)
+    kind = candidate_kind(row)
+    impressions = _as_float(
+        _nested_value(row, ["impressions", "total_page_impressions"], 0.0)
+    )
+    volume_log = features["search_volume_log"]
+    serp_fetched = features["serp_fetched"] > 0.0
+    intent_evidence = features["intent_evidence"] > 0.0
+    intent_match = features["intent_match"] > 0.0
+    planned_inlinks = features["planned_indexed_inlinks"]
 
     reasons: list[str] = []
-    impressions = _as_float(_nested_value(row, ["impressions", "total_page_impressions"], 0.0))
-    volume_log = features["search_volume_log"]
-    has_demand = impressions >= min_impressions or volume_log > 0.0
-    if not has_demand:
-        reasons.append("no_demand_evidence")
+    missing: list[str] = []
 
+    if kind == "existing_page":
+        reasons.append("existing_page_requires_enrichment")
+        return LaunchDecision(
+            eligible=False,
+            p_index_28d=0.0,
+            p_index_56d=0.0,
+            lower_28d=0.0,
+            lower_56d=0.0,
+            features=features,
+            reasons=reasons,
+            evidence={"candidate_kind": kind},
+            status="existing_page_requires_enrichment",
+            missing_features=[],
+        )
+
+    if not serp_fetched:
+        missing.append("serp_features")
+    if volume_log <= 0.0 and impressions < min_impressions:
+        missing.append("search_volume")
+    if not intent_evidence:
+        missing.append("intent_match")
+    elif not intent_match:
+        reasons.append("intent_mismatch")
+    if planned_inlinks < min_inlinks:
+        missing.append("planned_indexed_inlinks")
+    if features["non_boilerplate_ratio"] < min_non_boilerplate_ratio:
+        missing.append("non_boilerplate_ratio")
+    if features["sibling_similarity"] > max_sibling_similarity:
+        reasons.append("sibling_similarity_too_high")
     required_fields = _as_float(
-        _nested_value(row, ["required_data_fields", "required_live_records"], min_data_fields),
+        _nested_value(
+            row, ["required_data_fields", "required_live_records"], min_data_fields
+        ),
         min_data_fields,
     )
     if features["unique_data_fields"] < max(min_data_fields, required_fields):
-        reasons.append("insufficient_unique_data")
-
-    if features["sibling_similarity"] > max_sibling_similarity:
-        reasons.append("sibling_similarity_too_high")
-
-    if features["inlinks_from_indexed"] < min_inlinks:
-        reasons.append("insufficient_indexed_inlinks")
-
+        missing.append("unique_data_fields")
     if features["has_existing_owner"] > 0.0:
         reasons.append("query_owned_by_existing_page")
+
+    if missing:
+        reasons = missing + reasons
+        status = (
+            "unscored_missing_serp"
+            if "serp_features" in missing
+            else "rejected_missing_evidence"
+        )
+        return LaunchDecision(
+            eligible=False,
+            p_index_28d=0.0,
+            p_index_56d=0.0,
+            lower_28d=0.0,
+            lower_56d=0.0,
+            features=features,
+            reasons=reasons,
+            evidence={
+                "candidate_kind": kind,
+                "impressions": impressions,
+                "search_volume_log": round(volume_log, 4),
+                "serp_fetched": serp_fetched,
+                "intent_match": intent_match,
+                "planned_indexed_inlinks": planned_inlinks,
+                "unique_data_fields": round(features["unique_data_fields"], 4),
+                "sibling_similarity": round(features["sibling_similarity"], 4),
+                "non_boilerplate_ratio": round(features["non_boilerplate_ratio"], 4),
+            },
+            status=status,
+            missing_features=missing,
+        )
+
+    p28 = model.predict(features, horizon_days=28)
+    p56 = model.predict(features, horizon_days=56)
 
     if p28["probability"] < prob_28d or p28["lower"] < lower_28d:
         reasons.append("p_index_28d_below_floor")
@@ -473,13 +630,22 @@ def evaluate_launch_candidate(
         reasons.append("p_index_56d_below_floor")
 
     evidence = {
+        "candidate_kind": kind,
         "impressions": impressions,
         "search_volume_log": round(volume_log, 4),
+        "serp_fetched": serp_fetched,
+        "intent_match": intent_match,
         "required_data_fields": max(min_data_fields, required_fields),
         "unique_data_fields": round(features["unique_data_fields"], 4),
         "sibling_similarity": round(features["sibling_similarity"], 4),
         "inlinks_from_indexed": round(features["inlinks_from_indexed"], 4),
+        "planned_indexed_inlinks": planned_inlinks,
+        "non_boilerplate_ratio": round(features["non_boilerplate_ratio"], 4),
         "has_existing_owner": bool(features["has_existing_owner"]),
+        "demand_source": "keywords_data"
+        if volume_log > 0
+        else ("gsc_impressions" if impressions >= min_impressions else "none"),
+        "ranking_potential": ranking_potential(row),
     }
 
     return LaunchDecision(
@@ -491,6 +657,130 @@ def evaluate_launch_candidate(
         features=features,
         reasons=reasons,
         evidence=evidence,
+        status="eligible" if not reasons else "rejected_probability",
+        missing_features=[],
+    )
+
+
+CANARY_MIN_SIZE = 10
+CANARY_MAX_SIZE = 20
+CANARY_MIN_INDEXED_RATE = 0.80
+CANARY_MIN_IMPRESSIONS = 1.0
+
+
+def _template_family(page: str) -> str:
+    path = str(page).split("://", 1)[-1].split("?", 1)[0]
+    parts = [part for part in path.split("/") if part]
+    return parts[1] if len(parts) > 2 else (parts[0] if parts else "root")
+
+
+def build_canary_cohort(
+    rows: list[dict[str, Any]],
+    *,
+    size: int = CANARY_MAX_SIZE,
+    model: IndexationModel | None = None,
+    max_per_family: int = 5,
+) -> list[dict[str, Any]]:
+    """Select a small, evidence-qualified, family-diverse canary cohort.
+
+    The cohort is the empirical proof step: never scale a template until its
+    canary URLs are actually indexed.  Every member carries its gate decision
+    so the ledger can compare forecast with outcome later.
+    """
+    size = max(0, min(int(size), CANARY_MAX_SIZE))
+    if size < CANARY_MIN_SIZE:
+        return []
+    eligible: list[tuple[dict[str, Any], LaunchDecision]] = []
+    for row in rows:
+        decision = evaluate_launch_candidate(row, model=model)
+        if decision.eligible:
+            eligible.append((row, decision))
+    by_family: dict[str, list[tuple[dict[str, Any], LaunchDecision]]] = {}
+    for row, decision in eligible:
+        by_family.setdefault(_template_family(row.get("page", "")), []).append(
+            (row, decision)
+        )
+    selected: list[dict[str, Any]] = []
+    while len(selected) < size and any(by_family.values()):
+        for family in list(by_family):
+            bucket = by_family[family]
+            if not bucket:
+                del by_family[family]
+                continue
+            if (
+                sum(1 for item in selected if item["template_family"] == family)
+                >= max_per_family
+            ):
+                by_family.pop(family, None)
+                continue
+            row, decision = bucket.pop(0)
+            selected.append(
+                {
+                    **row,
+                    "template_family": family,
+                    "canary": True,
+                    "p_index_28d": round(decision.p_index_28d, 4),
+                    "p_index_56d": round(decision.p_index_56d, 4),
+                    "launch_evidence": decision.evidence,
+                }
+            )
+            if len(selected) >= size:
+                break
+    return selected
+
+
+def evaluate_canary_outcomes(
+    outcomes: list[dict[str, Any]],
+    *,
+    min_indexed_rate: float = CANARY_MIN_INDEXED_RATE,
+    min_impressions: float = CANARY_MIN_IMPRESSIONS,
+) -> dict[str, Any]:
+    """Scaling gate for a canary cohort.
+
+    ``coverage_state`` is the GSC URL Inspection verdict.  A cohort only earns
+    template-level scale-up when enough URLs are indexed *and* the cohort has
+    non-zero impressions; otherwise the template is rejected or pruned.
+    """
+    total = len(outcomes)
+    indexed = sum(
+        1
+        for outcome in outcomes
+        if "submitted and indexed" in str(outcome.get("coverage_state", "")).lower()
+    )
+    impressions = sum(float(outcome.get("impressions") or 0.0) for outcome in outcomes)
+    rate = indexed / total if total else 0.0
+    reasons: list[str] = []
+    if total < CANARY_MIN_SIZE:
+        reasons.append("cohort_too_small")
+    if rate < min_indexed_rate:
+        reasons.append("indexed_rate_below_floor")
+    if impressions < min_impressions:
+        reasons.append("no_impressions")
+    return {
+        "total": total,
+        "indexed": indexed,
+        "indexed_rate": round(rate, 4),
+        "impressions": round(impressions, 4),
+        "scale_allowed": not reasons,
+        "reasons": reasons,
+    }
+
+
+def canary_sitemap(urls: list[str], *, base_url: str = "") -> str:
+    """Dedicated sitemap so a canary cohort is isolated from bulk sitemaps."""
+    rows = []
+    for url in urls:
+        target = (
+            url
+            if url.startswith("http")
+            else f"{base_url.rstrip('/')}/{url.lstrip('/')}"
+        )
+        rows.append(f"  <url><loc>{target}</loc></url>")
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(rows)
+        + "\n</urlset>\n"
     )
 
 
@@ -521,7 +811,9 @@ def sync_outcomes_from_inspections(conn: sqlite3.Connection) -> int:
     ).fetchall()
     for url, coverage_state, last_crawl_time, inspected_at in rows:
         coverage = str(coverage_state or "")
-        indexed_at = inspected_at if "submitted and indexed" in coverage.lower() else None
+        indexed_at = (
+            inspected_at if "submitted and indexed" in coverage.lower() else None
+        )
         cursor = conn.execute(
             """
             UPDATE page_launch_outcomes
@@ -761,7 +1053,9 @@ def backtest(
     y = np.array([int(record["label"]) for record in test], dtype=float)
     probabilities = np.array(
         [
-            model.predict(record["features"], int(record.get("horizon_days") or 28))["probability"]
+            model.predict(record["features"], int(record.get("horizon_days") or 28))[
+                "probability"
+            ]
             for record in test
         ],
         dtype=float,
@@ -790,13 +1084,23 @@ def backtest(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Train/backtest the indexation forecast and inspect a launch candidate.")
-    parser.add_argument("--state-db", help="SQLite fleet state DB with page_launch_outcomes")
+    parser = argparse.ArgumentParser(
+        description="Train/backtest the indexation forecast and inspect a launch candidate."
+    )
+    parser.add_argument(
+        "--state-db", help="SQLite fleet state DB with page_launch_outcomes"
+    )
     parser.add_argument("--domain", help="Restrict training/backtest to one domain")
-    parser.add_argument("--fit", action="store_true", help="Fit and save the model from the state DB")
+    parser.add_argument(
+        "--fit", action="store_true", help="Fit and save the model from the state DB"
+    )
     parser.add_argument("--model", default=MODEL_PATH, help="Model JSON path")
-    parser.add_argument("--backtest-json", help="JSON file of labelled records for a holdout backtest")
-    parser.add_argument("--candidate-json", help="JSON object describing one candidate to evaluate")
+    parser.add_argument(
+        "--backtest-json", help="JSON file of labelled records for a holdout backtest"
+    )
+    parser.add_argument(
+        "--candidate-json", help="JSON object describing one candidate to evaluate"
+    )
     args = parser.parse_args(argv)
 
     if args.fit:
@@ -806,7 +1110,9 @@ def main(argv: list[str] | None = None) -> int:
 
         conn = connect_state_db(args.state_db)
         try:
-            model, report = fit_from_state_db(conn, domain=args.domain, output_path=args.model)
+            model, report = fit_from_state_db(
+                conn, domain=args.domain, output_path=args.model
+            )
         finally:
             conn.close()
         print(json.dumps(report, indent=2))
@@ -820,7 +1126,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.candidate_json:
         candidate = json.loads(Path(args.candidate_json).read_text(encoding="utf-8"))
         model = IndexationModel.load(args.model)
-        print(json.dumps(evaluate_launch_candidate(candidate, model=model).as_dict(), indent=2))
+        print(
+            json.dumps(
+                evaluate_launch_candidate(candidate, model=model).as_dict(), indent=2
+            )
+        )
         return 0
 
     parser.print_help()

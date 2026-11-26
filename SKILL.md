@@ -131,11 +131,36 @@ Position 90+ is a demand-absence signal, not demand. The skill therefore no long
 
 The model is trained on `page_launch_outcomes` (URL Inspection coverage state + GSC, recorded at launch and updated at 7/28/56 days). The transparent prior is used until at least 20 labelled outcomes exist, so the gate works on a brand-new domain with zero historical indexation data. DataForSEO supplies the cold-start demand/competition evidence: Keywords-Data search volume plus cached SERP features (forum ratio, exact-match rate, pixel crowding). Volumes are stored on the same 30-day `dfs_serp_cache` row as the SERP result and reused across invocations; only missing queries are priced. No page-count cap is applied: every candidate that clears the gate may launch; candidates that fail are discarded, not replaced with synthetic filler.
 
+**Fail-closed evidence contract.** Every new URL must be evaluated before creation:
+
+1. **SERP intent match** — the planned template must match the dominant top-10 archetype; a consumer verification query is never attached to a comparison/troubleshooting URL.
+2. **SERP data present** — `serp_fetched` must be true with non-empty `serp_item_types`; otherwise the candidate is `unscored_missing_serp`, never scored on a zero vector.
+3. **Real demand only** — Keywords-Data volume for a new route; missing volume is absent, never fabricated from impressions or another query.
+4. **Dry-run payload depth** — `unique_data_fields` comes from the page generator's payload, not the live DOM. Supply it with `--page-contracts contracts.json`; the contract also carries `planned_indexed_inlinks` (hub pages that will link on deploy) and `non_boilerplate_ratio`.
+5. **Template litmus** — if hiding the variable (country/app/service) leaves no meaningfully different content, or stripping the data collapses the page, the template is rejected (`non_boilerplate_ratio < 0.50`).
+6. **Planned indexed inlinks** — a new URL cannot already have live inlinks; use `planned_indexed_inlinks` from the routing/hub config. Existing pages use live `inlinks_from_indexed` and are never launch candidates; they are `existing_page_requires_enrichment`.
+
+**Canary proof before scale.** A template is never scaled from a static score:
+
+1. Ship a 10–20 URL canary cohort from `build_canary_cohort` and isolate it in a dedicated sitemap (`canary_sitemap`).
+2. Inspect the cohort through GSC URL Inspection at days 7, 14 and 21.
+3. Call `evaluate_canary_outcomes`; scale only when at least 80% are indexed and the cohort has non-zero impressions.
+4. Record every launch in `page_launch_outcomes`; `dead_route_candidates` flags routes still unindexed and unseen after 45 days for merge, enrichment, or `noindex`.
+
+**GSC limits:** URL Inspection is 2,000/day and 600/minute per property; use `sc-domain:<domain>` for domain properties and exact URL-prefix properties otherwise. Search Analytics caps at 25,000 rows sorted by clicks and lags about 48 hours; do not treat a zero-row day 3 as a ranking failure. Prefer the inspection verdict for indexation, and evaluate impressions over 14–21 days.
+
 ```bash
 # Record/fit/backtest the indexation model
 python scripts/indexation_forecast.py --state-db ~/.seo_fleet/fleet_state.db --fit
 python scripts/indexation_forecast.py --backtest-json labelled-records.json
 python scripts/indexation_forecast.py --candidate-json candidate.json
+
+# Evaluate new routes with dry-run payload contracts (never the live DOM)
+python scripts/collect_features.py --site smsriver.com \
+  --state-db ~/.seo_fleet/fleet_state.db \
+  --page-contracts contracts.json --output data/ltr_features.json
+python scripts/score_backlog.py --features data/ltr_features.json \
+  --canary-size 20 --compile-wave 20
 ```
 
 ### 4.2 Mandatory Invocation Output: Machine Learning Model Transparency & SHAP Attribution

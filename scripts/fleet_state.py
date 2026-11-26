@@ -238,31 +238,41 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(atomic_task_backlog)")}
     if "route_family" not in columns:
         try:
-            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN route_family TEXT NOT NULL DEFAULT 'root'")
+            conn.execute(
+                "ALTER TABLE atomic_task_backlog ADD COLUMN route_family TEXT NOT NULL DEFAULT 'root'"
+            )
             conn.commit()
         except sqlite3.OperationalError:
             pass  # concurrent migration already applied it
     if "decision_class" not in columns:
         try:
-            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN decision_class TEXT NOT NULL DEFAULT 'SHIP'")
+            conn.execute(
+                "ALTER TABLE atomic_task_backlog ADD COLUMN decision_class TEXT NOT NULL DEFAULT 'SHIP'"
+            )
             conn.commit()
         except sqlite3.OperationalError:
             pass
     if "expected_value" not in columns:
         try:
-            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN expected_value REAL NOT NULL DEFAULT 0.0")
+            conn.execute(
+                "ALTER TABLE atomic_task_backlog ADD COLUMN expected_value REAL NOT NULL DEFAULT 0.0"
+            )
             conn.commit()
         except sqlite3.OperationalError:
             pass
     if "cannibalization_risk" not in columns:
         try:
-            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN cannibalization_risk REAL NOT NULL DEFAULT 0.0")
+            conn.execute(
+                "ALTER TABLE atomic_task_backlog ADD COLUMN cannibalization_risk REAL NOT NULL DEFAULT 0.0"
+            )
             conn.commit()
         except sqlite3.OperationalError:
             pass
     if "confidence" not in columns:
         try:
-            conn.execute("ALTER TABLE atomic_task_backlog ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0")
+            conn.execute(
+                "ALTER TABLE atomic_task_backlog ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0"
+            )
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -275,7 +285,9 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             pass  # concurrent migration already applied it
 
     # experiment_ledger v2.1 migrations
-    exp_columns = {row[1] for row in conn.execute("PRAGMA table_info(experiment_ledger)")}
+    exp_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(experiment_ledger)")
+    }
     for col, col_def in [
         ("exposure_detected_at", "TEXT"),
         ("recrawl_confirmed_at", "TEXT"),
@@ -289,13 +301,17 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     ]:
         if col not in exp_columns:
             try:
-                conn.execute(f"ALTER TABLE experiment_ledger ADD COLUMN {col} {col_def}")
+                conn.execute(
+                    f"ALTER TABLE experiment_ledger ADD COLUMN {col} {col_def}"
+                )
                 conn.commit()
             except sqlite3.OperationalError:
                 pass
 
     # query_ownership_map v2.1 migrations
-    q_columns = {row[1] for row in conn.execute("PRAGMA table_info(query_ownership_map)")}
+    q_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(query_ownership_map)")
+    }
     for col, col_def in [
         ("ownership_risk_classification", "TEXT NOT NULL DEFAULT 'OWNED'"),
         ("serp_overlap_score", "REAL DEFAULT 0.0"),
@@ -303,13 +319,17 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     ]:
         if col not in q_columns:
             try:
-                conn.execute(f"ALTER TABLE query_ownership_map ADD COLUMN {col} {col_def}")
+                conn.execute(
+                    f"ALTER TABLE query_ownership_map ADD COLUMN {col} {col_def}"
+                )
                 conn.commit()
             except sqlite3.OperationalError:
                 pass
 
     # action_effectiveness_stats v2.1/v2.2 migrations
-    eff_columns = {row[1] for row in conn.execute("PRAGMA table_info(action_effectiveness_stats)")}
+    eff_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(action_effectiveness_stats)")
+    }
     for col, col_def in [
         ("alpha_prior", "REAL NOT NULL DEFAULT 1.5"),
         ("beta_prior", "REAL NOT NULL DEFAULT 3.5"),
@@ -319,7 +339,9 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     ]:
         if col not in eff_columns:
             try:
-                conn.execute(f"ALTER TABLE action_effectiveness_stats ADD COLUMN {col} {col_def}")
+                conn.execute(
+                    f"ALTER TABLE action_effectiveness_stats ADD COLUMN {col} {col_def}"
+                )
                 conn.commit()
             except sqlite3.OperationalError:
                 pass
@@ -329,7 +351,9 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         "SELECT COUNT(*) FROM atomic_task_backlog WHERE route_family = 'root' AND page LIKE '%/%'"
     ).fetchone()[0]
     if stale:
-        for task_id, page in conn.execute("SELECT id, page FROM atomic_task_backlog WHERE route_family = 'root'"):
+        for task_id, page in conn.execute(
+            "SELECT id, page FROM atomic_task_backlog WHERE route_family = 'root'"
+        ):
             conn.execute(
                 "UPDATE atomic_task_backlog SET route_family = ? WHERE id = ?",
                 (extract_route_family(page), task_id),
@@ -445,6 +469,7 @@ def upsert_serp_cache(
     now: datetime | None = None,
 ) -> None:
     stamp = _utc_now(now)
+    key = str(query).strip().lower()
     conn.execute(
         """
         INSERT INTO dfs_serp_cache (query, fetched_at, items_json, item_types)
@@ -454,7 +479,7 @@ def upsert_serp_cache(
             items_json = excluded.items_json,
             item_types = excluded.item_types
         """,
-        (query, _iso(stamp), json.dumps(items), json.dumps(item_types)),
+        (key, _iso(stamp), json.dumps(items), json.dumps(item_types)),
     )
     conn.commit()
 
@@ -468,25 +493,57 @@ def queries_missing_volume(conn: sqlite3.Connection, limit: int = 1000) -> list:
     return [row[0] for row in rows]
 
 
+def save_serp_volumes(conn: sqlite3.Connection, volumes: dict) -> int:
+    """Writes Keywords-Data volumes back into dfs_serp_cache.
+
+    Keys are stored normalised (strip + lower) so a query can never be read
+    back under a different casing and silently lose its paid volume.
+    """
+    updated = 0
+    stamp = _iso(_utc_now(None))
+    for keyword, volume in (volumes or {}).items():
+        if volume is None:
+            continue
+        key = str(keyword).strip().lower()
+        if not key:
+            continue
+        cur = conn.execute(
+            """
+            INSERT INTO dfs_serp_cache
+                (query, fetched_at, items_json, item_types, search_volume)
+            VALUES (?, ?, '[]', '[]', ?)
+            ON CONFLICT(query) DO UPDATE SET search_volume = excluded.search_volume
+            """,
+            (key, stamp, float(volume)),
+        )
+        updated += cur.rowcount
+    conn.commit()
+    return updated
+
+
 def load_cached_serp_volumes(
     conn: sqlite3.Connection,
     queries: list,
     max_age_days: int = SERP_CACHE_TTL_DAYS,
     now: datetime | None = None,
 ) -> dict:
-    """Fresh cached search volumes, so a paid Keywords-Data call is reused.
+    """Fresh cached search volumes, never inferred from another signal.
 
-    The volume is stored on the same 30-day SERP cache row as the fetched
-    result; it is never inferred from GSC impressions.
+    Normalised lookup is intentional: Keywords-Data returns lower-case keys,
+    while GSC and sitemap candidates keep title casing.  A missing key returns
+    no value; it never borrows another row's volume.
     """
     stamp = _utc_now(now)
     cutoff = stamp - timedelta(days=max_age_days)
     volumes: dict[str, float] = {}
     for query in queries:
+        key = str(query).strip().lower()
+        if not key:
+            continue
         row = conn.execute(
             "SELECT search_volume, fetched_at FROM dfs_serp_cache "
-            "WHERE lower(query) = lower(?) ORDER BY fetched_at DESC LIMIT 1",
-            (query,),
+            "WHERE lower(trim(query)) = ? ORDER BY fetched_at DESC LIMIT 1",
+            (key,),
         ).fetchone()
         if not row or row[0] is None:
             continue
@@ -501,30 +558,6 @@ def load_cached_serp_volumes(
     return volumes
 
 
-def save_serp_volumes(conn: sqlite3.Connection, volumes: dict) -> int:
-    """Writes Keywords-Data volumes back into dfs_serp_cache (surrogate head)."""
-    updated = 0
-    stamp = _iso(_utc_now(None))
-    for keyword, volume in (volumes or {}).items():
-        if volume is None:
-            continue
-        for candidate in (str(keyword), str(keyword).strip().lower()):
-            cur = conn.execute(
-                """
-                INSERT INTO dfs_serp_cache
-                    (query, fetched_at, items_json, item_types, search_volume)
-                VALUES (?, ?, '[]', '[]', ?)
-                ON CONFLICT(query) DO UPDATE SET search_volume = excluded.search_volume
-                """,
-                (candidate, stamp, float(volume)),
-            )
-            updated += cur.rowcount
-            if cur.rowcount:
-                break
-    conn.commit()
-    return updated
-
-
 def load_cached_serps(
     conn: sqlite3.Connection,
     queries: list,
@@ -536,8 +569,9 @@ def load_cached_serps(
     fresh: dict[str, dict[str, Any]] = {}
     for query in queries:
         row = conn.execute(
-            "SELECT items_json, item_types, fetched_at FROM dfs_serp_cache WHERE query = ?",
-            (query,),
+            "SELECT items_json, item_types, fetched_at FROM dfs_serp_cache "
+            "WHERE lower(trim(query)) = ? ORDER BY fetched_at DESC LIMIT 1",
+            (str(query).strip().lower(),),
         ).fetchone()
         if not row:
             continue
@@ -584,7 +618,9 @@ def canonicalize_backlog_action_codes(conn: sqlite3.Connection) -> int:
     - STRENGTHEN_HUB_INTERNAL_LINKS / BOOST_INTERNAL_LINKS / RESCUE_ORPHAN_ROUTE_INLINKS / BOOST_CLUSTER_CROSS_LINKS -> WIRE_HUB_AND_FOOTER_INLINKS
     """
     cur = conn.cursor()
-    rows = cur.execute("SELECT id, page, action_code, status, priority_score FROM atomic_task_backlog").fetchall()
+    rows = cur.execute(
+        "SELECT id, page, action_code, status, priority_score FROM atomic_task_backlog"
+    ).fetchall()
 
     modified = 0
     for task_id, page, action_code, status, score in rows:
@@ -604,11 +640,15 @@ def canonicalize_backlog_action_codes(conn: sqlite3.Connection) -> int:
                 if (exist_status == "LEASED" and status == "PENDING") or (
                     exist_status == status and exist_score >= score
                 ):
-                    cur.execute("DELETE FROM atomic_task_backlog WHERE id = ?", (task_id,))
+                    cur.execute(
+                        "DELETE FROM atomic_task_backlog WHERE id = ?", (task_id,)
+                    )
                     modified += 1
                     continue
                 else:
-                    cur.execute("DELETE FROM atomic_task_backlog WHERE id = ?", (exist_id,))
+                    cur.execute(
+                        "DELETE FROM atomic_task_backlog WHERE id = ?", (exist_id,)
+                    )
                     cur.execute(
                         "UPDATE atomic_task_backlog SET action_code = ? WHERE id = ?",
                         (target_code, task_id),
@@ -649,7 +689,9 @@ def enqueue_tasks(
             if not is_valid_property_host(page, domain):
                 continue
         try:
-            raw_action = str(task.get("action_code") or task.get("prescribed_action") or "")
+            raw_action = str(
+                task.get("action_code") or task.get("prescribed_action") or ""
+            )
             action_code = canonicalize_action_code(raw_action)
             # REJECTED is terminal (cursor hygiene): junk queries purged by
             # preflight_hygiene must never re-enter via the next compile wave.
@@ -768,7 +810,9 @@ def lease_tasks(
         for family in sorted(caps):
             family_filters.append("(route_family = ? AND family_rank <= ?)")
             family_params.extend([family, caps[family]])
-        family_filters.append(f"(route_family NOT IN ({', '.join('?' * len(caps)) or "''"}) AND family_rank <= ?)")
+        family_filters.append(
+            f"(route_family NOT IN ({', '.join('?' * len(caps)) or "''"}) AND family_rank <= ?)"
+        )
         family_params.extend([*caps.keys(), default_family_cap])
     # Wave-64 two-tier quotas: rows within their type cap rank quota_pass 0
     # (preferred); rows beyond it rank quota_pass 1 (backfill). Both tiers
@@ -781,7 +825,9 @@ def lease_tasks(
             case_parts.append("(action_code = ? AND type_rank <= ?)")
             quota_params.extend([code, tcaps[code]])
         if default_type_cap > 0:
-            case_parts.append(f"(action_code NOT IN ({', '.join('?' * len(tcaps)) or "''"}) AND type_rank <= ?)")
+            case_parts.append(
+                f"(action_code NOT IN ({', '.join('?' * len(tcaps)) or "''"}) AND type_rank <= ?)"
+            )
             quota_params.extend([*tcaps.keys(), default_type_cap])
         quota_case = "CASE WHEN " + " OR ".join(case_parts) + " THEN 0 ELSE 1 END"
     else:
@@ -921,7 +967,9 @@ def pending_count(conn: sqlite3.Connection, domain: str | None = None) -> int:
             (domain,),
         ).fetchone()
     else:
-        row = conn.execute("SELECT COUNT(*) FROM atomic_task_backlog WHERE status = 'PENDING'").fetchone()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM atomic_task_backlog WHERE status = 'PENDING'"
+        ).fetchone()
     return int(row[0])
 
 
@@ -953,7 +1001,9 @@ def record_experiment(
 ) -> int:
     """Records an executed SEO change into the persistent experiment ledger."""
     now_str = _iso(_utc_now(deployed_at))
-    cohort_list = control_cohort_pages or ([control_cohort_page] if control_cohort_page else [])
+    cohort_list = control_cohort_pages or (
+        [control_cohort_page] if control_cohort_page else []
+    )
     ctrl_primary = control_cohort_page or (cohort_list[0] if cohort_list else None)
     cur = conn.execute(
         """
@@ -1054,8 +1104,14 @@ def record_shipped_experiments(
         ctrl_base_clicks = 0.0
         if ctrl_cohort and baseline_gsc:
             for cp in ctrl_cohort:
-                matches = [v for k, v in baseline_gsc.items() if v.get("page", "").strip().lower() == cp.strip().lower()]
-                ctrl_base_clicks += sum(float(m.get("clicks", 0.0) or 0.0) for m in matches)
+                matches = [
+                    v
+                    for k, v in baseline_gsc.items()
+                    if v.get("page", "").strip().lower() == cp.strip().lower()
+                ]
+                ctrl_base_clicks += sum(
+                    float(m.get("clicks", 0.0) or 0.0) for m in matches
+                )
             ctrl_base_clicks = ctrl_base_clicks / max(len(ctrl_cohort), 1)
 
         record_experiment(
@@ -1144,7 +1200,16 @@ def update_experiment_recrawl(
                     updated_at = ?
                 WHERE domain = ? AND page = ? AND (status IN ('DEPLOYED', 'CRAWL_PENDING', 'PENDING_RECRAWL') OR recrawl_confirmed_at IS NULL)
                 """,
-                (last_crawl, now_str, ev_type, detail_json, cov_state, now_str, domain, page),
+                (
+                    last_crawl,
+                    now_str,
+                    ev_type,
+                    detail_json,
+                    cov_state,
+                    now_str,
+                    domain,
+                    page,
+                ),
             )
             updated += cur.rowcount
     else:
@@ -1253,18 +1318,43 @@ def get_t_critical_value(n_controls: int) -> float:
     df = max(1, int(n_controls) - 1)
     try:
         from scipy.stats import t as student_t  # type: ignore[import-untyped]
+
         return round(float(student_t.ppf(0.975, df)), 3)
     except Exception:
         pass
 
     # Exact standard 2-sided 95% Student-t critical values
     t_table = {
-        1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
-        6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
-        11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
-        16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
-        21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060,
-        26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042,
+        1: 12.706,
+        2: 4.303,
+        3: 3.182,
+        4: 2.776,
+        5: 2.571,
+        6: 2.447,
+        7: 2.365,
+        8: 2.306,
+        9: 2.262,
+        10: 2.228,
+        11: 2.201,
+        12: 2.179,
+        13: 2.160,
+        14: 2.145,
+        15: 2.131,
+        16: 2.120,
+        17: 2.110,
+        18: 2.101,
+        19: 2.093,
+        20: 2.086,
+        21: 2.080,
+        22: 2.074,
+        23: 2.069,
+        24: 2.064,
+        25: 2.060,
+        26: 2.056,
+        27: 2.052,
+        28: 2.048,
+        29: 2.045,
+        30: 2.042,
     }
     if df in t_table:
         return t_table[df]
@@ -1361,7 +1451,9 @@ def classify_cannibalization_risk(
 
     # Case 3: Confirmed competition / cannibalization
     if serp_overlap >= 0.50 or (lexical_overlap >= 0.80 and intent_a == intent_b):
-        if (ctr_drop_pct is not None and ctr_drop_pct > 0.25) or (rank_volatility is not None and rank_volatility > 5.0):
+        if (ctr_drop_pct is not None and ctr_drop_pct > 0.25) or (
+            rank_volatility is not None and rank_volatility > 5.0
+        ):
             return (
                 "CONFIRMED_COMPETITION",
                 0.85,
@@ -1431,9 +1523,21 @@ def update_experiment_outcomes(
 
     for exp in experiments:
         (
-            exp_id, page, query, action_code, route_family, deployed_at_str,
-            base_clicks, base_impr, base_pos, base_ctr,
-            ctrl_page, ctrl_pages_json, ctrl_base_clicks, pre_trend_div, status
+            exp_id,
+            page,
+            query,
+            action_code,
+            route_family,
+            deployed_at_str,
+            base_clicks,
+            base_impr,
+            base_pos,
+            base_ctr,
+            ctrl_page,
+            ctrl_pages_json,
+            ctrl_base_clicks,
+            pre_trend_div,
+            status,
         ) = exp
 
         # Calculate actual days elapsed since deployment. Production rows
@@ -1441,7 +1545,9 @@ def update_experiment_outcomes(
         # TypeError, and the old fallback defaulted to days_elapsed (28),
         # prematurely grading 1-3 day old experiments with phantom zeros.
         try:
-            dep_dt = datetime.fromisoformat(str(deployed_at_str).strip().replace("Z", "+00:00"))
+            dep_dt = datetime.fromisoformat(
+                str(deployed_at_str).strip().replace("Z", "+00:00")
+            )
             if dep_dt.tzinfo is None:
                 dep_dt = dep_dt.replace(tzinfo=timezone.utc)
             actual_days = max(0, (now_dt - dep_dt).days)
@@ -1455,18 +1561,40 @@ def update_experiment_outcomes(
         # Fallback to page-level aggregate if query is not broken down
         if not post_gsc:
             page_matches = [
-                v for k, v in fresh_gsc_rows.items()
+                v
+                for k, v in fresh_gsc_rows.items()
                 if v.get("page", "").strip().lower() == page.strip().lower()
             ]
             if page_matches:
                 post_gsc = {
-                    "clicks": sum(float(m.get("clicks", 0.0) or 0.0) for m in page_matches),
-                    "impressions": sum(float(m.get("impressions", 0.0) or 0.0) for m in page_matches),
-                    "position": (
-                        sum(float(m.get("position", 0.0) or 0.0) * float(m.get("impressions", 0.0) or 1.0) for m in page_matches)
-                        / max(sum(float(m.get("impressions", 0.0) or 1.0) for m in page_matches), 1.0)
+                    "clicks": sum(
+                        float(m.get("clicks", 0.0) or 0.0) for m in page_matches
                     ),
-                    "ctr": sum(float(m.get("clicks", 0.0) or 0.0) for m in page_matches) / max(sum(float(m.get("impressions", 0.0) or 1.0) for m in page_matches), 1.0),
+                    "impressions": sum(
+                        float(m.get("impressions", 0.0) or 0.0) for m in page_matches
+                    ),
+                    "position": (
+                        sum(
+                            float(m.get("position", 0.0) or 0.0)
+                            * float(m.get("impressions", 0.0) or 1.0)
+                            for m in page_matches
+                        )
+                        / max(
+                            sum(
+                                float(m.get("impressions", 0.0) or 1.0)
+                                for m in page_matches
+                            ),
+                            1.0,
+                        )
+                    ),
+                    "ctr": sum(float(m.get("clicks", 0.0) or 0.0) for m in page_matches)
+                    / max(
+                        sum(
+                            float(m.get("impressions", 0.0) or 1.0)
+                            for m in page_matches
+                        ),
+                        1.0,
+                    ),
                 }
 
         if not post_gsc:
@@ -1503,17 +1631,29 @@ def update_experiment_outcomes(
 
         ctrl_p_clicks_list: list[float] = []
         for cp in valid_controls:
-            matches = [v for k, v in fresh_gsc_rows.items() if v.get("page", "").strip().lower() == cp.strip().lower()]
+            matches = [
+                v
+                for k, v in fresh_gsc_rows.items()
+                if v.get("page", "").strip().lower() == cp.strip().lower()
+            ]
             if matches:
-                ctrl_p_clicks_list.append(sum(float(m.get("clicks", 0.0) or 0.0) for m in matches))
+                ctrl_p_clicks_list.append(
+                    sum(float(m.get("clicks", 0.0) or 0.0) for m in matches)
+                )
 
-        ctrl_p_clicks = (sum(ctrl_p_clicks_list) / len(ctrl_p_clicks_list)) if ctrl_p_clicks_list else ctrl_base_clicks
+        ctrl_p_clicks = (
+            (sum(ctrl_p_clicks_list) / len(ctrl_p_clicks_list))
+            if ctrl_p_clicks_list
+            else ctrl_base_clicks
+        )
 
         # DiD lift calculation
         treatment_lift = (p_clicks - base_clicks) / max(base_clicks, 1.0)
         control_lift = (ctrl_p_clicks - ctrl_base_clicks) / max(ctrl_base_clicks, 1.0)
         net_lift = treatment_lift - control_lift
-        inc_clicks = max(0.0, p_clicks - (base_clicks * (1.0 + max(-0.9, control_lift))))
+        inc_clicks = max(
+            0.0, p_clicks - (base_clicks * (1.0 + max(-0.9, control_lift)))
+        )
         inc_impr = max(0.0, p_impr - base_impr)
 
         # Statistical safeguards & Standard Error calculation (v2.2.1 P0.3)
@@ -1524,7 +1664,9 @@ def update_experiment_outcomes(
         ]
         if len(ctrl_lifts) > 1:
             mean_c_lift = sum(ctrl_lifts) / len(ctrl_lifts)
-            var_c = sum((l - mean_c_lift) ** 2 for l in ctrl_lifts) / (len(ctrl_lifts) - 1)
+            var_c = sum((l - mean_c_lift) ** 2 for l in ctrl_lifts) / (
+                len(ctrl_lifts) - 1
+            )
         else:
             var_c = max(0.01, abs(control_lift) * 0.05)
         # Poisson-Normal count rate variance without arbitrary scaling:
@@ -1544,7 +1686,9 @@ def update_experiment_outcomes(
             limitations.append(f"Control cohort size ({n_controls}) < 3")
             conf = min(conf, 0.40)
         if pre_trend_div > 0.30:
-            limitations.append(f"Parallel trends violation: pre-trend divergence {pre_trend_div:.2f} > 0.30")
+            limitations.append(
+                f"Parallel trends violation: pre-trend divergence {pre_trend_div:.2f} > 0.30"
+            )
             conf = min(conf, 0.35)
 
         if not limitations and actual_days >= 28:
@@ -1585,8 +1729,16 @@ def update_experiment_outcomes(
             if pre_trend_div <= 0.30 and n_controls >= 1:
                 is_success = (
                     outcome_class == "STATISTICALLY_SIGNIFICANT_LIFT"
-                    or (outcome_class != "COMMERCIALLY_NEGLIGIBLE_LIFT" and net_lift > 0.05 and inc_clicks >= min_incremental_clicks)
-                    or (outcome_class == "INSUFFICIENT_EVIDENCE" and net_lift > 0.05 and inc_clicks >= min_incremental_clicks)
+                    or (
+                        outcome_class != "COMMERCIALLY_NEGLIGIBLE_LIFT"
+                        and net_lift > 0.05
+                        and inc_clicks >= min_incremental_clicks
+                    )
+                    or (
+                        outcome_class == "INSUFFICIENT_EVIDENCE"
+                        and net_lift > 0.05
+                        and inc_clicks >= min_incremental_clicks
+                    )
                 )
                 pos_tier = get_position_tier(base_pos)
                 record_action_effectiveness(
@@ -1624,11 +1776,21 @@ def update_experiment_outcomes(
             WHERE id = ?
             """,
             (
-                p_clicks, p_impr, p_pos, p_ctr,
-                ctrl_p_clicks, ci_lower, ci_upper, outcome_class,
-                inc_clicks, inc_impr, conf,
+                p_clicks,
+                p_impr,
+                p_pos,
+                p_ctr,
+                ctrl_p_clicks,
+                ci_lower,
+                ci_upper,
+                outcome_class,
+                inc_clicks,
+                inc_impr,
+                conf,
                 "; ".join(limitations) if limitations else None,
-                new_status, now_str, exp_id,
+                new_status,
+                now_str,
+                exp_id,
             ),
         )
 
@@ -1642,13 +1804,16 @@ def get_experiment_summary(conn: sqlite3.Connection, domain: str) -> dict[str, A
         "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ?", (domain,)
     ).fetchone()[0]
     pending = conn.execute(
-        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status IN ('DEPLOYED', 'CRAWL_PENDING', 'PENDING_RECRAWL')", (domain,)
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status IN ('DEPLOYED', 'CRAWL_PENDING', 'PENDING_RECRAWL')",
+        (domain,),
     ).fetchone()[0]
     observing = conn.execute(
-        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status IN ('RECRAWL_CONFIRMED', 'INDEX_STATUS_VERIFIED', 'MEASUREMENT_PENDING', 'OBSERVING')", (domain,)
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status IN ('RECRAWL_CONFIRMED', 'INDEX_STATUS_VERIFIED', 'MEASUREMENT_PENDING', 'OBSERVING')",
+        (domain,),
     ).fetchone()[0]
     graded = conn.execute(
-        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status IN ('EVALUATED_28D', 'EVALUATED_56D', 'TERMINAL_EVALUATED', 'GRADED')", (domain,)
+        "SELECT COUNT(*) FROM experiment_ledger WHERE domain = ? AND status IN ('EVALUATED_28D', 'EVALUATED_56D', 'TERMINAL_EVALUATED', 'GRADED')",
+        (domain,),
     ).fetchone()[0]
 
     graded_stats = conn.execute(
@@ -1772,7 +1937,7 @@ def get_query_owner(
         (domain, q_norm, q_norm),
     ).fetchone()
 
-    is_low_data = (0 < query_impressions <= 100.0 and query_clicks <= 5.0)
+    is_low_data = 0 < query_impressions <= 100.0 and query_clicks <= 5.0
 
     if row:
         owner_url = row[1]
@@ -1784,7 +1949,11 @@ def get_query_owner(
         if candidate_page and owner_url.rstrip("/") == candidate_page.rstrip("/"):
             risk_class = "OWNED"
             cann_risk = 0.0
-        elif candidate_page and candidate_intent is not None and candidate_intent != owner_intent:
+        elif (
+            candidate_page
+            and candidate_intent is not None
+            and candidate_intent != owner_intent
+        ):
             # Only compare intents when the caller actually knows one: defaulting
             # to "tool" silently downgraded every cross-page brand query to
             # DISTINCT_INTENT (0.05), hiding real cannibalization.
@@ -1839,8 +2008,13 @@ def get_query_owner(
         hist_share = float(r[7] or 1.0)
 
         # Exact sub-query match in secondaries
-        if any(q_norm == sq.strip().lower() or sq.strip().lower() in q_norm for sq in sec_queries):
-            is_same = candidate_page and owner_url.rstrip("/") == candidate_page.rstrip("/")
+        if any(
+            q_norm == sq.strip().lower() or sq.strip().lower() in q_norm
+            for sq in sec_queries
+        ):
+            is_same = candidate_page and owner_url.rstrip("/") == candidate_page.rstrip(
+                "/"
+            )
             if is_same:
                 risk_class = "OWNED"
                 cann_risk = 0.0
@@ -1874,11 +2048,18 @@ def get_query_owner(
             }
 
         cluster_tokens = set(r[0].split())
-        overlap = len(q_tokens & cluster_tokens) / max(len(q_tokens | cluster_tokens), 1)
-        cluster_contained = len(cluster_tokens) > 0 and len(q_tokens & cluster_tokens) / len(cluster_tokens) >= 0.75
+        overlap = len(q_tokens & cluster_tokens) / max(
+            len(q_tokens | cluster_tokens), 1
+        )
+        cluster_contained = (
+            len(cluster_tokens) > 0
+            and len(q_tokens & cluster_tokens) / len(cluster_tokens) >= 0.75
+        )
 
         if overlap >= 0.70 or cluster_contained:
-            is_same = candidate_page and owner_url.rstrip("/") == candidate_page.rstrip("/")
+            is_same = candidate_page and owner_url.rstrip("/") == candidate_page.rstrip(
+                "/"
+            )
             if is_same:
                 risk_class = "OWNED"
                 cann_risk = 0.0
@@ -1894,7 +2075,9 @@ def get_query_owner(
             elif serp_overlap >= 0.50:
                 risk_class = "HIGH_SERP_OVERLAP"
                 cann_risk = 0.50
-            elif overlap < 0.80 and any(w in q_norm for w in ["vs", "compare", "alternative"]):
+            elif overlap < 0.80 and any(
+                w in q_norm for w in ["vs", "compare", "alternative"]
+            ):
                 risk_class = "POTENTIAL_OVERLAP"
                 cann_risk = 0.20
             else:
@@ -1968,7 +2151,9 @@ def record_action_effectiveness(
     confidence_weight = 1.0 - (1.0 / ((new_tot + 1) ** 0.5))
 
     # Check if position_tier column exists
-    eff_cols = {r[1] for r in conn.execute("PRAGMA table_info(action_effectiveness_stats)")}
+    eff_cols = {
+        r[1] for r in conn.execute("PRAGMA table_info(action_effectiveness_stats)")
+    }
     if "position_tier" in eff_cols:
         conn.execute(
             """
@@ -2057,7 +2242,9 @@ def get_action_effectiveness(
     - Tier 1: Fleet global prior Beta(1.5, 3.5) (win_rate = 0.30)
     """
     # Tier 3 check (specific position tier if available)
-    eff_cols = {r[1] for r in conn.execute("PRAGMA table_info(action_effectiveness_stats)")}
+    eff_cols = {
+        r[1] for r in conn.execute("PRAGMA table_info(action_effectiveness_stats)")
+    }
     if position_tier and "position_tier" in eff_cols:
         row = conn.execute(
             """
@@ -2072,8 +2259,12 @@ def get_action_effectiveness(
             tot = int(row[0])
             succ = int(row[1])
             raw_rate = float(succ) / float(tot) if tot > 0 else 0.30
-            smoothed = float(row[7] if row[7] is not None else (succ + 1.5) / (tot + 5.0))
-            conf = float(row[8] if row[8] is not None else (1.0 - 1.0 / ((tot + 1) ** 0.5)))
+            smoothed = float(
+                row[7] if row[7] is not None else (succ + 1.5) / (tot + 5.0)
+            )
+            conf = float(
+                row[8] if row[8] is not None else (1.0 - 1.0 / ((tot + 1) ** 0.5))
+            )
             se = (smoothed * (1.0 - smoothed) / (tot + 5.0)) ** 0.5
             ci = (max(0.0, smoothed - 1.96 * se), min(1.0, smoothed + 1.96 * se))
             return {
@@ -2141,7 +2332,10 @@ def get_action_effectiveness(
             "win_rate": float(succ) / float(tot) if tot > 0 else 0.30,
             "smoothed_win_rate": smoothed,
             "confidence_weight": conf,
-            "credible_interval": (max(0.0, smoothed - 1.96 * se), min(1.0, smoothed + 1.96 * se)),
+            "credible_interval": (
+                max(0.0, smoothed - 1.96 * se),
+                min(1.0, smoothed + 1.96 * se),
+            ),
             "avg_click_lift": float(p_row[2] or 0.0),
             "avg_impression_lift": float(p_row[3] or 0.0),
             "avg_rank_delta": float(p_row[4] or 0.0),
@@ -2227,7 +2421,9 @@ class DailyBudgetGate:
     SERP tasks per UTC day ($0.0006 each -> a 100 cap is $0.06/day max).
     """
 
-    def __init__(self, db_path: str = DEFAULT_DB_PATH, daily_cap: int = DEFAULT_DAILY_SERP_BUDGET):
+    def __init__(
+        self, db_path: str = DEFAULT_DB_PATH, daily_cap: int = DEFAULT_DAILY_SERP_BUDGET
+    ):
         self._conn = connect_state_db(db_path)
         self.daily_cap = daily_cap
         # Wave-64 review R3: property-level starvation guard. Every property
@@ -2252,7 +2448,9 @@ class DailyBudgetGate:
         return _utc_now(now).date().isoformat()
 
     def _total_spent(self, day: str) -> int:
-        row = self._conn.execute("SELECT spent FROM dfs_budget WHERE day = ?", (day,)).fetchone()
+        row = self._conn.execute(
+            "SELECT spent FROM dfs_budget WHERE day = ?", (day,)
+        ).fetchone()
         return int(row[0]) if row else 0
 
     def _domain_spent(self, day: str, domain: str) -> int:
@@ -2274,10 +2472,14 @@ class DailyBudgetGate:
             (day,),
         ).fetchone()[0]
         # a domain not yet in today's ledger still occupies a floor slot
-        active_domains = floor_count + (1 if self._domain_spent(day, domain) == 0 else 0)
+        active_domains = floor_count + (
+            1 if self._domain_spent(day, domain) == 0 else 0
+        )
         floor = self._dynamic_floor(active_domains)
         guaranteed_left = max(0, floor - self._domain_spent(day, domain))
-        shared_pool = max(0, self.daily_cap - min(active_domains * floor, self.daily_cap))
+        shared_pool = max(
+            0, self.daily_cap - min(active_domains * floor, self.daily_cap)
+        )
         shared_used = self._conn.execute(
             "SELECT COALESCE(SUM(MAX(spent - ?, 0)), 0) FROM dfs_budget_domain WHERE day = ?",
             (floor, day),
@@ -2285,7 +2487,9 @@ class DailyBudgetGate:
         shared_left = max(0, shared_pool - int(shared_used))
         return min(max(guaranteed_left, 0) + shared_left, total_left)
 
-    def record(self, n: int, now: datetime | None = None, domain: str | None = None) -> int:
+    def record(
+        self, n: int, now: datetime | None = None, domain: str | None = None
+    ) -> int:
         """Records n tasks; returns the remaining budget after the spend."""
         remaining = self.remaining(now=now, domain=domain)
         allowed = min(max(0, int(n)), remaining)
@@ -2375,7 +2579,9 @@ def inspection_calls_remaining(
 ) -> int:
     """Free-tier guard: max 2,000 URL Inspection calls per UTC day."""
     day = _utc_now(now).date().isoformat()
-    row = conn.execute("SELECT spent FROM url_inspection_budget WHERE day = ?", (day,)).fetchone()
+    row = conn.execute(
+        "SELECT spent FROM url_inspection_budget WHERE day = ?", (day,)
+    ).fetchone()
     return max(0, daily_cap - int(row[0] if row else 0))
 
 
@@ -2397,3 +2603,64 @@ def record_inspection_calls(
         )
         conn.commit()
     return inspection_calls_remaining(conn, daily_cap=daily_cap, now=now)
+
+
+def dead_route_candidates(
+    conn: sqlite3.Connection,
+    domain: str,
+    *,
+    after_days: int = 45,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Routes launched long enough ago that are still unindexed and unseen.
+
+    Returns prune/improve recommendations; it never mutates the live site.
+    A page that Google crawled and declined, with no impressions after the
+    observation window, should be merged, improved, or set to noindex rather
+    than accumulating in the sitemap.
+    """
+    stamp = _utc_now(now)
+    cutoff = stamp - timedelta(days=max(0, int(after_days)))
+    rows = conn.execute(
+        """
+        SELECT url, template_family, launched_at, coverage_state, features_json
+        FROM page_launch_outcomes
+        WHERE domain = ? AND indexed_at IS NULL
+        """,
+        (domain,),
+    ).fetchall()
+    dead: list[dict[str, Any]] = []
+    for url, family, launched_at, coverage_state, features_json in rows:
+        try:
+            launched = datetime.fromisoformat(str(launched_at))
+        except (TypeError, ValueError):
+            continue
+        if launched.tzinfo is None:
+            launched = launched.replace(tzinfo=timezone.utc)
+        if launched > cutoff:
+            continue
+        try:
+            features = json.loads(features_json or "{}")
+        except (TypeError, ValueError):
+            features = {}
+        impressions = float(
+            features.get("impressions")
+            or (features.get("features") or {}).get("impressions")
+            or 0.0
+        )
+        coverage = str(coverage_state or "").lower()
+        if impressions > 0:
+            continue
+        if "not indexed" not in coverage and "unknown" not in coverage and coverage:
+            continue
+        dead.append(
+            {
+                "url": url,
+                "template_family": family,
+                "launched_at": launched_at,
+                "coverage_state": coverage_state,
+                "impressions": impressions,
+                "recommendation": "noindex_or_merge",
+            }
+        )
+    return dead

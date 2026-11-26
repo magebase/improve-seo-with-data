@@ -928,7 +928,8 @@ def compile_wave_backlog(
             "CREATE_PROGRAMMATIC_ROUTE",
             lambda r: (
                 float(r.get("current_pos", 0.0) or 0.0) >= 90.0
-                and str(r.get("coverage_state", "")) != "Discovered - currently not indexed"
+                and str(r.get("coverage_state", ""))
+                != "Discovered - currently not indexed"
             ),
         ),
         (
@@ -970,10 +971,13 @@ def compile_wave_backlog(
     known = set(known_live_urls or set())
     for r in rows:
         p = str(r.get("page", "")).rstrip("/")
-        if float(r.get("impressions", 0) or 0) > 0 or float(r.get("clicks_30d", 0) or 0) > 0:
+        if (
+            float(r.get("impressions", 0) or 0) > 0
+            or float(r.get("clicks_30d", 0) or 0) > 0
+        ):
             known.add(p)
             known.add(p + "/")
-    for p, _ in (shipped_ledger or set()):
+    for p, _ in shipped_ledger or set():
         known.add(str(p).rstrip("/"))
         known.add(str(p).rstrip("/") + "/")
     for row in sorted(rows, key=lambda r: r.get("rank_score", 0.0), reverse=True):
@@ -1011,11 +1015,14 @@ def compile_wave_backlog(
             if path.startswith(prefix):
                 propagation = {"prefix": prefix, "siblings": int(count)}
                 break
-        total_imp = int(row.get("total_page_impressions", 0) or row.get("impressions", 0) or 0)
+        total_imp = int(
+            row.get("total_page_impressions", 0) or row.get("impressions", 0) or 0
+        )
         is_unbuilt = (
             is_truly_unbuilt_route(page, known, total_imp)
             and float(row.get("current_pos", 0.0) or 0.0) >= 90.0
-            and str(row.get("coverage_state", "")) != "Discovered - currently not indexed"
+            and str(row.get("coverage_state", ""))
+            != "Discovered - currently not indexed"
         )
         for code, predicate in rules:
             if is_unbuilt and code != "CREATE_PROGRAMMATIC_ROUTE":
@@ -1067,7 +1074,9 @@ def compile_wave_backlog(
                     paa=", ".join(f"'{q}'" for q in paa_questions),
                 ),
                 "rank_score": float(row.get("rank_score", 0.0) or 0.0),
-                "priority_score": float(row.get("priority_score") or row.get("rank_score") or 0.0),
+                "priority_score": float(
+                    row.get("priority_score") or row.get("rank_score") or 0.0
+                ),
                 "lgbm_score": float(row.get("rank_score", 0.0) or 0.0),
                 "expected_value": float(row.get("expected_value") or 0.0),
                 "cannibalization_risk": float(row.get("cannibalization_risk") or 0.0),
@@ -1084,8 +1093,12 @@ def compile_wave_backlog(
                 task["launch_evidence"] = launch_decision.evidence
                 task["launch_features"] = launch_decision.features
             if row.get("shap") and isinstance(row["shap"], dict):
-                top_shap = sorted(row["shap"].items(), key=lambda kv: abs(float(kv[1])), reverse=True)[:3]
-                task["target_component"] = ", ".join(f"{'+' if v>=0 else ''}{v:.2f} {k}" for k, v in top_shap)
+                top_shap = sorted(
+                    row["shap"].items(), key=lambda kv: abs(float(kv[1])), reverse=True
+                )[:3]
+                task["target_component"] = ", ".join(
+                    f"{'+' if v >= 0 else ''}{v:.2f} {k}" for k, v in top_shap
+                )
             if propagation is not None:
                 task["catalog_propagation"] = dict(propagation)
             tasks.append(task)
