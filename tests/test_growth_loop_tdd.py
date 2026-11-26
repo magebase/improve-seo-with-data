@@ -378,3 +378,29 @@ def test_page_level_indexation_action_is_not_duplicated_per_query():
         and action["action_code"] == "ENRICH_UNIQUE_DATA"
     ]
     assert len(page_actions) == 1
+
+
+def test_sitemap_scope_excludes_retired_urls():
+    plan = build_growth_plan(
+        [
+            _row(
+                page="https://example.com/retired/",
+                query="retired query",
+                coverage_state="Discovered - currently not indexed",
+            ),
+            _row(
+                page="https://example.com/receive-sms/gb/",
+                query="receive sms uk",
+                coverage_state="Crawled - currently not indexed",
+            ),
+        ],
+        domain="example.com",
+        sitemap_urls={"https://example.com/receive-sms/gb/"},
+    )
+    assert all(
+        action["page"] != "https://example.com/retired/" for action in plan["actions"]
+    )
+    assert any(
+        action["page"] == "https://example.com/receive-sms/gb/"
+        for action in plan["actions"]
+    )

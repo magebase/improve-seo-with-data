@@ -1154,12 +1154,36 @@ def main(argv: list[str] | None = None) -> int:
         help="scope lease and pending count checks to a specific domain (e.g. figiva.com)",
     )
     parser.add_argument(
+        "--keep-urls",
+        default="",
+        help="JSON list of allowed URLs for the growth plan (curated footprint)",
+    )
+    parser.add_argument(
+        "--sitemap",
+        default="",
+        help="live sitemap URL; limits the growth plan to Google-visible URLs",
+    )
+    parser.add_argument(
         "--no-lock-registry",
         action="store_true",
         help="skip the multi-worktree lock registry (~/.seo_fleet/"
         "worktree_locks.json) when picking locked route prefixes",
     )
     args = parser.parse_args(argv)
+
+    growth_urls: set[str] | None = None
+    if args.keep_urls:
+        try:
+            with open(args.keep_urls, encoding="utf-8") as fh:
+                growth_urls = {
+                    str(url).strip() for url in json.load(fh) if str(url).strip()
+                }
+        except Exception:  # noqa: BLE001 - malformed scope is missing evidence
+            growth_urls = set()
+    elif args.sitemap:
+        from growth_loop import fetch_sitemap_urls
+
+        growth_urls = fetch_sitemap_urls(args.sitemap)
 
     def _hygiene_context():
         from cursor_hygiene import active_locked_prefixes
@@ -1220,6 +1244,7 @@ def main(argv: list[str] | None = None) -> int:
                 domain=args.domain or "",
                 queue=leased,
                 conn=fast_conn,
+                sitemap_urls=growth_urls,
             )
             with open(args.output, "w", encoding="utf-8") as fh:
                 json.dump(
@@ -1556,6 +1581,7 @@ def main(argv: list[str] | None = None) -> int:
             domain=str(target_domain or ""),
             queue=queue + rescue_rows + leased,
             conn=conn,
+            sitemap_urls=growth_urls,
         )
         print(
             format_model_decision_summary(
@@ -1569,7 +1595,10 @@ def main(argv: list[str] | None = None) -> int:
         from growth_loop import build_growth_plan
 
         growth_plan = build_growth_plan(
-            rows, domain=str(target_domain or ""), queue=queue + rescue_rows
+            rows,
+            domain=str(target_domain or ""),
+            queue=queue + rescue_rows,
+            sitemap_urls=growth_urls,
         )
         print(format_model_decision_summary([], queue=queue, model_mode=result["mode"]))
         _print_growth_plan(growth_plan)
