@@ -61,3 +61,17 @@ def test_collector_refuses_constant_siblings(monkeypatch):
     monkeypatch.setattr("collect_live_benchmarks._fetch", fake_fetch)
     with pytest.raises(RuntimeError, match="varying metrics"):
         collect("https://example.com/sitemap.xml", limit=5)
+
+
+def test_collector_refuses_a_sitewide_sitemap(monkeypatch):
+    urls = "".join(
+        f"<url><loc>https://example.com/benchmarks/{index}/</loc></url>"
+        for index in range(31)
+    )
+
+    def fake_fetch(url: str, timeout: int = 20) -> str:
+        return urls
+
+    monkeypatch.setattr("collect_live_benchmarks._fetch", fake_fetch)
+    with pytest.raises(RuntimeError, match="containment limit"):
+        collect("https://example.com/sitemap.xml", limit=15)

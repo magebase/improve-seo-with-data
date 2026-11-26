@@ -29,6 +29,7 @@ from seo_factory import (
     validate_page_contract,
 )
 
+MAX_PILOT_SITEMAP_URLS = 30
 METRIC_RE = re.compile(r'data-metric="([a-z_]+)">([^<]*)<')
 ROW_RE = re.compile(r"<tr>(.*?)</tr>", re.DOTALL)
 CELL_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.DOTALL)
@@ -61,6 +62,12 @@ def _text(fragment: str) -> str:
 
 def _benchmark_urls(sitemap_url: str, limit: int) -> list[str]:
     body = _fetch(sitemap_url)
+    all_urls = re.findall(r"<loc>(.*?)</loc>", body)
+    if len(all_urls) > MAX_PILOT_SITEMAP_URLS:
+        raise RuntimeError(
+            f"pilot sitemap has {len(all_urls)} URLs; containment limit is "
+            f"{MAX_PILOT_SITEMAP_URLS}. Submit the 15+15 pilot sitemap, not the site-wide one."
+        )
     urls = [
         value
         for value in re.findall(r"<loc>(.*?)</loc>", body)

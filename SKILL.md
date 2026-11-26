@@ -229,6 +229,16 @@ python scripts/seo_factory.py cohort-measure --cohort coh_...   --day 21 --index
 
 **Discipline:** an existing domain below 65% active-sitemap indexation does not get a new-template pilot. Run `repair-plan` and `ENRICH` first. A fresh domain may start with 1–2 Tier A authority assets plus one 5–15 URL Tier B pilot.
 
+### 4.2.1 Pilot Containment (Mandatory)
+
+A pilot is a controlled test, not a small version of the full site.
+
+- Submit **only** the pilot sitemap: 10-15 new template URLs plus their parent hubs (at most 30 total). Never submit the site-wide sitemap on a cold host while a template is being proven.
+- Keep non-pilot routes `200` for users but send `X-Robots-Tag: noindex, follow`; do not let them enter the sitemap or the crawl-priority graph.
+- Give every pilot template one distinct search intent from its parent hub. If the hub targets ``"<entity> server list"``, the pilot must target ``"<entity> live player count"`` / ``"server stats"`` / ``"population by country"``; never reuse the hub's primary query in the title, H1 or lead.
+- Use a stable pilot sitemap with a hysteresis floor, not a live-count filter: a transient dip stays `200`; sustained low sample flips `noindex` and leaves the sitemap; only retired entities return `404`/`410`.
+- Do not buy links, post to communities or scale past the pilot until the cohort clears the 80% indexation gate. A lab on a disposable subdomain must not accumulate off-page equity that has to be migrated later.
+
 ### 4.3 The Positive-Expectation Invocation Loop (v3.0)
 
 The earlier versions of this skill were **gate-heavy**: they could correctly refuse a bad page and still return an empty queue. That is a safety property, not a growth property. The 2026-11-26 SMSRiver run exposed the gap: 1,064 candidates produced 0 new routes, 867 existing pages were identified as enrichment work, and the operator was left holding a diagnosis rather than an executable next step.
