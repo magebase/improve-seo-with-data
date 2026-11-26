@@ -584,6 +584,138 @@ def discover_cluster_candidates(
     ]
 
 
+DRAFT_STOPWORDS = frozenset(
+    {
+        "best",
+        "free",
+        "online",
+        "top",
+        "for",
+        "with",
+        "and",
+        "the",
+        "a",
+        "an",
+        "how",
+        "to",
+        "vs",
+        "versus",
+        "review",
+        "reviews",
+        "guide",
+        "2025",
+        "2026",
+        "cheap",
+        "cheapest",
+        "fast",
+        "instant",
+        "list",
+        "near",
+        "me",
+    }
+)
+
+
+DRAFT_GENERIC_WORDS = frozenset(
+    {
+        "server",
+        "servers",
+        "hosting",
+        "host",
+        "list",
+        "lists",
+        "ip",
+        "ips",
+        "status",
+        "download",
+        "proxy",
+        "ftp",
+        "dedicated",
+        "api",
+        "lookup",
+        "make",
+        "address",
+        "modded",
+        "checker",
+        "check",
+        "validator",
+        "validation",
+        "number",
+        "numbers",
+    }
+)
+
+
+DRAFT_ENTITY_ALIASES = {"mc": "minecraft", "csgo": "cs2"}
+
+
+def _draft_slug(value: str) -> str:
+    tokens = [
+        token
+        for token in re.findall(r"[a-z0-9]+", value.lower())
+        if token not in DRAFT_STOPWORDS and token not in DRAFT_GENERIC_WORDS
+    ]
+    if not tokens:
+        return ""
+    slug = "-".join(tokens[:3])
+    return DRAFT_ENTITY_ALIASES.get(slug, slug)
+
+
+def draft_contracts_from_cluster(
+    cluster: dict[str, Any],
+    *,
+    domain: str,
+    max_pages: int = 15,
+) -> list[dict[str, Any]]:
+    """Emit reviewable page-contract shells from a winnable cluster.
+
+    These are deliberately INVALID until a real payload is supplied:
+    ``unique_data_fields=0`` and ``stripped_overlap_score=1.0`` mean the
+    contract gate will reject them. This is the handoff to the page builder,
+    not permission to publish a URL.
+    """
+    winnable = (
+        bool(cluster.get("winnable"))
+        or str(cluster.get("status") or "").upper() == "WINNABLE"
+    )
+    if not domain or not winnable:
+        return []
+    keywords = [str(k).strip() for k in cluster.get("keywords") or [] if str(k).strip()]
+    by_entity: dict[str, list[str]] = {}
+    for keyword in keywords:
+        slug = _draft_slug(keyword)
+        if not slug:
+            continue
+        by_entity.setdefault(slug, []).append(keyword)
+    drafts: list[dict[str, Any]] = []
+    for slug, variants in sorted(
+        by_entity.items(), key=lambda item: (-len(item[1]), item[0])
+    )[: max(0, int(max_pages))]:
+        drafts.append(
+            {
+                "url": f"https://{domain}/{slug}/",
+                "cluster_id": str(cluster.get("cluster_id") or ""),
+                "tier": "B",
+                "data_source_hash": "",
+                "unique_data_fields": 0,
+                "stripped_overlap_score": 1.0,
+                "planned_indexed_inlinks": 0,
+                "telemetry_fields": [],
+                "telemetry_requirements": [
+                    "observed_performance_or_compatibility",
+                    "inventory_freshness_or_churn",
+                    "activity_or_velocity",
+                ],
+                "min_sample_size": 3,
+                "max_staleness_days": 30,
+                "status": "DRAFT_REQUIRES_TELEMETRY",
+                "draft": True,
+                "query_variants": variants,
+            }
+        )
+    return drafts
+
+
 def create_cohort(
     conn: Any,
     *,
@@ -744,6 +876,16 @@ def main(argv: list[str] | None = None) -> int:
     discover.add_argument("--niche", required=True)
     discover.add_argument("--limit", type=int, default=100)
     discover.add_argument("--max-keywords", type=int, default=5)
+    discover.add_argument(
+        "--domain",
+        default="",
+        help="target domain for draft page contracts (contracts stay INVALID until real telemetry is supplied)",
+    )
+    discover.add_argument(
+        "--contracts-output",
+        default="",
+        help="write draft page contracts discovered from the winnable cluster",
+    )
     discover.add_argument("--output", default="")
 
     cohort = sub.add_parser("cohort-create", help="create a pilot cohort")
@@ -829,7 +971,24 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 for row in rows
             ]
-            text = json.dumps({"funnel": diagnostics, "clusters": saved}, indent=2)
+            drafts: list[dict[str, Any]] = []
+            if args.domain:
+                for row, cluster in zip(rows, saved):
+                    drafts.extend(
+                        draft_contracts_from_cluster(
+                            {**row, "cluster_id": cluster.get("cluster_id")},
+                            domain=args.domain,
+                        )
+                    )
+            if args.contracts_output and drafts:
+                Path(args.contracts_output).write_text(
+                    json.dumps(drafts, indent=2),
+                    encoding="utf-8",
+                )
+            text = json.dumps(
+                {"funnel": diagnostics, "clusters": saved, "draft_contracts": drafts},
+                indent=2,
+            )
             if args.output:
                 Path(args.output).write_text(text, encoding="utf-8")
             print(text)

@@ -44,6 +44,20 @@ DEFAULT_COOLDOWN_DAYS = 30
 DEFAULT_REVIEW_DAYS = 21
 DEFAULT_LIMIT = 5
 DEFAULT_VALUE_PER_CLICK = 0.0
+#: A "positive" label must clear this lower-bound click lift. Below it, a
+#: title tweak or internal link is unmeasurable noise, not growth.
+MATERIALITY_FLOOR_CLICKS_90D = 10.0
+MIN_TITLE_IMPRESSIONS = 50
+MIN_TITLE_POSITION = 4.0
+MAX_TITLE_POSITION = 20.0
+#: Reviews below this baseline volume cannot detect a meaningful lift.
+MIN_REVIEW_IMPRESSIONS = 200
+#: Known Google core/spam rollout windows. A review whose observation window
+#: overlaps one is quarantined instead of poisoning action effectiveness.
+CORE_UPDATE_WINDOWS = (
+    ("2026-11-01", "2026-11-24"),
+    ("2026-12-01", "2026-12-31"),
+)
 
 # Position -> conservative organic CTR prior.  These are planning priors, not
 # promises: the observed CTR from GSC always wins when it is present.
@@ -184,6 +198,38 @@ def expected_ctr(position: float) -> float:
     return 0.002
 
 
+def indexing_state(row: dict[str, Any]) -> bool | None:
+    """True indexed, False explicitly rejected, None unknown.
+
+    Never infer "indexed" from an absent coverage field: a page with no
+    evidence is not a safe target for a title test.
+    """
+    coverage = str(row.get("coverage_state") or "").strip().lower()
+    if not coverage:
+        value = row.get("is_indexed")
+        return bool(value) if value is not None else None
+    if any(
+        token in coverage
+        for token in (
+            "not indexed",
+            "unknown to google",
+            "discovered",
+            "crawled",
+            "excluded",
+            "duplicate",
+            "alternate page",
+            "redirect",
+        )
+    ):
+        return False
+    if "submitted and indexed" in coverage or coverage in {
+        "indexed",
+        "submitted and indexed",
+    }:
+        return True
+    return None
+
+
 def estimate_ranking_probability(row: dict[str, Any]) -> dict[str, Any]:
     """Transparent P(top-10 / top-3) prior for an existing or planned page.
 
@@ -253,8 +299,28 @@ def estimate_ranking_probability(row: dict[str, Any]) -> dict[str, Any]:
         + 0.10 * min(volume_log, 6.0)
         - 0.35 * authority_penalty
     )
-    p_top10 = _clamp(_sigmoid(logit_top10) * p_index, 0.0, 1.0)
-    p_top3 = _clamp(_sigmoid(logit_top10 - 1.25) * p_index, 0.0, 1.0)
+    host_rd = _f(
+        row.get(
+            "host_legitimate_rd",
+            row.get("host_referring_domains", feats.get("host_legitimate_rd")),
+        ),
+        0.0,
+    )
+    weakest_rd = _f(row.get("weakest_top10_rd", feats.get("weakest_top10_rd")), 0.0)
+    authority_source = "provided"
+    if host_rd > 0 and weakest_rd > 0:
+        authority_ratio = host_rd / weakest_rd
+        # A 42-RD site facing 674-2,390-RD competitors is not a 35% top-10
+        # candidate. Square-rooting the ratio keeps a 5x gap meaningful while
+        # sharply capping 10x+ cliffs.
+        authority_factor = _clamp(authority_ratio**0.5, 0.02, 1.0)
+    else:
+        authority_ratio = 0.0
+        authority_factor = 0.35
+        authority_source = "missing"
+
+    p_top10 = _clamp(_sigmoid(logit_top10) * p_index * authority_factor, 0.0, 1.0)
+    p_top3 = _clamp(_sigmoid(logit_top10 - 1.25) * p_index * authority_factor, 0.0, 1.0)
     p_top10_lower = _clamp(p_top10 * PRIOR_LOWER_FACTOR, 0.0, 1.0)
     p_top3_lower = _clamp(p_top3 * PRIOR_LOWER_FACTOR, 0.0, 1.0)
 
@@ -268,6 +334,11 @@ def estimate_ranking_probability(row: dict[str, Any]) -> dict[str, Any]:
         "position_signal": round(position_signal, 4),
         "serp_openness": round(serp_openness, 4),
         "authority_penalty": round(authority_penalty, 4),
+        "authority_factor": round(authority_factor, 4),
+        "authority_ratio": round(authority_ratio, 4),
+        "authority_source": authority_source,
+        "host_legitimate_rd": round(host_rd, 3),
+        "weakest_top10_rd": round(weakest_rd, 3),
         "note": "Prior, not a Google guarantee; recalibrate from measured outcomes.",
     }
 
@@ -313,6 +384,7 @@ class GrowthAction:
     action_code: str
     kind: str
     target: str = ""
+    priority_track: str = "ranking"
     p_success: float = 0.4
     p_success_lower: float = 0.3
     expected_clicks_90d: float = 0.0
@@ -335,6 +407,7 @@ class GrowthAction:
             "action_code": self.action_code,
             "kind": self.kind,
             "target": self.target,
+            "priority_track": self.priority_track,
             "p_success": round(self.p_success, 4),
             "p_success_lower": round(self.p_success_lower, 4),
             "expected_clicks_90d": round(self.expected_clicks_90d, 4),
@@ -362,6 +435,7 @@ def _make_action(
     effort_hours: float | None = None,
     evidence: dict[str, Any] | None = None,
     baseline: dict[str, Any] | None = None,
+    priority_track: str = "ranking",
     now: datetime | None = None,
 ) -> GrowthAction:
     code = action_code.upper()
@@ -382,6 +456,7 @@ def _make_action(
         action_code=code,
         kind=ACTION_KIND.get(code, "IMPROVE"),
         target=target,
+        priority_track=priority_track,
         p_success=p,
         p_success_lower=lower,
         expected_clicks_90d=clicks,
@@ -488,7 +563,13 @@ def actions_from_features(
     domain: str,
     now: datetime | None = None,
 ) -> list[GrowthAction]:
-    """Generate existing-page improvements from measured GSC/SERP rows."""
+    """Generate existing-page actions from measured GSC/SERP rows.
+
+    Indexation blockers are a separate mandatory track. A title rewrite is
+    only proposed for a URL that is already indexed, at position 4-20, with at
+    least 50 impressions in the window: editing the title of a rejected page
+    cannot create ranking evidence and is actively misleading.
+    """
     actions: list[GrowthAction] = []
     for row in rows:
         page, query = _row_pages(row)
@@ -505,9 +586,129 @@ def actions_from_features(
         row_domain = _row_domain(row, domain)
         if domain and row_domain.lower() != domain.lower():
             continue
+        indexed = indexing_state(row)
 
-        # Striking distance: a page already close enough that a section is a
-        # plausible top-10 move, but only when there is real demand evidence.
+        if indexed is False:
+            unique_fields = _f(
+                row.get("unique_data_fields", feats.get("unique_data_fields"))
+            )
+            non_boilerplate = _f(
+                row.get("non_boilerplate_ratio", feats.get("non_boilerplate_ratio")),
+                1.0,
+            )
+            actions.append(
+                _make_action(
+                    domain=row_domain,
+                    page=page,
+                    query=query,
+                    action_code="ENRICH_UNIQUE_DATA",
+                    p_success=SUCCESS_PRIOR["ENRICH_UNIQUE_DATA"],
+                    lift_clicks=0.0,
+                    priority_track="indexation",
+                    evidence={
+                        "source": "measured_gsc_row",
+                        "reason": "unindexed_content_depth",
+                        "indexation_state": "not_indexed",
+                        "unique_data_fields": round(unique_fields, 3),
+                        "non_boilerplate_ratio": round(non_boilerplate, 3),
+                        "impressions_30d": round(impressions, 3),
+                        "ranking": ranking,
+                        "honest_note": "Required before any CTR/ranking action; no click lift claimed.",
+                    },
+                    baseline=_baseline(row),
+                    now=now,
+                )
+            )
+            coverage = str(row.get("coverage_state") or "").lower()
+            if any(
+                token in coverage
+                for token in (
+                    "discovered",
+                    "unknown to google",
+                    "duplicate",
+                    "canonical",
+                    "excluded",
+                )
+            ):
+                actions.append(
+                    _make_action(
+                        domain=row_domain,
+                        page=page,
+                        query=query,
+                        action_code="FIX_INDEXABILITY",
+                        p_success=SUCCESS_PRIOR["FIX_INDEXABILITY"],
+                        lift_clicks=0.0,
+                        priority_track="indexation",
+                        evidence={
+                            "source": "measured_gsc_row",
+                            "reason": "coverage_not_indexed",
+                            "coverage_state": row.get("coverage_state"),
+                            "ranking": ranking,
+                        },
+                        baseline=_baseline(row),
+                        now=now,
+                    )
+                )
+            if impressions >= 10:
+                actions.append(
+                    _make_action(
+                        domain=row_domain,
+                        page=page,
+                        query=query,
+                        action_code="INJECT_CONTEXTUAL_INLINK",
+                        p_success=SUCCESS_PRIOR["INJECT_CONTEXTUAL_INLINK"],
+                        lift_clicks=0.0,
+                        priority_track="indexation",
+                        evidence={
+                            "source": "measured_gsc_row",
+                            "reason": "unindexed_kept_url_link_equity",
+                            "impressions_30d": round(impressions, 3),
+                            "ranking": ranking,
+                        },
+                        baseline=_baseline(row),
+                        now=now,
+                    )
+                )
+            continue
+
+        if indexed is not True:
+            # Unknown coverage is not permission to run a title test.
+            continue
+
+        # CTR underperformance is only a ranking action on an indexed URL with
+        # enough demand to make a lower-bound click estimate measurable.
+        if (
+            impressions >= MIN_TITLE_IMPRESSIONS
+            and MIN_TITLE_POSITION <= pos <= MAX_TITLE_POSITION
+            and ctr < expected_ctr(pos) * 0.70
+        ):
+            p_rank = float(ranking.get("p_top10", 0.0) or 0.0)
+            delta_ctr = max(0.0, expected_ctr(pos) * 0.70 - ctr)
+            lift = p_rank * delta_ctr * impressions
+            actions.append(
+                _make_action(
+                    domain=row_domain,
+                    page=page,
+                    query=query,
+                    action_code="REWRITE_TITLE_META",
+                    p_success=SUCCESS_PRIOR["REWRITE_TITLE_META"],
+                    lift_clicks=lift,
+                    evidence={
+                        "source": "measured_gsc_row",
+                        "reason": "ctr_underperformance_indexed_only",
+                        "current_ctr": round(ctr, 5),
+                        "expected_ctr": round(expected_ctr(pos), 5),
+                        "impressions_30d": round(impressions, 3),
+                        "indexation_state": "indexed",
+                        "lift_formula": "p_index(1.0) * p_top10 * delta_ctr * impressions",
+                        "ranking": ranking,
+                    },
+                    baseline=_baseline(row),
+                    now=now,
+                )
+            )
+
+        # Striking distance is a section change, still only on indexed pages.
         if 10.0 <= pos <= 30.0 and impressions >= 10:
             target_pos = max(1.0, pos - 3.0)
             lift = impressions * max(
@@ -523,10 +724,11 @@ def actions_from_features(
                     lift_clicks=lift,
                     evidence={
                         "source": "measured_gsc_row",
-                        "reason": "striking_distance",
+                        "reason": "striking_distance_indexed_only",
                         "current_position": round(pos, 3),
                         "target_position": round(target_pos, 3),
                         "impressions_30d": round(impressions, 3),
+                        "indexation_state": "indexed",
                         "ranking": ranking,
                     },
                     baseline=_baseline(row),
@@ -534,32 +736,6 @@ def actions_from_features(
                 )
             )
 
-        # CTR underperformance: only for pages that already earn impressions.
-        if impressions >= 20 and ctr < expected_ctr(pos) * 0.70:
-            lift = impressions * max(0.001, expected_ctr(pos) * 0.70 - ctr)
-            actions.append(
-                _make_action(
-                    domain=row_domain,
-                    page=page,
-                    query=query,
-                    action_code="REWRITE_TITLE_META",
-                    p_success=SUCCESS_PRIOR["REWRITE_TITLE_META"],
-                    lift_clicks=lift,
-                    evidence={
-                        "source": "measured_gsc_row",
-                        "reason": "ctr_underperformance",
-                        "current_ctr": round(ctr, 5),
-                        "expected_ctr": round(expected_ctr(pos), 5),
-                        "impressions_30d": round(impressions, 3),
-                        "ranking": ranking,
-                    },
-                    baseline=_baseline(row),
-                    now=now,
-                )
-            )
-
-        # Internal-link equity: a page with almost no indexed inlinks and
-        # measurable impressions is a safe, bounded improvement.
         inlinks = _f(row.get("inlinks_from_indexed", feats.get("inlinks_from_indexed")))
         hub_links = _f(feats.get("parent_hub_internal_links"))
         if impressions >= 10 and (inlinks < 3 or hub_links < 2):
@@ -585,8 +761,6 @@ def actions_from_features(
                 )
             )
 
-        # Data-depth gap: only propose enrichment where a real page already
-        # has demand; do not turn an empty row into a content-writing task.
         unique_fields = _f(
             row.get("unique_data_fields", feats.get("unique_data_fields"))
         )
@@ -607,32 +781,6 @@ def actions_from_features(
                         "reason": "thin_or_boilerplate_content",
                         "unique_data_fields": round(unique_fields, 3),
                         "non_boilerplate_ratio": round(non_boilerplate, 3),
-                        "ranking": ranking,
-                    },
-                    baseline=_baseline(row),
-                    now=now,
-                )
-            )
-
-        # Indexation block: no clicks can arrive while the page is not indexed.
-        coverage = str(row.get("coverage_state") or "").lower()
-        if (
-            coverage
-            and "indexed" not in coverage
-            and "submitted and indexed" not in coverage
-        ):
-            actions.append(
-                _make_action(
-                    domain=row_domain,
-                    page=page,
-                    query=query,
-                    action_code="FIX_INDEXABILITY",
-                    p_success=SUCCESS_PRIOR["FIX_INDEXABILITY"],
-                    lift_clicks=impressions * 0.10,
-                    evidence={
-                        "source": "measured_gsc_row",
-                        "reason": "coverage_not_indexed",
-                        "coverage_state": coverage,
                         "ranking": ranking,
                     },
                     baseline=_baseline(row),
@@ -681,6 +829,19 @@ def actions_from_repair_queue(
                 target=target_url,
                 p_success=p,
                 lift_clicks=lift,
+                priority_track=(
+                    "indexation"
+                    if code
+                    in {
+                        "ENRICH",
+                        "FIX_INDEXABILITY",
+                        "MERGE_301",
+                        "NOINDEX",
+                        "PRUNE_OR_NOINDEX",
+                        "REQUEST_INDEXING",
+                    }
+                    else "ranking"
+                ),
                 evidence={"source": "repair_actions", "reason": reason},
                 now=now,
             )
@@ -692,6 +853,7 @@ def actions_from_indexation(
     conn: sqlite3.Connection | None,
     *,
     domain: str,
+    allowed_urls: set[str] | None = None,
     now: datetime | None = None,
 ) -> list[GrowthAction]:
     """Turn cached URL-Inspection failures into explicit indexation fixes."""
@@ -711,6 +873,8 @@ def actions_from_indexation(
     actions: list[GrowthAction] = []
     for url, coverage, last_crawl in rows:
         page = str(url or "").strip()
+        if allowed_urls and _normalize_page(page) not in allowed_urls:
+            continue
         if not page or page in seen:
             continue
         seen.add(page)
@@ -720,6 +884,9 @@ def actions_from_indexation(
         if "discovered" in state:
             code = "REQUEST_INDEXING"
             reason = "discovered_not_indexed"
+        elif "crawled" in state and "not indexed" in state:
+            code = "ENRICH_UNIQUE_DATA"
+            reason = "crawled_not_indexed_content_depth"
         elif "duplicate" in state or "canonical" in state:
             code = "FIX_INDEXABILITY"
             reason = "canonical_or_duplicate"
@@ -734,6 +901,7 @@ def actions_from_indexation(
                 action_code=code,
                 p_success=SUCCESS_PRIOR.get(code, 0.45),
                 lift_clicks=0.0,
+                priority_track="indexation",
                 evidence={
                     "source": "url_inspections",
                     "reason": reason,
@@ -747,12 +915,43 @@ def actions_from_indexation(
     return actions
 
 
+PAGE_LEVEL_ACTIONS = {
+    "ENRICH_UNIQUE_DATA",
+    "FIX_INDEXABILITY",
+    "INJECT_CONTEXTUAL_INLINK",
+    "PRUNE_OR_NOINDEX",
+    "REQUEST_INDEXING",
+}
+
+
 def _dedupe_actions(actions: Iterable[GrowthAction]) -> list[GrowthAction]:
-    best: dict[str, GrowthAction] = {}
+    best: dict[Any, GrowthAction] = {}
     for action in actions:
-        current = best.get(action.action_key)
-        if current is None or action.score > current.score:
-            best[action.action_key] = action
+        key: Any = action.action_key
+        if action.action_code in PAGE_LEVEL_ACTIONS:
+            # A page-level defect is one task, not one task per query it
+            # happens to receive impressions for.
+            key = (
+                action.domain.lower(),
+                _normalize_page(action.page),
+                action.action_code,
+                action.target,
+            )
+        current = best.get(key)
+        quality = (
+            action.expected_clicks_lower,
+            _f(action.baseline.get("impressions")),
+        )
+        current_quality = (
+            (
+                current.expected_clicks_lower,
+                _f(current.baseline.get("impressions")),
+            )
+            if current
+            else (0.0, 0.0)
+        )
+        if current is None or quality > current_quality:
+            best[key] = action
     return list(best.values())
 
 
@@ -805,26 +1004,10 @@ def _fallback_action(
             best = {"key": key, "row": row, "page": page, "query": query}
     if best:
         row = best["row"]
-        impressions = _f(row.get("impressions"))
-        pos = _f(
-            row.get("current_pos", (row.get("features") or {}).get("current_pos")),
-            100.0,
-        )
-        lift = max(0.0, impressions * max(0.001, expected_ctr(pos) * 0.05))
-        return _make_action(
-            domain=_row_domain(row, domain),
-            page=best["page"],
-            query=best["query"],
-            action_code="REWRITE_TITLE_META",
-            p_success=0.40,
-            lift_clicks=lift,
-            evidence={
-                "source": "fallback_existing_page",
-                "reason": "no_positive_gate_action_remaining",
-                "ranking": estimate_ranking_probability(row),
-                "honest_note": "Low-prior title/description test; verify with GSC after 21 days.",
-            },
-            baseline=_baseline(row),
+        return _strategic_action(
+            domain=domain,
+            rows=candidates,
+            reason="no_measurable_action_on_existing_pages",
             now=now,
         )
     return _make_action(
@@ -843,6 +1026,69 @@ def _fallback_action(
     )
 
 
+def _strategic_action(
+    *,
+    domain: str,
+    rows: list[dict[str, Any]],
+    reason: str,
+    now: datetime,
+) -> GrowthAction:
+    """The honest exit when every measurable on-page action is below noise."""
+    page = f"https://{domain}/" if domain else "/"
+    return _make_action(
+        domain=domain,
+        page=page,
+        query="",
+        action_code="BUILD_TIER_A_ASSET",
+        p_success=0.55,
+        lift_clicks=0.0,
+        priority_track="strategic",
+        evidence={
+            "source": "strategic_escalation",
+            "reason": reason,
+            "honest_note": (
+                "On-page actions are below the materiality floor. Build one "
+                "first-party benchmark or utility asset, or run outside-in "
+                "discovery; do not ship a sub-click title edit."
+            ),
+            "materiality_floor_clicks_90d": MATERIALITY_FLOOR_CLICKS_90D,
+            "measured_rows": len(rows),
+        },
+        now=now,
+    )
+
+
+def hydrate_inspection_states(
+    rows: list[dict[str, Any]],
+    conn: sqlite3.Connection | None,
+    *,
+    domain: str,
+) -> list[dict[str, Any]]:
+    """Attach cached URL-Inspection coverage to matching feature rows."""
+    if conn is None or not domain:
+        return rows
+    try:
+        inspections = {
+            str(url): coverage
+            for url, coverage in conn.execute(
+                "SELECT url, coverage_state FROM url_inspections "
+                "WHERE site LIKE ? ORDER BY inspected_at DESC",
+                (f"%{domain}%",),
+            )
+        }
+    except sqlite3.Error:
+        return rows
+    if not inspections:
+        return rows
+    for row in rows:
+        if row.get("coverage_state"):
+            continue
+        page = str(row.get("page") or row.get("url") or "")
+        if page and page in inspections:
+            row["coverage_state"] = inspections[page]
+    return rows
+
+
 def build_growth_plan(
     rows: Iterable[dict[str, Any]],
     *,
@@ -851,6 +1097,7 @@ def build_growth_plan(
     conn: sqlite3.Connection | None = None,
     limit: int = DEFAULT_LIMIT,
     cooldown_days: int = DEFAULT_COOLDOWN_DAYS,
+    sitemap_urls: set[str] | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a non-empty, de-duplicated, evidence-ranked action plan."""
@@ -859,31 +1106,81 @@ def build_growth_plan(
     domain = domain or next(
         (_row_domain(row, "") for row in rows if _row_domain(row, "")), ""
     )
+    rows = hydrate_inspection_states(rows, conn, domain=domain)
+    if sitemap_urls:
+        rows = [
+            row
+            for row in rows
+            if _normalize_page(str(row.get("page") or row.get("url") or ""))
+            in sitemap_urls
+        ]
     all_actions: list[GrowthAction] = []
     all_actions.extend(actions_from_queue(queue or [], domain=domain, now=now))
     all_actions.extend(actions_from_features(rows, domain=domain, now=now))
     all_actions.extend(actions_from_repair_queue(conn, domain=domain, now=now))
-    all_actions.extend(actions_from_indexation(conn, domain=domain, now=now))
+    all_actions.extend(
+        actions_from_indexation(conn, domain=domain, allowed_urls=sitemap_urls, now=now)
+    )
     actions = _dedupe_actions(all_actions)
 
     blocked = _open_or_recent_keys(
         conn, domain=domain, cooldown_days=cooldown_days, now=now
     )
     actions = [action for action in actions if action.action_key not in blocked]
-    actions.sort(
-        key=lambda action: (action.expected_clicks_lower > 0, action.score),
-        reverse=True,
-    )
+    indexation = [action for action in actions if action.priority_track == "indexation"]
+    material = [
+        action
+        for action in actions
+        if action.priority_track != "indexation"
+        and action.expected_clicks_lower >= MATERIALITY_FLOOR_CLICKS_90D
+    ]
+    indexation.sort(key=lambda action: (action.p_success, action.score), reverse=True)
+    material.sort(key=lambda action: action.score, reverse=True)
 
-    positive = [action for action in actions if action.expected_clicks_lower > 0]
-    if positive:
-        selected = positive[: max(1, limit)]
+    if indexation:
+        selected = indexation[: max(1, limit)]
+        guarantee = "indexation_prerequisite"
+        reason = (
+            "indexation blockers must be fixed before CTR/ranking actions; "
+            "no click lift is claimed"
+        )
+    elif material:
+        selected = material[: max(1, limit)]
         guarantee = "positive_expected_click_lift"
-        reason = "at least one action has a positive measured click-lift lower bound"
+        reason = (
+            "at least one action clears the materiality floor with a positive "
+            "measured click-lift lower bound"
+        )
     elif actions:
-        selected = actions[: max(1, limit)]
-        guarantee = "maintenance_only"
-        reason = "no positive click-lift action; selected indexation/hygiene work"
+        strategic = _strategic_action(
+            domain=domain,
+            rows=rows,
+            reason="all_on_page_actions_below_materiality_floor",
+            now=now,
+        )
+        if strategic.action_key in blocked:
+            strategic = _make_action(
+                domain=domain,
+                page=f"https://{domain}/" if domain else "/",
+                query="",
+                action_code="MEASURE_OUTCOME",
+                target="strategic-action-in-flight",
+                p_success=1.0,
+                lift_clicks=0.0,
+                priority_track="measurement",
+                evidence={
+                    "source": "fallback_measurement",
+                    "reason": "strategic_action_already_open",
+                    "honest_note": "Wait for the open strategic action and measure it.",
+                },
+                now=now,
+            )
+        selected = [strategic]
+        guarantee = "below_materiality_floor"
+        reason = (
+            f"no action clears the {MATERIALITY_FLOOR_CLICKS_90D:g}-click/90d "
+            "floor; escalating to a Tier A asset instead of shipping busywork"
+        )
     else:
         fallback = _fallback_action(rows, domain=domain, now=now)
         if fallback.action_key in blocked:
@@ -895,6 +1192,7 @@ def build_growth_plan(
                 target="open-action-in-flight",
                 p_success=1.0,
                 lift_clicks=0.0,
+                priority_track="measurement",
                 evidence={
                     "source": "fallback_measurement",
                     "reason": "all_known_actions_open_or_cooling",
@@ -908,11 +1206,9 @@ def build_growth_plan(
         elif fallback.action_code == "MEASURE_OUTCOME":
             guarantee = "measurement_only"
         else:
-            guarantee = "fallback_existing_page"
+            guarantee = "below_materiality_floor"
         reason = fallback.evidence.get("reason", "no_candidate_actions")
 
-    # Keep the guarantee attached to the top action so the executor cannot
-    # accidentally describe a measurement as a ranking win.
     for action in selected:
         action.evidence["plan_guarantee"] = guarantee
     return {
@@ -920,8 +1216,14 @@ def build_growth_plan(
         "domain": domain,
         "guarantee": guarantee,
         "reason": reason,
+        "materiality_floor_clicks_90d": MATERIALITY_FLOOR_CLICKS_90D,
         "positive_action_count": sum(
-            1 for action in selected if action.expected_clicks_lower > 0
+            1
+            for action in selected
+            if action.expected_clicks_lower >= MATERIALITY_FLOOR_CLICKS_90D
+        ),
+        "indexation_action_count": sum(
+            1 for action in selected if action.priority_track == "indexation"
         ),
         "actions": [action.to_dict() for action in selected],
         "evaluated_due": [],
@@ -972,6 +1274,11 @@ def ensure_growth_schema(conn: sqlite3.Connection) -> None:
             ON growth_runs (domain, created_at);
         """
     )
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(growth_actions)")}
+    if "priority_track" not in columns:
+        conn.execute(
+            "ALTER TABLE growth_actions ADD COLUMN priority_track TEXT NOT NULL DEFAULT 'ranking'"
+        )
     conn.commit()
 
 
@@ -993,10 +1300,11 @@ def record_growth_plan(
                 """
                 INSERT OR IGNORE INTO growth_actions (
                     action_key, domain, page, query, action_code, kind, target,
-                    status, p_success, p_success_lower, expected_clicks_90d,
-                    expected_clicks_lower, expected_value, effort_hours, score,
-                    baseline_json, evidence_json, created_at, due_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    priority_track, status, p_success, p_success_lower,
+                    expected_clicks_90d, expected_clicks_lower, expected_value,
+                    effort_hours, score, baseline_json, evidence_json, created_at,
+                    due_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     action["action_key"],
@@ -1006,6 +1314,7 @@ def record_growth_plan(
                     action.get("action_code", ""),
                     action.get("kind", ""),
                     action.get("target", ""),
+                    action.get("priority_track", "ranking"),
                     "OPEN",
                     _f(action.get("p_success")),
                     _f(action.get("p_success_lower")),
@@ -1091,6 +1400,20 @@ def due_growth_actions(
     return [dict(zip(columns, row)) for row in rows]
 
 
+def _window_overlaps_core_update(start: str, end: str) -> bool:
+    try:
+        start_dt = datetime.fromisoformat(start)
+        end_dt = datetime.fromisoformat(end)
+    except (TypeError, ValueError):
+        return False
+    for window_start, window_end in CORE_UPDATE_WINDOWS:
+        update_start = datetime.fromisoformat(f"{window_start}T00:00:00+00:00")
+        update_end = datetime.fromisoformat(f"{window_end}T23:59:59+00:00")
+        if start_dt <= update_end and end_dt >= update_start:
+            return True
+    return False
+
+
 def review_growth_actions(
     conn: sqlite3.Connection,
     observations: dict[str, dict[str, Any]],
@@ -1122,9 +1445,69 @@ def review_growth_actions(
             continue
         baseline = json.loads(row.get("baseline_json") or "{}")
         base_clicks = _f(baseline.get("clicks"))
+        base_impressions = _f(baseline.get("impressions"))
         base_pos = _f(baseline.get("position"), 100.0)
         clicks = _f(obs.get("clicks"))
         pos = _f(obs.get("position"), base_pos)
+
+        completed = str(row.get("completed_at") or row.get("updated_at") or "")
+        if _window_overlaps_core_update(completed, _iso(now)):
+            outcome = {
+                "baseline_impressions": base_impressions,
+                "baseline_clicks": base_clicks,
+                "observed_clicks": clicks,
+                "observed_position": pos,
+                "reviewed_at": _iso(now),
+                "quarantined": True,
+                "reason": "core_update_window",
+            }
+            conn.execute(
+                "UPDATE growth_actions SET status = ?, outcome_json = ?, updated_at = ? "
+                "WHERE action_key = ?",
+                (
+                    "QUARANTINED_CORE_UPDATE",
+                    json.dumps(outcome, sort_keys=True),
+                    _iso(now),
+                    row["action_key"],
+                ),
+            )
+            reviews.append(
+                {
+                    "action_key": row["action_key"],
+                    "status": "QUARANTINED_CORE_UPDATE",
+                    "outcome": outcome,
+                }
+            )
+            continue
+
+        if base_impressions < MIN_REVIEW_IMPRESSIONS:
+            outcome = {
+                "baseline_impressions": base_impressions,
+                "baseline_clicks": base_clicks,
+                "observed_clicks": clicks,
+                "observed_position": pos,
+                "reviewed_at": _iso(now),
+                "reason": "baseline_below_minimum_detectable_effect",
+            }
+            conn.execute(
+                "UPDATE growth_actions SET status = ?, outcome_json = ?, updated_at = ? "
+                "WHERE action_key = ?",
+                (
+                    "INSUFFICIENT_BASELINE",
+                    json.dumps(outcome, sort_keys=True),
+                    _iso(now),
+                    row["action_key"],
+                ),
+            )
+            reviews.append(
+                {
+                    "action_key": row["action_key"],
+                    "status": "INSUFFICIENT_BASELINE",
+                    "outcome": outcome,
+                }
+            )
+            continue
+
         click_ok = clicks >= base_clicks * 1.10 if base_clicks > 0 else clicks > 0
         pos_ok = pos <= base_pos - 1.0 if base_pos > 0 else False
         success = bool(click_ok or pos_ok)
@@ -1189,6 +1572,35 @@ def growth_status(conn: sqlite3.Connection, *, domain: str = "") -> dict[str, An
     return {"domain": domain, "counts": counts, "due_reviews": due}
 
 
+def fetch_sitemap_urls(url: str) -> set[str]:
+    """Fetch one sitemap (or sitemap index) and normalize its <loc> URLs."""
+    import xml.etree.ElementTree as ET
+    from urllib.request import Request, urlopen
+
+    try:
+        request = Request(url, headers={"User-Agent": "improve-seo-with-data/3.0"})
+        with urlopen(request, timeout=20) as response:
+            payload = response.read()
+        root = ET.fromstring(payload)
+    except Exception:  # noqa: BLE001 - unreachable sitemap is missing evidence
+        return set()
+    locs = {
+        (element.text or "").strip()
+        for element in root.iter()
+        if element.tag.endswith("loc") and element.text
+    }
+    if not locs:
+        return set()
+    # A sitemap index points at family sitemaps, not pages. Follow one level
+    # so the planner sees the real URL set instead of nine .xml files.
+    if all(loc.endswith((".xml", ".xml.gz")) for loc in locs):
+        pages: set[str] = set()
+        for child in list(locs)[:20]:
+            pages.update(fetch_sitemap_urls(child))
+        return pages
+    return {_normalize_page(loc) for loc in locs if loc}
+
+
 def _read_json(path: str) -> Any:
     with open(path, encoding="utf-8") as handle:
         return json.load(handle)
@@ -1210,6 +1622,16 @@ def _cmd_plan(args: argparse.Namespace) -> int:
     queue: list[dict[str, Any]] = []
     if args.action_queue and Path(args.action_queue).exists():
         queue = _queue_rows(_read_json(args.action_queue))
+    sitemap_urls: set[str] | None = None
+    if args.keep_urls:
+        try:
+            sitemap_urls = {
+                _normalize_page(str(url)) for url in _read_json(args.keep_urls)
+            }
+        except Exception:  # noqa: BLE001 - malformed keep file is missing evidence
+            sitemap_urls = set()
+    elif args.sitemap:
+        sitemap_urls = fetch_sitemap_urls(args.sitemap)
     conn = _connect(args.state_db) if args.state_db else None
     try:
         plan = build_growth_plan(
@@ -1219,6 +1641,7 @@ def _cmd_plan(args: argparse.Namespace) -> int:
             conn=conn,
             limit=args.limit,
             cooldown_days=args.cooldown_days,
+            sitemap_urls=sitemap_urls,
             now=_now(),
         )
         if args.record and conn is not None:
@@ -1294,6 +1717,16 @@ def main(argv: list[str] | None = None) -> int:
     plan.add_argument("--domain", default="")
     plan.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     plan.add_argument("--cooldown-days", type=int, default=DEFAULT_COOLDOWN_DAYS)
+    plan.add_argument(
+        "--sitemap",
+        default="",
+        help="live sitemap URL; limits actions to URLs Google can actually see",
+    )
+    plan.add_argument(
+        "--keep-urls",
+        default="",
+        help="JSON list of allowed URLs; overrides --sitemap for a curated footprint",
+    )
     plan.add_argument("--output", default="data/growth_plan.json")
     plan.add_argument("--record", action="store_true")
     plan.set_defaults(func=_cmd_plan)

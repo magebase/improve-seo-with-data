@@ -290,6 +290,7 @@ CREATE TABLE IF NOT EXISTS growth_actions (
     action_code         TEXT NOT NULL,
     kind                TEXT NOT NULL,
     target              TEXT NOT NULL DEFAULT '',
+    priority_track      TEXT NOT NULL DEFAULT 'ranking',
     status              TEXT NOT NULL DEFAULT 'OPEN',
     p_success           REAL NOT NULL DEFAULT 0.0,
     p_success_lower     REAL NOT NULL DEFAULT 0.0,

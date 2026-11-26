@@ -414,3 +414,35 @@ def test_discover_merges_keyword_ideas_when_suggestions_are_empty():
     assert funnel["raw_ideas"] == 15
     assert funnel["valid_entities"] == 15
     assert rows, "keyword_ideas should produce a scoreable cluster"
+
+
+def test_discovery_draft_contracts_are_invalid_until_telemetry_exists():
+    from seo_factory import draft_contracts_from_cluster
+
+    cluster = {
+        "cluster_id": "cl_test",
+        "winnable": True,
+        "keywords": [
+            "free bin lookup",
+            "bin lookup api",
+            "free bin lookup online",
+        ],
+    }
+    drafts = draft_contracts_from_cluster(cluster, domain="binvalidator.com")
+    assert drafts
+    assert drafts[0]["status"] == "DRAFT_REQUIRES_TELEMETRY"
+    assert drafts[0]["unique_data_fields"] == 0
+    assert drafts[0]["telemetry_requirements"]
+    assert validate_page_contract(drafts[0])["valid"] is False
+
+
+def test_rejected_cluster_never_emits_draft_contracts():
+    from seo_factory import draft_contracts_from_cluster
+
+    assert (
+        draft_contracts_from_cluster(
+            {"cluster_id": "cl_no", "winnable": False, "keywords": ["x"]},
+            domain="example.com",
+        )
+        == []
+    )
