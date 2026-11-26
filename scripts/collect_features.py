@@ -1770,7 +1770,6 @@ def expand_candidates(
                 seeds,
                 limit=args.suggest_limit,
                 min_volume=args.suggest_min_volume,
-                max_difficulty=args.suggest_max_difficulty,
             )
             injected = synthesize_unseen_rows(
                 items,

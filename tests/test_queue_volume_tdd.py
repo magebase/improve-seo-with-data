@@ -1552,3 +1552,75 @@ def test_volume_backfill_unlocks_the_surrogate_volume_head():
     assert surrogate.load(models_dir=meta["search_volume_log"].rsplit("/", 1)[0])
     pred = surrogate.predict_serp_features(["widget question 999"])[0]
     assert 0.5 <= pred["search_volume_log"] <= 5.0
+
+
+def test_keyword_suggestions_drop_difficulty_filter_and_keep_volume_floor():
+    """Labs suggestions must not pre-filter on keyword_difficulty.
+
+    Difficulty is a Labs estimate; the live SERP + Backlinks stage measures the
+    real top-10 authority. Keeping it here silently dropped null-difficulty and
+    high-KD long-tail rows before discovery ever saw them.
+    """
+    calls: list[dict] = []
+
+    def transport(method, url, body=None, headers=None):
+        calls.append({"url": url, "payload": json.loads(body or "[]")})
+        return {"status_code": 20000, "tasks": [{"result": [{"items": []}]}]}
+
+    client = DataForSEOClient("login", "pass", transport=transport)
+    client.keyword_suggestions(["iban format"], limit=10, min_volume=10)
+
+    payload = calls[0]["payload"][0]
+    keys = [f[0] for f in payload["filters"]]
+    assert keys == ["keyword_info.search_volume"]
+    assert payload["filters"][0] == ["keyword_info.search_volume", ">", 9]
+
+
+def test_keyword_ideas_hits_the_ideas_endpoint_and_normalizes_rows():
+    calls: list[dict] = []
+    envelope = {
+        "status_code": 20000,
+        "tasks": [
+            {
+                "result": [
+                    {
+                        "items": [
+                            {
+                                "keyword": "iban number structure",
+                                "keyword_info": {
+                                    "search_volume": 20,
+                                    "keyword_difficulty": 55,
+                                },
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+    }
+
+    def transport(method, url, body=None, headers=None):
+        calls.append({"url": url, "payload": json.loads(body or "[]")})
+        return envelope
+
+    client = DataForSEOClient("login", "pass", transport=transport)
+    rows = client.keyword_ideas(["iban format"], limit=10, min_volume=10)
+
+    assert calls[0]["url"].endswith("/dataforseo_labs/google/keyword_ideas/live")
+    assert rows == [
+        {
+            "keyword": "iban number structure",
+            "volume": 20.0,
+            "difficulty": 55,
+            "serp_items": [],
+        }
+    ]
+
+
+def test_serp_item_domain_rejects_breadcrumb_count_labels():
+    """SERP breadcrumbs sometimes begin with '260+' / '1.4k+', not a domain."""
+    from dataforseo_client import _item_domain
+
+    assert _item_domain({"domain": "google.com", "breadcrumb": "260+ results"}) == ""
+    assert _item_domain({"domain": "google.com", "breadcrumb": "1.4k+ results"}) == ""
+    assert _item_domain({"domain": "google.com", "breadcrumb": "reddit.com › r/finance"}) == "reddit.com"

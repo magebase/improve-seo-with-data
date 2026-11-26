@@ -372,3 +372,45 @@ def test_discover_reports_empty_funnel_instead_of_a_black_box():
     assert funnel["raw_suggestions"] == 1
     assert funnel["valid_entities"] == 0
     assert funnel["rejection_reason"] == "no_valid_entities"
+
+
+def test_discover_merges_keyword_ideas_when_suggestions_are_empty():
+    """keyword_suggestions is exact-match; keyword_ideas fills the entity phrasing."""
+
+    class IdeasClient:
+        def keyword_suggestions(self, seeds, limit=100):
+            return []
+
+        def keyword_ideas(self, seeds, limit=100):
+            return [
+                {"keyword": f"iban number structure {i}", "volume": 40}
+                for i in range(15)
+            ]
+
+        def fetch_serp_live(self, keyword, depth=10):
+            return [
+                {
+                    "items": [
+                        {"type": "organic", "domain": "reddit.com"},
+                        {"type": "organic", "domain": "thin.example"},
+                        {"type": "organic", "domain": "big.example"},
+                    ]
+                }
+            ]
+
+        def backlinks_summary(self, domain):
+            return {
+                "reddit.com": {"referring_domains": 5000},
+                "thin.example": {"referring_domains": 30},
+                "big.example": {"referring_domains": 50000},
+            }[domain]
+
+    funnel: dict = {}
+    rows = discover_cluster_candidates(
+        IdeasClient(), seeds=["iban format"], niche="finance", diagnostics=funnel
+    )
+
+    assert funnel["raw_suggestions"] == 0
+    assert funnel["raw_ideas"] == 15
+    assert funnel["valid_entities"] == 15
+    assert rows, "keyword_ideas should produce a scoreable cluster"

@@ -49,6 +49,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -169,6 +170,17 @@ def _tokenize(query: str) -> set[str]:
     return {tok for tok in query.lower().split() if tok}
 
 
+_DOMAIN_LABEL_RE = re.compile(
+    r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$"
+)
+
+
+def _valid_domain(value: str) -> bool:
+    """Reject SERP breadcrumb labels like ``260+`` / ``1.4k+`` as domains."""
+    candidate = value.strip().lower().strip(".")
+    return bool(candidate and _DOMAIN_LABEL_RE.match(candidate))
+
+
 def _item_domain(item: dict[str, Any]) -> str:
     """Resolve the real publisher domain for a SERP item.
 
@@ -190,7 +202,7 @@ def _item_domain(item: dict[str, Any]) -> str:
             if token.startswith(prefix):
                 token = token[len(prefix) :]
         token = token.split("/")[0].lstrip("www.")
-        if token and token not in {"google.com", "www.google.com"}:
+        if _valid_domain(token) and token not in {"google.com", "www.google.com"}:
             return token
 
     website_name = str(item.get("website_name", "")).strip().lower()
@@ -210,7 +222,7 @@ def _item_domain(item: dict[str, Any]) -> str:
         }
         if name in ugc_brands:
             return ugc_brands[name]
-        if "." in name and name not in {"google", "google.com"}:
+        if _valid_domain(name) and name not in {"google", "google.com"}:
             return name
 
     url = str(item.get("url", "")).strip().lower()
@@ -491,8 +503,7 @@ class DataForSEOClient:
         location_code: int = 2840,
         language_name: str = "english",
         limit: int = 100,
-        min_volume: int = 50,
-        max_difficulty: int = 35,
+        min_volume: int = 10,
         include_serp_info: bool = True,
     ) -> list[dict[str, Any]]:
         """Labs keyword_suggestions/live: net-new candidates for thin/0-row sites.
@@ -512,12 +523,60 @@ class DataForSEOClient:
                 "limit": limit,
                 "filters": [
                     ["keyword_info.search_volume", ">", max(0, min_volume - 1)],
-                    ["keyword_info.keyword_difficulty", "<", max_difficulty],
                 ],
-                "logic": "and",
             }
         ]
         data = self._post("/dataforseo_labs/google/keyword_suggestions/live", payload)
+        items: list[dict[str, Any]] = []
+        for task in data.get("tasks") or []:
+            for result in task.get("result") or []:
+                items.extend(result.get("items") or [])
+        normalized: list[dict[str, Any]] = []
+        for item in items:
+            info = item.get("keyword_info") or {}
+            if not item.get("keyword"):
+                continue
+            normalized.append(
+                {
+                    "keyword": str(item["keyword"]),
+                    "volume": float(info.get("search_volume") or 0),
+                    "difficulty": info.get("keyword_difficulty"),
+                    "serp_items": (item.get("serp_info") or {}).get("se_items") or [],
+                }
+            )
+        return normalized
+
+    def keyword_ideas(
+        self,
+        seeds: list[str],
+        *,
+        location_code: int = 2840,
+        language_name: str = "english",
+        limit: int = 100,
+        min_volume: int = 10,
+        include_serp_info: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Labs keyword_ideas/live: varied entity phrasing the exact-match endpoint misses.
+
+        ``keyword_suggestions`` full-text matches the seed string, so a seed like
+        ``iban format`` misses ``iban number structure`` / ``iban example``.
+        ``keyword_ideas`` accepts up to 200 seeds and returns semantically related
+        phrases. No difficulty filter is applied here: winnability is measured on
+        the live SERP + Backlinks stage, where the actual top-10 authority is known.
+        """
+        payload = [
+            {
+                "keywords": [s.strip() for s in seeds if s.strip()][:200],
+                "location_code": location_code,
+                "language_name": language_name,
+                "include_serp_info": include_serp_info,
+                "limit": limit,
+                "filters": [
+                    ["keyword_info.search_volume", ">", max(0, min_volume - 1)],
+                ],
+            }
+        ]
+        data = self._post("/dataforseo_labs/google/keyword_ideas/live", payload)
         items: list[dict[str, Any]] = []
         for task in data.get("tasks") or []:
             for result in task.get("result") or []:

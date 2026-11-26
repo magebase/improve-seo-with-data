@@ -515,14 +515,24 @@ def discover_cluster_candidates(
     rejected niche is distinguishable from a parser that extracted nothing.
     """
     raw_suggestions = list(client.keyword_suggestions(seeds, limit=limit))
+    raw_ideas: list[dict[str, Any]] = []
+    ideas_method = getattr(client, "keyword_ideas", None)
+    if callable(ideas_method):
+        raw_ideas = list(ideas_method(seeds, limit=limit))
+    merged: dict[str, dict[str, Any]] = {}
+    for row in [*raw_suggestions, *raw_ideas]:
+        keyword = str(row.get("keyword") or "").strip().lower()
+        if keyword and keyword not in merged:
+            merged[keyword] = row
     suggestions = [
         row
-        for row in raw_suggestions
+        for row in merged.values()
         if row.get("keyword") and float(row.get("volume") or 0) > 0
     ]
     funnel: dict[str, Any] = {
         "seeds": list(seeds),
         "raw_suggestions": len(raw_suggestions),
+        "raw_ideas": len(raw_ideas),
         "valid_entities": len(suggestions),
         "aggregate_demand": round(sum(float(row["volume"]) for row in suggestions), 2),
         "serps_checked": 0,
