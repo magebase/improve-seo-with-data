@@ -5,19 +5,20 @@ from __future__ import annotations
 from fleet_state import connect_state_db
 from seo_factory import (
     advance_cohort,
-    discover_cluster_candidates,
-    save_cluster,
     classify_disposal,
     compute_stripped_overlap,
     create_cohort,
+    discover_cluster_candidates,
     evaluate_cluster,
+    finalize_footprint,
     plan_site_repair,
     record_cohort_measurement,
     register_page_contract,
+    save_cluster,
+    select_keep_list,
     should_noindex_empty_state,
     validate_page_contract,
 )
-
 
 SITEMAP = [
     "https://smsriver.com/",
@@ -26,6 +27,8 @@ SITEMAP = [
     "https://smsriver.com/country-codes/germany/",
     "https://smsriver.com/compare/",
     "https://smsriver.com/compare/twilio-vs-plivo/",
+    "https://smsriver.com/guides/",
+    "https://smsriver.com/guides/short-code-vs-10dlc-vs-toll-free-sms-comparison/",
     "https://smsriver.com/status/",
 ]
 
@@ -66,6 +69,43 @@ def test_country_code_child_merges_to_its_hub():
     )
     assert decision["decision"] == "MERGE_301"
     assert decision["target"] == "https://smsriver.com/country-codes/"
+
+
+def test_compare_child_without_absorbed_value_is_gone_not_301():
+    decision = classify_disposal(
+        _row("https://smsriver.com/compare/twilio-vs-plivo/"),
+        sitemap_urls=SITEMAP,
+    )
+    assert decision["decision"] == "GONE_410"
+
+
+def test_compare_child_with_backlinks_keeps_equity_via_301():
+    decision = classify_disposal(
+        _row("https://smsriver.com/compare/twilio-vs-plivo/", backlinks=3),
+        sitemap_urls=SITEMAP,
+    )
+    assert decision["decision"] == "MERGE_301"
+    assert decision["target"] == "https://smsriver.com/compare/"
+
+
+def test_guide_child_with_absorbed_content_can_301():
+    decision = classify_disposal(
+        _row(
+            "https://smsriver.com/guides/short-code-vs-10dlc-vs-toll-free-sms-comparison/",
+            content_absorbed=True,
+        ),
+        sitemap_urls=SITEMAP,
+    )
+    assert decision["decision"] == "MERGE_301"
+    assert decision["target"] == "https://smsriver.com/guides/"
+
+
+def test_live_inventory_country_page_is_enriched_not_gone():
+    decision = classify_disposal(
+        _row("https://smsriver.com/receive-sms/au/", live_inventory_count=19),
+        sitemap_urls=SITEMAP,
+    )
+    assert decision["decision"] == "ENRICH"
 
 
 def test_user_facing_status_page_is_noindexed():
@@ -174,7 +214,7 @@ def test_cluster_requires_demand_and_weak_top10():
         "big.example": {"referring_domains": 50000},
     }
     result = evaluate_cluster(
-        volumes=[100, 60],
+        volumes=[40.0] * 15,
         top10_domains=["reddit.com", "thin.example", "big.example"],
         authority=authority,
     )
@@ -219,8 +259,10 @@ def test_cohort_freezes_below_fifty_percent_at_day21():
 
 def test_outside_in_discovery_uses_real_serp_and_authority():
     class FakeClient:
-        def keyword_suggestions(self, seeds, limit=10):
-            return [{"keyword": "test harness sms", "volume": 120}]
+        def keyword_suggestions(self, seeds, limit=100):
+            return [
+                {"keyword": f"test harness sms {i}", "volume": 40} for i in range(15)
+            ]
 
         def fetch_serp_live(self, keyword, depth=10):
             return [
@@ -244,7 +286,8 @@ def test_outside_in_discovery_uses_real_serp_and_authority():
         FakeClient(), seeds=["test harness"], niche="developer"
     )
     assert len(rows) == 1
-    assert rows[0]["volume"] == 120
+    assert rows[0]["volume"] == 600.0
+    assert rows[0]["entities"] == 15
     assert rows[0]["winnable"] is True
     assert rows[0]["weak_top10_count"] == 2
 
@@ -270,3 +313,29 @@ def test_discovered_cluster_is_persisted():
         == "WINNABLE"
     )
     conn.close()
+
+
+def test_finalize_caps_footprint_and_noindexes_non_keep_inventory():
+    decisions = [
+        {"url": "https://smsriver.com/", "decision": "PROTECT", "evidence": {}},
+        {
+            "url": "https://smsriver.com/receive-sms/gb/",
+            "decision": "ENRICH",
+            "evidence": {"impressions_90d": 200, "live_inventory_count": 124},
+        },
+        {
+            "url": "https://smsriver.com/receive-sms/de/",
+            "decision": "ENRICH",
+            "evidence": {"impressions_90d": 0, "live_inventory_count": 75},
+        },
+        {
+            "url": "https://smsriver.com/orphan/",
+            "decision": "ENRICH",
+            "evidence": {"impressions_90d": 0, "live_inventory_count": 0},
+        },
+    ]
+    keep = select_keep_list(decisions, limit=2)
+    assert keep == ["https://smsriver.com/", "https://smsriver.com/receive-sms/gb/"]
+    final = finalize_footprint(decisions, keep_urls=keep)
+    assert final["counts"]["NOINDEX"] == 1
+    assert final["counts"]["GONE_410"] == 1

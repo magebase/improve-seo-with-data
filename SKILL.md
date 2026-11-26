@@ -171,19 +171,19 @@ python scripts/score_backlog.py --features data/ltr_features.json \
 
 ### 4.2 Unified pSEO State Machine (Repair → Contract → Pilot → Scale)
 
-`scripts/seo_factory.py` turns the launch gate into a lifecycle. The fleet DB is the single source of truth: `clusters`, `page_contracts`, `cohorts`, and `url_lifecycle` sit alongside the existing GSC/SERP/inspection tables.
+`scripts/seo_factory.py` turns the launch gate into a lifecycle. The fleet DB is the single source of truth: `clusters`, `page_contracts`, `cohorts`, `url_lifecycle`, and `repair_actions` sit alongside the existing GSC/SERP/inspection tables. Keep the DB on persistent disk (`~/.seo_fleet/`), never in `/dev/shm`; a reboot would erase multi-week cohort history.
 
 **Existing-site repair.** `repair-plan` classifies every current URL before any new page is considered:
 
-- `PROTECT` — any click in 90 days, indexed with impressions, or a backlink; never touched by a prune batch.
-- `MERGE_301` — only a genuine **ancestor** replacement (`/country-codes/germany/` → `/country-codes/`). A hub is never redirected into a child, and unrelated pages are never bulk-redirected to `/`.
+- `PROTECT` — any click in 90 days, indexed with impressions, or a hard-locked route; never touched by a prune batch. Backlinks alone do not protect a page: they make an ancestor merge the preferred option so the equity survives.
+- `MERGE_301` — only a genuine **ancestor** replacement (`/country-codes/germany/` → `/country-codes/`). A generic `/compare/` or `/guides/` hub is not a replacement unless the source value was actually absorbed or it has backlinks; otherwise the source is `GONE_410`. A hub is never redirected into a child, and unrelated pages are never bulk-redirected to `/`.
 - `NOINDEX` — user-facing routes with no search intent (`/status/`, `/workbench/`); strip from sitemaps, do not robots-block.
-- `ENRICH` — demand exists but value does not; add first-party telemetry instead of minting a new URL.
+- `ENRICH` — demand or live inventory exists but value does not; add first-party telemetry instead of minting a new URL.
 - `GONE_410` — zero clicks, zero backlinks, no ancestor, no utility.
 
 **Data-moat contracts.** `page_contracts` binds every Tier B page to a dry-run payload: `data_source_hash`, at least 3 unique data fields, entity-stripped overlap ≤ 0.45, at least 3 planned indexed inlinks, and a cluster. `compute_stripped_overlap` is the CI check: strip country/app/brand tokens and measure shingle overlap on the remaining prose.
 
-**Outside-in winnability.** `evaluate_cluster` requires aggregate demand ≥ 50 and at least 2 weak top-10 slots (UGC or ≤ 250 referring domains) before a cluster can become a pilot. It is data-in, no fabricated volume.
+**Outside-in winnability.** `evaluate_cluster` requires aggregate demand ≥ 500 searches/month across **at least 15 valid entities**, plus at least 2 weak top-10 slots (UGC or ≤ 250 referring domains), before a cluster can become a pilot. It is data-in, no fabricated volume. `discover` aggregates the whole keyword-pattern list, not one keyword at a time.
 
 **Cohort state machine.** A pilot is 5–15 URLs in a dedicated sitemap, measured at days 7/14/21/45:
 
@@ -194,6 +194,10 @@ python scripts/score_backlog.py --features data/ltr_features.json \
 ```bash
 # Existing URL triage (writes url_lifecycle)
 python scripts/seo_factory.py repair-plan   --input url_rows.json --sitemap-file sitemap_urls.json   --domain smsriver.com --persist
+
+# Cap the indexable footprint to ~15-20 strong URLs
+python scripts/seo_factory.py finalize --input repair_plan.json \
+  --keep-limit 18 --output final_footprint.json
 
 # Validate/register dry-run contracts
 python scripts/seo_factory.py contracts --input contracts.json

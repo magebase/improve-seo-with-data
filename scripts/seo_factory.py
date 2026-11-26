@@ -16,7 +16,7 @@ import re
 import sys
 import uuid
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -31,7 +31,8 @@ MAX_STRIPPED_OVERLAP = 0.45
 MIN_PLANNED_INLINKS = 3
 MIN_PILOT_INDEX_RATE = 0.80
 FREEZE_TEMPLATE_RATE = 0.50
-MIN_CLUSTER_DEMAND = 50.0
+MIN_CLUSTER_DEMAND = 500.0
+MIN_CLUSTER_ENTITIES = 15
 MIN_WEAK_TOP10 = 2
 WEAK_REFERRING_DOMAIN_LIMIT = 250.0
 
@@ -70,7 +71,6 @@ def _family(url: str) -> str:
 def _is_protected(row: dict[str, Any]) -> bool:
     return bool(
         float(row.get("clicks_90d") or 0) > 0
-        or float(row.get("backlinks") or 0) > 0
         or (
             str(row.get("coverage_state", ""))
             .lower()
@@ -93,7 +93,6 @@ def find_merge_target(
     family = _family(url)
     if family not in MERGE_FAMILIES:
         return None
-    target = _norm(url)
     paths = {_path(candidate): candidate for candidate in sitemap_urls}
     parts = [part for part in _path(url).split("/") if part]
     for depth in range(len(parts) - 1, 0, -1):
@@ -116,6 +115,7 @@ def classify_disposal(
         "impressions_90d": float(row.get("impressions_90d") or 0),
         "coverage_state": row.get("coverage_state"),
         "backlinks": float(row.get("backlinks") or 0),
+        "live_inventory_count": float(row.get("live_inventory_count") or 0),
     }
     if _is_protected(row):
         return {
@@ -138,18 +138,32 @@ def classify_disposal(
         }
     target = find_merge_target(url, sitemap_urls)
     if target:
+        family = _family(url)
+        absorbed = bool(row.get("content_absorbed"))
+        if (
+            family in {"compare", "guides"}
+            and not absorbed
+            and evidence["backlinks"] <= 0
+        ):
+            return {
+                "url": url,
+                "decision": "GONE_410",
+                "reason": "generic_hub_without_content_absorption_or_backlinks",
+                "target": None,
+                "evidence": {**evidence, "content_absorbed": absorbed},
+            }
         return {
             "url": url,
             "decision": "MERGE_301",
-            "reason": "closest_parent_replacement",
+            "reason": "ancestor_replacement",
             "target": target,
-            "evidence": evidence,
+            "evidence": {**evidence, "content_absorbed": absorbed},
         }
-    if evidence["impressions_90d"] > 0:
+    if evidence["impressions_90d"] > 0 or evidence["live_inventory_count"] > 0:
         return {
             "url": url,
             "decision": "ENRICH",
-            "reason": "has_demand_but_not_enough_value",
+            "reason": "has_demand_or_live_inventory_but_not_enough_value",
             "target": None,
             "evidence": evidence,
         }
@@ -234,6 +248,56 @@ def should_noindex_empty_state(
     if has_unique_telemetry:
         return False
     return int(zero_inventory_days) >= int(threshold_days)
+
+
+def select_keep_list(
+    decisions: list[dict[str, Any]],
+    *,
+    limit: int = 18,
+) -> list[str]:
+    """Pick a tight indexable footprint from a repair plan.
+
+    Protected URLs are always kept.  Remaining slots go to the highest measured
+    demand, then the largest live inventory.  Everything else must leave the
+    indexable footprint even if the page still exists for users.
+    """
+    protected = [d for d in decisions if d["decision"] == "PROTECT"]
+    enrich = sorted(
+        (d for d in decisions if d["decision"] == "ENRICH"),
+        key=lambda d: (
+            -float(d.get("evidence", {}).get("impressions_90d") or 0),
+            -float(d.get("evidence", {}).get("live_inventory_count") or 0),
+            d["url"],
+        ),
+    )
+    keep = protected + enrich[: max(0, int(limit) - len(protected))]
+    return [d["url"] for d in keep]
+
+
+def finalize_footprint(
+    decisions: list[dict[str, Any]],
+    *,
+    keep_urls: list[str],
+) -> dict[str, Any]:
+    """Turn a repair plan into the final indexable footprint.
+
+    A non-kept ENRICH page with live inventory becomes NOINDEX (users can still
+    reach it); a non-kept page with no inventory becomes GONE_410.
+    """
+    keep = {str(url).rstrip("/") for url in keep_urls}
+    finalized = []
+    for decision in decisions:
+        item = dict(decision)
+        if item["url"].rstrip("/") not in keep and item["decision"] == "ENRICH":
+            has_inventory = (
+                float(item.get("evidence", {}).get("live_inventory_count") or 0) > 0
+            )
+            item["decision"] = "NOINDEX" if has_inventory else "GONE_410"
+            item["reason"] = "outside_final_keep_list"
+            item["target"] = None
+        finalized.append(item)
+    counts = Counter(item["decision"] for item in finalized)
+    return {"total": len(finalized), "counts": dict(counts), "decisions": finalized}
 
 
 def validate_page_contract(contract: dict[str, Any]) -> dict[str, Any]:
@@ -334,6 +398,8 @@ def evaluate_cluster(
     top10_domains: list[str],
     authority: dict[str, dict[str, Any]],
     forum_domains: set[str] | None = None,
+    min_demand: float = MIN_CLUSTER_DEMAND,
+    min_entities: int = MIN_CLUSTER_ENTITIES,
 ) -> dict[str, Any]:
     """Outside-in cluster gate: demand + weak top-10 authority."""
     forum_domains = forum_domains or {
@@ -346,28 +412,32 @@ def evaluate_cluster(
         "github.com",
     }
     demand = float(sum(max(0.0, float(v)) for v in volumes))
+    entities = sum(1 for volume in volumes if float(volume) > 0)
     weak = 0
     weakest = None
     for domain in top10_domains:
-        key = str(domain).lower().lstrip("www.")
+        key = str(domain).lower().removeprefix("www.")
         metrics = authority.get(key) or {}
         ref = metrics.get("referring_domains")
-        if key in forum_domains:
-            weak += 1
-        elif ref is not None and float(ref) <= WEAK_REFERRING_DOMAIN_LIMIT:
+        if key in forum_domains or (
+            ref is not None and float(ref) <= WEAK_REFERRING_DOMAIN_LIMIT
+        ):
             weak += 1
         if ref is not None and (weakest is None or float(ref) < weakest):
             weakest = float(ref)
     reasons: list[str] = []
-    if demand < MIN_CLUSTER_DEMAND:
+    if demand < min_demand:
         reasons.append("insufficient_demand")
+    if entities < min_entities:
+        reasons.append("insufficient_entities")
     if weak < MIN_WEAK_TOP10:
         reasons.append("top10_too_authoritative")
     if weakest is None:
         reasons.append("missing_backlink_evidence")
-    score = min(100.0, (demand / MIN_CLUSTER_DEMAND) * 40.0 + min(weak, 4) * 15.0)
+    score = min(100.0, (demand / min_demand) * 40.0 + min(weak, 4) * 15.0)
     return {
         "demand_score": round(demand, 2),
+        "entities": entities,
         "winnability_score": round(score, 2),
         "weakest_top10_rd": weakest,
         "weak_top10_count": weak,
@@ -385,8 +455,7 @@ def save_cluster(
     evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cluster_id = (
-        "cl_"
-        + hashlib.sha1(f"{niche}|{entity_pattern}".encode("utf-8")).hexdigest()[:12]
+        "cl_" + hashlib.sha1(f"{niche}|{entity_pattern}".encode()).hexdigest()[:12]
     )
     stamp = _now()
     conn.execute(
@@ -429,52 +498,53 @@ def discover_cluster_candidates(
     *,
     seeds: list[str],
     niche: str,
-    limit: int = 10,
+    limit: int = 100,
     max_keywords: int = 5,
 ) -> list[dict[str, Any]]:
     """Outside-in discovery with real volume, SERP and backlink evidence.
 
-    This is deliberately limited: one Labs suggestions call, then a bounded
-    number of SERP/backlink lookups.  A missing API response is an error, not
-    zero demand.
+    The cluster is the aggregate pattern, not one keyword.  Aggregate demand and
+    entity count are evaluated together; a single 50-volume keyword is not a
+    business.  A missing API response is an error, not zero demand.
     """
-    suggestions = client.keyword_suggestions(seeds, limit=limit)
-    rows: list[dict[str, Any]] = []
+    suggestions = [
+        row
+        for row in client.keyword_suggestions(seeds, limit=limit)
+        if row.get("keyword") and float(row.get("volume") or 0) > 0
+    ]
+    if not suggestions:
+        return []
+    volumes = [float(row["volume"]) for row in suggestions]
+    domains: list[str] = []
     for suggestion in suggestions[: max(0, int(max_keywords))]:
-        keyword = suggestion.get("keyword")
-        volume = float(suggestion.get("volume") or 0)
-        if not keyword or volume <= 0:
-            continue
-        serp = client.fetch_serp_live(keyword, depth=10)
-        items = (serp[0].get("items") if serp else []) or []
-        domains: list[str] = []
-        for item in items:
-            if item.get("type") == "organic":
-                domain = _item_domain(item)
-                if domain and domain not in domains:
-                    domains.append(domain)
-        authority = {}
-        for domain in domains[:10]:
-            try:
-                authority[domain] = client.backlinks_summary(domain)
-            except Exception:  # noqa: BLE001 - a failed backlink probe is missing evidence
+        serp = client.fetch_serp_live(suggestion["keyword"], depth=10)
+        for item in (serp[0].get("items") if serp else []) or []:
+            if item.get("type") != "organic":
                 continue
-        evaluation = evaluate_cluster(
-            volumes=[volume],
-            top10_domains=domains,
-            authority=authority,
-        )
-        rows.append(
-            {
-                "keyword": keyword,
-                "entity_pattern": keyword,
-                "volume": volume,
-                "top10_domains": domains,
-                "authority": authority,
-                **evaluation,
-            }
-        )
-    return rows
+            domain = _item_domain(item)
+            if domain and domain not in domains:
+                domains.append(domain)
+    authority: dict[str, dict[str, Any]] = {}
+    for domain in domains[:10]:
+        try:
+            authority[domain] = client.backlinks_summary(domain)
+        except Exception:  # noqa: BLE001 - a failed backlink probe is missing evidence
+            authority[domain] = {}
+    evaluation = evaluate_cluster(
+        volumes=volumes,
+        top10_domains=domains,
+        authority=authority,
+    )
+    return [
+        {
+            "entity_pattern": " | ".join(seeds),
+            "keywords": [row["keyword"] for row in suggestions],
+            "volume": round(sum(volumes), 2),
+            "top10_domains": domains,
+            "authority": authority,
+            **evaluation,
+        }
+    ]
 
 
 def create_cohort(
@@ -611,6 +681,13 @@ def main(argv: list[str] | None = None) -> int:
     repair.add_argument("--output", default="")
     repair.add_argument("--persist", action="store_true")
 
+    finalize = sub.add_parser(
+        "finalize", help="cap the indexable footprint to a keep list"
+    )
+    finalize.add_argument("--input", required=True, help="repair plan JSON")
+    finalize.add_argument("--keep-limit", type=int, default=18)
+    finalize.add_argument("--output", default="")
+
     contracts = sub.add_parser(
         "contracts", help="validate/register dry-run page contracts"
     )
@@ -628,7 +705,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     discover.add_argument("--seeds", required=True, help="CSV of seed keywords")
     discover.add_argument("--niche", required=True)
-    discover.add_argument("--limit", type=int, default=10)
+    discover.add_argument("--limit", type=int, default=100)
     discover.add_argument("--max-keywords", type=int, default=5)
     discover.add_argument("--output", default="")
 
@@ -659,6 +736,18 @@ def main(argv: list[str] | None = None) -> int:
                 conn=conn if args.persist else None,
             )
             text = json.dumps(plan, indent=2)
+            if args.output:
+                Path(args.output).write_text(text, encoding="utf-8")
+            print(text)
+            return 0
+        if args.command == "finalize":
+            plan = _read_json(args.input)
+            decisions = plan.get("decisions") or plan
+            keep = select_keep_list(decisions, limit=args.keep_limit)
+            final = finalize_footprint(decisions, keep_urls=keep)
+            text = json.dumps(
+                {"keep": keep, "keep_count": len(keep), **final}, indent=2
+            )
             if args.output:
                 Path(args.output).write_text(text, encoding="utf-8")
             print(text)
