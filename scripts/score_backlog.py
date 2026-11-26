@@ -905,6 +905,12 @@ def score_rows(
         )
         intel = compute_opportunity_intelligence(row, conn=conn, domain=row_domain)
         row.update(intel)
+        try:
+            from growth_loop import estimate_ranking_probability
+
+            row["ranking_probability"] = estimate_ranking_probability(row)
+        except Exception:
+            row["ranking_probability"] = {"model": "unavailable", "p_top10": None}
     return {"mode": "trained_model", "label_mode": label_mode, "rows": rows}
 
 
@@ -1542,10 +1548,13 @@ def main(argv: list[str] | None = None) -> int:
         merge_leased_into_output(args.output, leased, hygiene)
         from growth_loop import build_growth_plan
 
+        # Route-rescue rows are deliberately excluded from the demand queue,
+        # but they still need an execution owner: orphan routes are the
+        # cheapest internal-link/indexation wins on the site.
         growth_plan = build_growth_plan(
             rows,
             domain=str(target_domain or ""),
-            queue=queue + leased,
+            queue=queue + rescue_rows + leased,
             conn=conn,
         )
         print(
@@ -1560,7 +1569,7 @@ def main(argv: list[str] | None = None) -> int:
         from growth_loop import build_growth_plan
 
         growth_plan = build_growth_plan(
-            rows, domain=str(target_domain or ""), queue=queue
+            rows, domain=str(target_domain or ""), queue=queue + rescue_rows
         )
         print(format_model_decision_summary([], queue=queue, model_mode=result["mode"]))
         _print_growth_plan(growth_plan)

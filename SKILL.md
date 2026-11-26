@@ -10,6 +10,8 @@ An autonomous, data-first SEO engineering, conversion optimization, and Generati
 
 Eliminates speculative "best practices", subjective design opinions, and isolated dashboards. Turns multi-dimensional performance data into a prioritized, revenue-weighted growth engine that identifies where search visibility exists, diagnoses why it is not producing clicks or conversions, and continuously executes changes that compound business outcomes.
 
+> **Start every run with the execution loop, not the diagnosis.** `scripts/growth_loop.py plan` must return at least one action. If the launch gate rejects every new route, the planner still selects the highest-lower-bound existing-page improvement, indexation fix, or measurement task. The `guarantee` field distinguishes a real click-lift action from maintenance and instrumentation — never describe the latter two as ranking wins.
+
 ---
 
 ## 1. Where Most "Data-Driven" SEO Skills Fail (The 5 Structural Flaws to Eliminate)

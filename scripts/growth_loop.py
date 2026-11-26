@@ -414,7 +414,7 @@ def _queue_rows(payload: Any) -> list[dict[str, Any]]:
         return [row for row in payload if isinstance(row, dict)]
     if not isinstance(payload, dict):
         return []
-    for key in ("leased", "tasks", "queue", "actions"):
+    for key in ("leased", "tasks", "queue", "actions", "route_rescue"):
         value = payload.get(key)
         if isinstance(value, list):
             return [row for row in value if isinstance(row, dict)]
