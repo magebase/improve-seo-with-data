@@ -810,7 +810,17 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
         # Site homepages are navigation hubs; the large-listing filter rule
         # applies to catalog/directory pages, not landings.
         res = verify_directory_functionality(url, html, large_listing_requires_filter=False)
-    elif "/compare/" in path or "/articles/" in path or "/guides/" in path:
+    elif (
+        "/directory/" in path
+        or "/niche/" in path
+        or "/formats/" in path
+        or path.rstrip("/") in ("/calculators", "/calculators/index", "/tools", "/tools/index")
+    ):
+        # Hub & taxonomy listings must route to directory checks BEFORE host-wide catch-alls
+        res = verify_directory_functionality(url, html)
+    elif "/compare/" in path or "/articles/" in path or "/guides/" in path or (
+        "/article/" in path and "/article/wacc" not in path
+    ):
         res = FunctionalTestResult(
             url=url,
             product_type="comparison" if "/compare/" in path else "editorial",
@@ -821,18 +831,10 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
         )
     elif "openfileconverter.com" in host or "/convert/" in path or "/studio/" in path:
         res = verify_converter_functionality(url, html)
-    elif "incomecanvas.com" in host or "/calculator" in path or "/article/wacc" in path:
-        res = verify_calculator_functionality(url, html)
-    elif path.rstrip("/") in ("/tools", "/tools/index"):
-        # Tool hub: structured listing + navigation, not a number inventory page.
-        res = verify_directory_functionality(url, html)
-    elif "/tools/" in path:
-        # Tool/calculator detail pages: interactive inputs, not carrier inventory.
+    elif "/calculators/" in path or "/tools/" in path or "/article/wacc" in path:
         res = verify_calculator_functionality(url, html)
     elif "smsriver.com" in host or "/number" in path or "/sms" in path:
         res = verify_smsriver_functionality(url, html)
-    elif "/directory/" in path or "/niche/" in path or "/formats/" in path or path.rstrip("/") in ("/calculators", "/tools"):
-        res = verify_directory_functionality(url, html)
     elif "figiva.com" in host or "/gpa" in path:
         res = verify_calculator_functionality(url, html)
     else:
