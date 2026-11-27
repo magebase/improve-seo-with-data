@@ -56,6 +56,7 @@ import sys
 import time
 from collections import Counter
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -267,6 +268,7 @@ def inspect_coverage_states(
     max_calls: int = 40,
     ttl_hours: int = 24 * 7,
     runner: Any = None,
+    force_urls: list[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Live GSC URL Inspection enrichment for the highest-value unindexed URLs.
 
@@ -288,12 +290,16 @@ def inspect_coverage_states(
             targets.append(str(url))
 
     results: dict[str, dict[str, Any]] = {}
+    force_keys = {str(url).rstrip("/") for url in (force_urls or [])}
     pending: list[str] = []
     if state_conn is not None:
         cached = load_url_inspections(state_conn, targets, max_age_hours=ttl_hours)
         results.update(cached)
         pending = [
-            u for u in targets if u.rstrip("/") not in {k.rstrip("/") for k in cached}
+            u
+            for u in targets
+            if u.rstrip("/") not in {k.rstrip("/") for k in cached}
+            or u.rstrip("/") in force_keys
         ]
     else:
         pending = targets
@@ -355,6 +361,32 @@ def inspect_coverage_states(
     results.update(inspected)
     return results
 
+
+def inspection_target_urls(
+    candidates: list[dict[str, Any]],
+    extra_urls: list[str] | None = None,
+    limit: int = 100,
+) -> list[str]:
+    """Ordered unique inspection targets, extras first.
+
+    ``collect_features`` normally inspects only zero-impression candidate rows.
+    A route can be in the live sitemap yet absent from candidates (no GSC query
+    rows), so its cached inspection state never refreshes and the planner keeps
+    emitting ``FIX_INDEXABILITY`` for a URL Google has already indexed. Extras
+    are inspected first so they cannot be crowded out by the candidate cap.
+    """
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for raw in list(extra_urls or []) + [
+        str(c["page"]) for c in candidates if float(c.get("impressions", 0) or 0) == 0.0
+    ]:
+        url = str(raw or "").strip()
+        key = url.rstrip("/")
+        if not url or not key or key in seen:
+            continue
+        seen.add(key)
+        ordered.append(url)
+    return ordered[: max(0, limit)]
 
 PAIR_ROUTE_SEPARATORS = {"convert": "-to-", "compare": "-vs-"}
 
@@ -1887,6 +1919,13 @@ def main(argv: list[str] | None = None) -> int:
         "results cached 7 days in the state DB)",
     )
     parser.add_argument(
+        "--inspect-urls-file",
+        default=None,
+        help="file with one URL per line to inspect even when it is not a "
+        "candidate (refreshes cached coverageState for sitemap routes with zero "
+        "GSC query rows)",
+    )
+    parser.add_argument(
         "--redirect-map",
         action="append",
         default=[],
@@ -2122,11 +2161,21 @@ def main(argv: list[str] | None = None) -> int:
     # need internal links (discovery gate). Requires --state-db so results are
     # cached and budget-counted across invocations.
     if state_conn is not None and not args.no_inspect:
-        inspection_targets = [
-            str(c["page"])
-            for c in candidates
-            if float(c.get("impressions", 0) or 0) == 0.0
-        ][: max(0, args.inspect_limit)]
+        extra_inspection_urls: list[str] = []
+        if args.inspect_urls_file:
+            try:
+                extra_inspection_urls = [
+                    line.strip()
+                    for line in Path(args.inspect_urls_file).read_text().splitlines()
+                    if line.strip() and not line.lstrip().startswith("#")
+                ]
+            except OSError as exc:
+                print(f"      inspect-urls-file ignored ({exc}).")
+        inspection_targets = inspection_target_urls(
+            candidates,
+            extra_urls=extra_inspection_urls,
+            limit=args.inspect_limit,
+        )
         if inspection_targets:
             try:
                 inspections = inspect_coverage_states(
@@ -2134,6 +2183,7 @@ def main(argv: list[str] | None = None) -> int:
                     inspection_targets,
                     state_conn=state_conn,
                     max_calls=args.inspect_limit,
+                    force_urls=extra_inspection_urls,
                 )
                 enriched = 0
                 for cand in candidates:
