@@ -1337,6 +1337,9 @@ def main(argv: list[str] | None = None) -> int:
                     fh,
                     indent=2,
                 )
+            if _enforce_growth_guarantee(args.output, growth_plan):
+                leased = []
+                print("  Queue suppressed: plan is not positive_expected_click_lift.")
             print(
                 f"Fast path: leased {len(leased)} tasks from the backlog cursor "
                 f"(no collection/scoring; {_pending(fast_conn, domain=domain)} still pending)."
@@ -1361,8 +1364,6 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             _print_growth_plan(growth_plan)
-            if _enforce_growth_guarantee(args.output, growth_plan):
-                print("  Queue suppressed: plan is not positive_expected_click_lift.")
             fast_conn.close()
             return 0
         fast_conn.close()
@@ -1668,7 +1669,6 @@ def main(argv: list[str] | None = None) -> int:
         for task in leased:
             task["top_shap_drivers"] = extract_top_shap_string(task)
             task["selection_rationale"] = extract_selection_rationale(task)
-        merge_leased_into_output(args.output, leased, hygiene)
         from growth_loop import build_growth_plan
 
         # Route-rescue rows are deliberately excluded from the demand queue,
@@ -1681,6 +1681,12 @@ def main(argv: list[str] | None = None) -> int:
             conn=conn,
             sitemap_urls=growth_urls,
         )
+        if _enforce_growth_guarantee(args.output, growth_plan):
+            queue = []
+            leased = []
+            rescue_rows = []
+            print("  Queue suppressed: plan is not positive_expected_click_lift.")
+        merge_leased_into_output(args.output, leased, hygiene)
         print(
             format_model_decision_summary(
                 leased, queue=queue, model_mode=result["mode"]
@@ -1689,11 +1695,6 @@ def main(argv: list[str] | None = None) -> int:
         _print_growth_plan(growth_plan)
         conn.close()
         _attach_growth_plan(args.output, growth_plan)
-        if _enforce_growth_guarantee(args.output, growth_plan):
-            queue = []
-            leased = []
-            rescue_rows = []
-            print("  Queue suppressed: plan is not positive_expected_click_lift.")
     else:
         from growth_loop import build_growth_plan
 
@@ -1703,13 +1704,13 @@ def main(argv: list[str] | None = None) -> int:
             queue=queue + rescue_rows,
             sitemap_urls=growth_urls,
         )
-        print(format_model_decision_summary([], queue=queue, model_mode=result["mode"]))
-        _print_growth_plan(growth_plan)
-        _attach_growth_plan(args.output, growth_plan)
         if _enforce_growth_guarantee(args.output, growth_plan):
             queue = []
             rescue_rows = []
             print("  Queue suppressed: plan is not positive_expected_click_lift.")
+        print(format_model_decision_summary([], queue=queue, model_mode=result["mode"]))
+        _print_growth_plan(growth_plan)
+        _attach_growth_plan(args.output, growth_plan)
     if consolidation_tasks:
         print(
             f"\nCannibalization: {len(consolidation_tasks)} CONSOLIDATE_CANNIBALIZED_URLS task(s):"
