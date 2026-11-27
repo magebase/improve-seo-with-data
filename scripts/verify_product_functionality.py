@@ -87,10 +87,18 @@ SECTION_179_STATUTORY_TABLE: dict[int, dict[str, Any]] = {
 }
 
 FIGIVA_GRADE_POINTS = {
-    "A+": 4.0, "A": 4.0, "A-": 3.7,
-    "B+": 3.3, "B": 3.0, "B-": 2.7,
-    "C+": 2.3, "C": 2.0, "C-": 1.7,
-    "D+": 1.3, "D": 1.0, "D-": 0.7,
+    "A+": 4.0,
+    "A": 4.0,
+    "A-": 3.7,
+    "B+": 3.3,
+    "B": 3.0,
+    "B-": 2.7,
+    "C+": 2.3,
+    "C": 2.0,
+    "C-": 1.7,
+    "D+": 1.3,
+    "D": 1.0,
+    "D-": 0.7,
     "F": 0.0,
 }
 
@@ -98,6 +106,7 @@ FIGIVA_GRADE_POINTS = {
 # -----------------------------------------------------------------------------
 # 1. Pure Mathematical & Functional Reference Engines
 # -----------------------------------------------------------------------------
+
 
 def calculate_section_179_deduction(
     cost: float,
@@ -115,7 +124,9 @@ def calculate_section_179_deduction(
         If BusinessIncome: FinalDeduction = min(BaseDeduction, max(0, BusinessIncome))
     """
     if tax_year not in SECTION_179_STATUTORY_TABLE:
-        raise ValueError(f"Unsupported tax year: {tax_year}. Supported years: {list(SECTION_179_STATUTORY_TABLE.keys())}")
+        raise ValueError(
+            f"Unsupported tax year: {tax_year}. Supported years: {list(SECTION_179_STATUTORY_TABLE.keys())}"
+        )
 
     limits = SECTION_179_STATUTORY_TABLE[tax_year]
     max_ded = float(limits["max_deduction"])
@@ -216,19 +227,27 @@ def verify_dom_structural_integrity(html_content: str) -> tuple[bool, list[str]]
 
     # 1. Check for unparsed pipe tables wrapped inside <p> tags
     if re.search(r"<p[^>]*>\s*\|.*?\|", html_content, re.DOTALL):
-        issues.append("DOM Structural Violation: Raw pipe-delimited Markdown table detected inside a <p> tag.")
+        issues.append(
+            "DOM Structural Violation: Raw pipe-delimited Markdown table detected inside a <p> tag."
+        )
 
     # 2. Check for literal entity-escaped blockquote syntax (&gt;) inside <p> tags
     if re.search(r"<p[^>]*>\s*&gt;\s*", html_content):
-        issues.append("DOM Structural Violation: Unparsed literal blockquote syntax (&gt;) detected inside a <p> tag.")
+        issues.append(
+            "DOM Structural Violation: Unparsed literal blockquote syntax (&gt;) detected inside a <p> tag."
+        )
 
     # 3. Check for raw unparsed markdown bold syntax (**text**) inside paragraph text
     if re.search(r"<p[^>]*>[^<]*\*\*[^*]+\*\*[^<]*</p>", html_content):
-        issues.append("DOM Structural Violation: Unparsed raw bold syntax (**...**) detected inside a <p> tag.")
+        issues.append(
+            "DOM Structural Violation: Unparsed raw bold syntax (**...**) detected inside a <p> tag."
+        )
 
     # 4. Check for table divider rows (|:---| or |--:|) leaking into paragraph text
     if re.search(r"<p[^>]*>.*?\|\s*:?-+:?\s*\|.*?</p>", html_content, re.DOTALL):
-        issues.append("DOM Structural Violation: Unparsed table separator syntax detected inside a <p> tag.")
+        issues.append(
+            "DOM Structural Violation: Unparsed table separator syntax detected inside a <p> tag."
+        )
 
     return len(issues) == 0, issues
 
@@ -271,7 +290,9 @@ def calculate_aca_excess_aptc_repayment(
             cap = None
             rule = "IRC § 36B(c)(1)(A) Subsidy Cliff Sunset (>= 400% FPL 100% full repayment required)"
         else:
-            caps_2026 = ACA_REPAYMENT_CAPS_BY_YEAR.get(2026, ACA_REPAYMENT_CAPS_BY_YEAR[2025])
+            caps_2026 = ACA_REPAYMENT_CAPS_BY_YEAR.get(
+                2026, ACA_REPAYMENT_CAPS_BY_YEAR[2025]
+            )
             if fpl < 200.0:
                 cap = caps_2026["under_200"][status_key]
             elif fpl < 300.0:
@@ -284,9 +305,13 @@ def calculate_aca_excess_aptc_repayment(
         if fpl >= 400.0:
             repayment = excess
             cap = None
-            rule = f"IRC § 36B(f)(2)(B) (>= 400% FPL No Statutory Cap; Full Repayment Due)"
+            rule = (
+                f"IRC § 36B(f)(2)(B) (>= 400% FPL No Statutory Cap; Full Repayment Due)"
+            )
         else:
-            schedule = ACA_REPAYMENT_CAPS_BY_YEAR.get(tax_year, ACA_REPAYMENT_CAPS_BY_YEAR[2025])
+            schedule = ACA_REPAYMENT_CAPS_BY_YEAR.get(
+                tax_year, ACA_REPAYMENT_CAPS_BY_YEAR[2025]
+            )
             if fpl < 200.0:
                 cap = schedule["under_200"][status_key]
             elif fpl < 300.0:
@@ -361,7 +386,9 @@ def calculate_figiva_gpa(courses: list[dict[str, Any]]) -> dict[str, Any]:
         g = str(c.get("grade", "")).strip().upper()
         pts = FIGIVA_GRADE_POINTS.get(g)
         if pts is None:
-            raise ValueError(f"Unknown grade '{g}'. Allowed: {list(FIGIVA_GRADE_POINTS.keys())}")
+            raise ValueError(
+                f"Unknown grade '{g}'. Allowed: {list(FIGIVA_GRADE_POINTS.keys())}"
+            )
         credits = max(0.0, float(c.get("credits", 0.0)))
         total_pts += pts * credits
         total_credits += credits
@@ -401,12 +428,14 @@ def verify_smsriver_operational_pipeline(
         body = msg.get("text") or msg.get("body") or msg.get("message")
         ts = msg.get("timestamp") or msg.get("received_at")
         otp_match = re.search(r"\b(\d{4,8})\b", str(body))
-        verified_messages.append({
-            "sender": sender,
-            "has_body": bool(body),
-            "timestamp": ts,
-            "extracted_otp": otp_match.group(1) if otp_match else None,
-        })
+        verified_messages.append(
+            {
+                "sender": sender,
+                "has_body": bool(body),
+                "timestamp": ts,
+                "extracted_otp": otp_match.group(1) if otp_match else None,
+            }
+        )
 
     return {
         "phone_number": clean_num,
@@ -419,6 +448,7 @@ def verify_smsriver_operational_pipeline(
 # -----------------------------------------------------------------------------
 # 2. File Converter Execution Pipeline (OpenFileConverter)
 # -----------------------------------------------------------------------------
+
 
 def execute_converter_pipeline(
     source_format: str,
@@ -459,7 +489,9 @@ def execute_converter_pipeline(
         ihdr = struct.pack(">I", len(ihdr_data)) + b"IHDR" + ihdr_data + ihdr_crc
 
         # IDAT chunk: raw uncompressed scanlines with filter byte 0
-        raw_scanlines = b"".join(b"\x00" + (b"\x80\x80\x80" * width) for _ in range(height))
+        raw_scanlines = b"".join(
+            b"\x00" + (b"\x80\x80\x80" * width) for _ in range(height)
+        )
         idat_data = zlib.compress(raw_scanlines)
         idat_crc = struct.pack(">I", zlib.crc32(b"IDAT" + idat_data) & 0xFFFFFFFF)
         idat = struct.pack(">I", len(idat_data)) + b"IDAT" + idat_data + idat_crc
@@ -472,7 +504,9 @@ def execute_converter_pipeline(
 
     elif src == "step" and tgt == "stl":
         if b"ISO-10303-21" not in input_bytes:
-            raise ValueError("Invalid STEP file: missing 'ISO-10303-21' specification header.")
+            raise ValueError(
+                "Invalid STEP file: missing 'ISO-10303-21' specification header."
+            )
         # Generate valid ASCII STL
         stl_content = (
             "solid openfileconverter_mesh\n"
@@ -489,7 +523,9 @@ def execute_converter_pipeline(
 
     elif src == "docx" and tgt == "pdf":
         if not input_bytes.startswith(b"PK\x03\x04"):
-            raise ValueError("Invalid DOCX file: missing zip container signature 'PK\\x03\\x04'.")
+            raise ValueError(
+                "Invalid DOCX file: missing zip container signature 'PK\\x03\\x04'."
+            )
         # Generate valid PDF 1.4 stream
         pdf_content = (
             b"%PDF-1.4\n"
@@ -503,12 +539,15 @@ def execute_converter_pipeline(
         return pdf_content
 
     else:
-        raise NotImplementedError(f"Conversion pair '{src}->{tgt}' pipeline not registered for byte execution.")
+        raise NotImplementedError(
+            f"Conversion pair '{src}->{tgt}' pipeline not registered for byte execution."
+        )
 
 
 # -----------------------------------------------------------------------------
 # 3. HTML Surface Verification Functions
 # -----------------------------------------------------------------------------
+
 
 def verify_converter_functionality(url: str, html: str) -> FunctionalTestResult:
     """Verifies that an OpenFileConverter page has real functional conversion logic."""
@@ -521,8 +560,16 @@ def verify_converter_functionality(url: str, html: str) -> FunctionalTestResult:
     tgt_fmt = conv_match.group(2) if conv_match else ""
 
     # Check 1: Interactive UI Dropzone or File Input
-    has_file_input = bool(re.search(r"<input[^>]+type=['\"]file['\"]", html, re.IGNORECASE))
-    has_dropzone = bool(re.search(r"(class=['\"][^'\"]*(?:dropzone|converter|workbench)[^'\"]*['\"]|id=['\"][^'\"]*(?:dropzone|converter|workbench)[^'\"]*['\"])", html, re.IGNORECASE))
+    has_file_input = bool(
+        re.search(r"<input[^>]+type=['\"]file['\"]", html, re.IGNORECASE)
+    )
+    has_dropzone = bool(
+        re.search(
+            r"(class=['\"][^'\"]*(?:dropzone|converter|workbench)[^'\"]*['\"]|id=['\"][^'\"]*(?:dropzone|converter|workbench)[^'\"]*['\"])",
+            html,
+            re.IGNORECASE,
+        )
+    )
     if not (has_file_input or has_dropzone):
         issues.append("Missing interactive file dropzone or file input element")
 
@@ -532,24 +579,41 @@ def verify_converter_functionality(url: str, html: str) -> FunctionalTestResult:
         r"(addEventListener\(['\"](?:change|drop|submit)['\"]|onsubmit|onchange|<form)",
         r"(download\s*=|createElement\(['\"]a['\"]\)|href\s*=\s*URL\.createObjectURL|<button|<input)",
     ]
-    matched_pipelines = sum(bool(re.search(pat, html, re.IGNORECASE)) for pat in pipeline_patterns)
+    matched_pipelines = sum(
+        bool(re.search(pat, html, re.IGNORECASE)) for pat in pipeline_patterns
+    )
     if matched_pipelines < 2:
-        issues.append("Missing client-side conversion execution pipeline (no FileReader/wasm/Worker or form handling found)")
+        issues.append(
+            "Missing client-side conversion execution pipeline (no FileReader/wasm/Worker or form handling found)"
+        )
 
     # Check 3: Format-specific specification awareness
     if src_fmt and tgt_fmt:
         if src_fmt.upper() not in html.upper() or tgt_fmt.upper() not in html.upper():
-            issues.append(f"Page fails format integrity: target format pair '{src_fmt}->{tgt_fmt}' not fully represented in page content")
+            issues.append(
+                f"Page fails format integrity: target format pair '{src_fmt}->{tgt_fmt}' not fully represented in page content"
+            )
 
     passed = len(issues) == 0
     status_label = "IMPLEMENTATION_PRESENT" if passed else "VERIFICATION_FAILED"
 
     # If pair is executable in reference engine, run execution test
-    if passed and (src_fmt, tgt_fmt) in [("bmp", "png"), ("step", "stl"), ("docx", "pdf")]:
+    if passed and (src_fmt, tgt_fmt) in [
+        ("bmp", "png"),
+        ("step", "stl"),
+        ("docx", "pdf"),
+    ]:
         try:
             if (src_fmt, tgt_fmt) == ("bmp", "png"):
                 # Synthetic 1x1 24bpp BMP
-                mock_bmp = b"BM" + struct.pack("<IHHI", 58, 0, 0, 54) + struct.pack("<IIIHHIIIIII", 40, 1, 1, 1, 24, 0, 4, 2835, 2835, 0, 0) + b"\x00\x00\x00\x00"
+                mock_bmp = (
+                    b"BM"
+                    + struct.pack("<IHHI", 58, 0, 0, 54)
+                    + struct.pack(
+                        "<IIIHHIIIIII", 40, 1, 1, 1, 24, 0, 4, 2835, 2835, 0, 0
+                    )
+                    + b"\x00\x00\x00\x00"
+                )
                 out = execute_converter_pipeline("bmp", "png", mock_bmp)
                 if out.startswith(b"\x89PNG\r\n\x1a\n"):
                     status_label = "FUNCTIONALLY_VERIFIED"
@@ -589,12 +653,24 @@ def verify_calculator_functionality(url: str, html: str) -> FunctionalTestResult
     math_total = 0
 
     # Case A: ACA Premium Tax Credit & FTE Calculator
-    if "aca" in path or "premium-tax-credit" in path or "applicable-large-employer" in path:
+    if (
+        "aca" in path
+        or "premium-tax-credit" in path
+        or "applicable-large-employer" in path
+    ):
         math_total += 3
         # Invariant 1: 2026 Excess APTC 100% Repayment Rule (IRC § 36B repayment cap sunset)
         has_2026_repayment_rule = bool(
-            re.search(r"(100%|full repayment|no repayment limitation|caps? (?:sunset|expired|no longer apply))", html, re.IGNORECASE)
-            or re.search(r"repayment_cap\s*=\s*(?:0|null|Infinity|None|false)", html, re.IGNORECASE)
+            re.search(
+                r"(100%|full repayment|no repayment limitation|caps? (?:sunset|expired|no longer apply))",
+                html,
+                re.IGNORECASE,
+            )
+            or re.search(
+                r"repayment_cap\s*=\s*(?:0|null|Infinity|None|false)",
+                html,
+                re.IGNORECASE,
+            )
         )
         if has_2026_repayment_rule:
             math_passed += 1
@@ -605,7 +681,9 @@ def verify_calculator_functionality(url: str, html: str) -> FunctionalTestResult
             )
 
         # Invariant 2: Statutory 130-Hour Full-Time Employee Classification Threshold (IRC § 4980H(c)(4)(A) & 26 C.F.R. § 54.4980H-1(a)(21)(ii))
-        has_130h_threshold = bool(re.search(r"\b130\s*(?:hours?|hrs?)\b", html, re.IGNORECASE))
+        has_130h_threshold = bool(
+            re.search(r"\b130\s*(?:hours?|hrs?)\b", html, re.IGNORECASE)
+        )
         if has_130h_threshold:
             math_passed += 1
         else:
@@ -614,7 +692,10 @@ def verify_calculator_functionality(url: str, html: str) -> FunctionalTestResult
             )
 
         # Invariant 3: Statutory 120-Hour Divisor for FTE Aggregate Calculation (IRC § 4980H(c)(2)(E))
-        has_120h_divisor = bool(re.search(r"\b120\s*(?:hours?|hrs?|divisor)\b", html, re.IGNORECASE) or "/ 120" in html)
+        has_120h_divisor = bool(
+            re.search(r"\b120\s*(?:hours?|hrs?|divisor)\b", html, re.IGNORECASE)
+            or "/ 120" in html
+        )
         if has_120h_divisor:
             math_passed += 1
         else:
@@ -646,46 +727,73 @@ def verify_calculator_functionality(url: str, html: str) -> FunctionalTestResult
             if has_2026_cap and has_2026_phaseout:
                 math_passed += 1
             else:
-                issues.append("Section 179 2026 Limits Missing: Page missing $2,560,000 cap or $4,090,000 phaseout threshold.")
+                issues.append(
+                    "Section 179 2026 Limits Missing: Page missing $2,560,000 cap or $4,090,000 phaseout threshold."
+                )
         else:
             # 2025 or generic page
-            if (has_stale_cap and has_stale_phaseout) or (has_2026_cap and has_2026_phaseout):
+            if (has_stale_cap and has_stale_phaseout) or (
+                has_2026_cap and has_2026_phaseout
+            ):
                 math_passed += 1
             else:
-                issues.append("Section 179 Limits Missing: Missing statutory deduction cap and phaseout threshold.")
+                issues.append(
+                    "Section 179 Limits Missing: Missing statutory deduction cap and phaseout threshold."
+                )
 
         # Invariant 2: Mathematical Phaseout Formula
-        has_phaseout_logic = bool(re.search(r"(Math\.max|Math\.min|cost\s*-\s*phaseout|excess\s*=\s*cost|reduction)", html, re.IGNORECASE))
+        has_phaseout_logic = bool(
+            re.search(
+                r"(Math\.max|Math\.min|cost\s*-\s*phaseout|excess\s*=\s*cost|reduction)",
+                html,
+                re.IGNORECASE,
+            )
+        )
         if has_phaseout_logic or "dollar-for-dollar" in html.lower():
             math_passed += 1
         else:
-            issues.append("Section 179 Math Invariant Failure: Missing dollar-for-dollar reduction calculation formula.")
+            issues.append(
+                "Section 179 Math Invariant Failure: Missing dollar-for-dollar reduction calculation formula."
+            )
 
         # Invariant 3: SUV Limit Awareness ($32,000 for 2026, $30,500 for 2025)
         if has_2026_suv or bool(re.search(r"30,?500", html)) or "suv" in html.lower():
             math_passed += 1
         else:
-            issues.append("Section 179 SUV Limit Invariant: Missing qualifying SUV deduction ceiling ($32,000 for 2026).")
+            issues.append(
+                "Section 179 SUV Limit Invariant: Missing qualifying SUV deduction ceiling ($32,000 for 2026)."
+            )
 
     # Case C: WACC / Corporate Finance Calculator
     elif "wacc" in path or "capital-structure" in path:
         math_total += 2
-        has_tax_shield = bool(re.search(r"\(1\s*-\s*(?:t|tax|t_c)\)", html, re.IGNORECASE) or "tax shield" in html.lower())
-        has_weights = bool(re.search(r"(equity|debt|cost_of_equity|cost_of_debt)", html, re.IGNORECASE))
+        has_tax_shield = bool(
+            re.search(r"\(1\s*-\s*(?:t|tax|t_c)\)", html, re.IGNORECASE)
+            or "tax shield" in html.lower()
+        )
+        has_weights = bool(
+            re.search(r"(equity|debt|cost_of_equity|cost_of_debt)", html, re.IGNORECASE)
+        )
         if has_tax_shield and has_weights:
             math_passed += 2
         else:
-            issues.append("WACC Formula Invariant Failure: Calculation missing after-tax interest tax shield (1 - TaxRate) or debt/equity weighting.")
+            issues.append(
+                "WACC Formula Invariant Failure: Calculation missing after-tax interest tax shield (1 - TaxRate) or debt/equity weighting."
+            )
 
     # Case D: Figiva GPA Calculator
     elif "figiva" in path or "gpa" in path:
         math_total += 2
         has_grade_scale = bool(re.search(r"(4\.0|3\.7|3\.3|3\.0|2\.7|2\.3|2\.0)", html))
-        has_credit_weights = bool(re.search(r"(credits?|weight|quality\s*points)", html, re.IGNORECASE))
+        has_credit_weights = bool(
+            re.search(r"(credits?|weight|quality\s*points)", html, re.IGNORECASE)
+        )
         if has_grade_scale and has_credit_weights:
             math_passed += 2
         else:
-            issues.append("Figiva GPA Scale Invariant Failure: Missing standard 4.0 collegiate grade points or credit weights.")
+            issues.append(
+                "Figiva GPA Scale Invariant Failure: Missing standard 4.0 collegiate grade points or credit weights."
+            )
 
     # Generic Calculator
     else:
@@ -696,10 +804,16 @@ def verify_calculator_functionality(url: str, html: str) -> FunctionalTestResult
         if has_interactive_calc:
             math_passed += 1
         else:
-            issues.append("Generic Calculator Invariant Failure: Missing interactive numeric inputs or calculation trigger.")
+            issues.append(
+                "Generic Calculator Invariant Failure: Missing interactive numeric inputs or calculation trigger."
+            )
 
     passed = len(issues) == 0
-    status_label = "FUNCTIONALLY_VERIFIED" if passed and math_passed == math_total else ("IMPLEMENTATION_PRESENT" if passed else "VERIFICATION_FAILED")
+    status_label = (
+        "FUNCTIONALLY_VERIFIED"
+        if passed and math_passed == math_total
+        else ("IMPLEMENTATION_PRESENT" if passed else "VERIFICATION_FAILED")
+    )
 
     return FunctionalTestResult(
         url=url,
@@ -717,14 +831,30 @@ def verify_calculator_functionality(url: str, html: str) -> FunctionalTestResult
 def verify_smsriver_functionality(url: str, html: str) -> FunctionalTestResult:
     """Verifies that an SMSRiver page has active virtual number inventory rendering."""
     issues: list[str] = []
-    has_table_or_grid = bool(re.search(r"(<table|class=['\"][^'\"]*number-grid[^'\"]*['\"])", html, re.IGNORECASE))
-    has_phone_number_format = bool(re.search(r"(\+\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4})", html))
+    has_table_or_grid = bool(
+        re.search(
+            r"(<table|class=['\"][^'\"]*number-grid[^'\"]*['\"])", html, re.IGNORECASE
+        )
+    )
+    has_phone_number_format = bool(
+        re.search(r"(\+\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4})", html)
+    )
     if not (has_table_or_grid and has_phone_number_format):
-        issues.append("SMSRiver Inventory Failure: Page missing active phone number listings or operational table.")
+        issues.append(
+            "SMSRiver Inventory Failure: Page missing active phone number listings or operational table."
+        )
 
-    has_polling = bool(re.search(r"(fetch\(['\"].*messages|setInterval|WebSocket|htmx|hx-get)", html, re.IGNORECASE))
+    has_polling = bool(
+        re.search(
+            r"(fetch\(['\"].*messages|setInterval|WebSocket|htmx|hx-get)",
+            html,
+            re.IGNORECASE,
+        )
+    )
     if not has_polling:
-        issues.append("SMSRiver Listener Failure: Missing inbound message polling or real-time event stream listener.")
+        issues.append(
+            "SMSRiver Listener Failure: Missing inbound message polling or real-time event stream listener."
+        )
 
     passed = len(issues) == 0
     status_label = "IMPLEMENTATION_PRESENT" if passed else "VERIFICATION_FAILED"
@@ -735,7 +865,10 @@ def verify_smsriver_functionality(url: str, html: str) -> FunctionalTestResult:
         if phone_match:
             try:
                 sample_phone = phone_match.group(1)
-                verify_smsriver_operational_pipeline(sample_phone, {"messages": [{"from": "Uber", "text": "Your code is 492019"}]})
+                verify_smsriver_operational_pipeline(
+                    sample_phone,
+                    {"messages": [{"from": "Uber", "text": "Your code is 492019"}]},
+                )
                 status_label = "FUNCTIONALLY_VERIFIED"
             except Exception:
                 pass
@@ -753,6 +886,59 @@ def verify_smsriver_functionality(url: str, html: str) -> FunctionalTestResult:
     )
 
 
+def verify_lookup_tool_functionality(url: str, html: str) -> FunctionalTestResult:
+    """Verifies a lookup/search tool rather than a numeric calculator.
+
+    SMSRiver's MCC/MNC and phone-format tools accept text or phone input and
+    return a table; they are not arithmetic calculators, so requiring
+    ``type=number`` + a calculation button is a false failure.
+    """
+    issues: list[str] = []
+    has_input = bool(
+        re.search(
+            r"<input[^>]+(?:type=['\"](?:text|search|number|tel)['\"]|placeholder=)",
+            html,
+            re.IGNORECASE,
+        )
+    )
+    has_trigger = bool(
+        re.search(
+            r"<button|role=['\"]button['\"]|hx-get|data-action", html, re.IGNORECASE
+        )
+    )
+    has_result_surface = bool(
+        re.search(
+            r"(<table|<tbody|class=['\"][^'\"]*(?:result|output)[^'\"]*['\"])",
+            html,
+            re.IGNORECASE,
+        )
+    )
+    if not (has_input and has_trigger):
+        issues.append(
+            "Lookup Tool Invariant Failure: Missing query input or submit trigger."
+        )
+    if not has_result_surface:
+        issues.append(
+            "Lookup Tool Invariant Failure: Missing result table or output surface."
+        )
+
+    passed = len(issues) == 0
+    return FunctionalTestResult(
+        url=url,
+        product_type="lookup_tool",
+        passed=passed,
+        test_name="lookup_tool_interaction_verification",
+        details=(
+            f"Input: {has_input}; Trigger: {has_trigger}; "
+            f"Result surface: {has_result_surface}"
+        ),
+        issues=issues,
+        math_checks_passed=1 if passed else 0,
+        math_checks_total=1,
+        status_label="IMPLEMENTATION_PRESENT" if passed else "VERIFICATION_FAILED",
+    )
+
+
 def verify_directory_functionality(
     url: str,
     html: str,
@@ -763,11 +949,25 @@ def verify_directory_functionality(
     links = re.findall(r"<a[^>]+href=['\"]([^'\"]+)['\"][^>]*>", html, re.IGNORECASE)
     valid_links = [l for l in links if not l.startswith(("#", "javascript:"))]
     if len(valid_links) < 3:
-        issues.append(f"Directory Utility Failure: Found only {len(valid_links)} structured links (< 3 required for directory utility).")
+        issues.append(
+            f"Directory Utility Failure: Found only {len(valid_links)} structured links (< 3 required for directory utility)."
+        )
 
-    has_search_or_filter = bool(re.search(r"(<input[^>]+type=['\"]search['\"]|id=['\"][^'\"]*filter[^'\"]*['\"])", html, re.IGNORECASE))
-    if large_listing_requires_filter and not has_search_or_filter and len(valid_links) > 20:
-        issues.append("Directory Navigation Warning: Large listing directory lacks instant client-side filter or search input.")
+    has_search_or_filter = bool(
+        re.search(
+            r"(<input[^>]+type=['\"]search['\"]|id=['\"][^'\"]*filter[^'\"]*['\"])",
+            html,
+            re.IGNORECASE,
+        )
+    )
+    if (
+        large_listing_requires_filter
+        and not has_search_or_filter
+        and len(valid_links) > 20
+    ):
+        issues.append(
+            "Directory Navigation Warning: Large listing directory lacks instant client-side filter or search input."
+        )
 
     passed = len(issues) == 0
     return FunctionalTestResult(
@@ -787,7 +987,10 @@ def verify_directory_functionality(
 # Master Product Functionality Dispatcher
 # -----------------------------------------------------------------------------
 
-def verify_product_functionality(url: str, html: str, status_code: int = 200) -> FunctionalTestResult:
+
+def verify_product_functionality(
+    url: str, html: str, status_code: int = 200
+) -> FunctionalTestResult:
     """Master dispatcher running domain- and archetype-specific functional tests."""
     parsed = urlparse(url)
     host = parsed.hostname or ""
@@ -809,17 +1012,23 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
     if path.rstrip("/") in ("", "/index", "/index.html"):
         # Site homepages are navigation hubs; the large-listing filter rule
         # applies to catalog/directory pages, not landings.
-        res = verify_directory_functionality(url, html, large_listing_requires_filter=False)
+        res = verify_directory_functionality(
+            url, html, large_listing_requires_filter=False
+        )
     elif (
         "/directory/" in path
         or "/niche/" in path
         or "/formats/" in path
-        or path.rstrip("/") in ("/calculators", "/calculators/index", "/tools", "/tools/index")
+        or path.rstrip("/")
+        in ("/calculators", "/calculators/index", "/tools", "/tools/index")
     ):
         # Hub & taxonomy listings must route to directory checks BEFORE host-wide catch-alls
         res = verify_directory_functionality(url, html)
-    elif "/compare/" in path or "/articles/" in path or "/guides/" in path or (
-        "/article/" in path and "/article/wacc" not in path
+    elif (
+        "/compare/" in path
+        or "/articles/" in path
+        or "/guides/" in path
+        or ("/article/" in path and "/article/wacc" not in path)
     ):
         res = FunctionalTestResult(
             url=url,
@@ -831,6 +1040,8 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
         )
     elif "openfileconverter.com" in host or "/convert/" in path or "/studio/" in path:
         res = verify_converter_functionality(url, html)
+    elif "smsriver.com" in host and path.startswith("/tools/"):
+        res = verify_lookup_tool_functionality(url, html)
     elif "/calculators/" in path or "/tools/" in path or "/article/wacc" in path:
         res = verify_calculator_functionality(url, html)
     elif "smsriver.com" in host or "/number" in path or "/sms" in path:
@@ -856,7 +1067,9 @@ def verify_product_functionality(url: str, html: str, status_code: int = 200) ->
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Real functional product verification gate.")
+    parser = argparse.ArgumentParser(
+        description="Real functional product verification gate."
+    )
     parser.add_argument("--url", required=True, help="URL of the page to verify")
     parser.add_argument("--file", required=True, help="Path to rendered HTML file")
     args = parser.parse_args(argv)
@@ -868,8 +1081,12 @@ def main(argv: list[str] | None = None) -> int:
     html = Path(args.file).read_text(encoding="utf-8")
     result = verify_product_functionality(args.url, html)
 
-    print(f"Product Functionality Verification: {result.test_name} [{result.product_type.upper()}]")
-    print(f"  Result: {'PASSED' if result.passed else 'FAILED'} (Status: {result.status_label})")
+    print(
+        f"Product Functionality Verification: {result.test_name} [{result.product_type.upper()}]"
+    )
+    print(
+        f"  Result: {'PASSED' if result.passed else 'FAILED'} (Status: {result.status_label})"
+    )
     print(f"  Details: {result.details}")
     if result.issues:
         print("  Issues:")
