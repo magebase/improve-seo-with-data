@@ -166,9 +166,17 @@ def main() -> int:
         print("          Deploy templates/llms.txt to the root directory for AI crawlers.")
 
     print("\n2. AI Crawler Permissions (robots.txt):")
+    crawlers = robots_eval.get("crawlers", {})
+    blocked_ai_bots = [
+        bot
+        for bot, rules in crawlers.items()
+        if any(str(r).strip().lower() in ("disallow: /", "disallow:/") for r in (rules or []))
+    ]
     if robots_eval["status"] == 200:
-        print("   [PASS] Found /robots.txt")
-        crawlers = robots_eval.get("crawlers", {})
+        if blocked_ai_bots:
+            print(f"   [FAIL] Found /robots.txt, but primary AI crawlers are blocked: {', '.join(blocked_ai_bots)}")
+        else:
+            print("   [PASS] Found /robots.txt")
         if crawlers:
             for bot, rules in crawlers.items():
                 print(f"       Agent '{bot}': {rules}")
@@ -198,7 +206,7 @@ def main() -> int:
     score = 0
     if llms_eval["present"]:
         score += 25
-    if robots_eval["status"] == 200:
+    if robots_eval["status"] == 200 and not blocked_ai_bots:
         score += 25
     if page_signals["json_ld_count"] > 0:
         score += 25

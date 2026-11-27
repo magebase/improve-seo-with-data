@@ -1030,13 +1030,34 @@ def verify_product_functionality(
         or "/guides/" in path
         or ("/article/" in path and "/article/wacc" not in path)
     ):
+        is_compare = "/compare/" in path
+        text_only = re.sub(
+            r"<script[^>]*>.*?</script>|<style[^>]*>.*?</style>|<[^>]+>",
+            " ",
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        word_count = len(re.findall(r"\b\w+\b", text_only))
+        has_headings = bool(
+            re.search(r"<h[23][^>]*>.*?</h[23]>", html, flags=re.IGNORECASE | re.DOTALL)
+        )
+        has_table = bool(re.search(r"<table\b", html, flags=re.IGNORECASE))
+        issues: list[str] = []
+        if word_count < 80:
+            issues.append(f"Editorial/comparison body too thin ({word_count} words < 80).")
+        if not has_headings:
+            issues.append("Missing structured <h2>/<h3> subheadings.")
+        if is_compare and not has_table:
+            issues.append("Comparison page missing <table> specification matrix.")
+        passed = len(issues) == 0
         res = FunctionalTestResult(
             url=url,
-            product_type="comparison" if "/compare/" in path else "editorial",
-            passed=True,
-            test_name="comparative_analysis_presence_check",
-            details="Comparative specification table and technical metrics verified",
-            status_label="FUNCTIONALLY_VERIFIED",
+            product_type="comparison" if is_compare else "editorial",
+            passed=passed,
+            test_name="comparative_analysis_presence_check" if is_compare else "editorial_structure_check",
+            details=f"Words={word_count}; Headings={has_headings}; Table={has_table}",
+            issues=issues,
+            status_label="IMPLEMENTATION_PRESENT" if passed else "VERIFICATION_FAILED",
         )
     elif "openfileconverter.com" in host or "/convert/" in path or "/studio/" in path:
         res = verify_converter_functionality(url, html)

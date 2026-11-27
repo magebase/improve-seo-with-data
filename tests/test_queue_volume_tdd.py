@@ -23,15 +23,14 @@ from pathlib import Path
 
 import pytest
 
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from dataforseo_client import DataForSEOClient  # noqa: E402
-from log_outcomes_and_retrain import (  # noqa: E402
+from dataforseo_client import DataForSEOClient
+from log_outcomes_and_retrain import (
     detect_regressions,
     has_recrawl_evidence,
 )
-from ltr_ranker import (  # noqa: E402
+from ltr_ranker import (
     filter_cooldown,
     load_cooldown_keys,
     prescribe_all_actions,
@@ -510,8 +509,8 @@ def test_fetch_sitemap_urls_parses_locs_and_index(monkeypatch):
 
         def read(self):
             return (
-                "<urlset><url><loc>https://a.com/one/</loc></url></urlset>"
-            ).encode()
+                b"<urlset><url><loc>https://a.com/one/</loc></url></urlset>"
+            )
 
     monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: FakeResp())
     urls = fetch_sitemap_urls("a.com")
@@ -681,7 +680,7 @@ def test_waterfall_tops_up_from_orphans_then_matrix_then_suggestions():
         }
     ]
     sitemap = ["https://a.com/one/", "https://a.com/two/", "https://a.com/three/"]
-    matrix_fn = lambda need: [  # noqa: E731
+    matrix_fn = lambda need: [
         {
             "query": f"pair {i}",
             "page": f"https://a.com/pair-{i}/",
@@ -720,7 +719,7 @@ def test_waterfall_never_drops_below_tier_order_and_dedupes():
         }
     ]
     sitemap = ["https://a.com/one/"]  # duplicate of the GSC row -> no orphan
-    suggest_fn = lambda need: [  # noqa: E731
+    suggest_fn = lambda need: [
         {
             "query": f"sug {i}",
             "page": f"https://a.com/sug-{i}/",
@@ -1077,10 +1076,11 @@ def test_derive_sibling_counts_groups_distinct_pages_per_prefix():
 
 
 def test_refit_from_state_db_trains_and_predicts_on_real_cache_shapes():
+    import tempfile
+
     from dataforseo_client import FORUM_UGC_DOMAINS
     from dfs_surrogate import refit_from_state_db
     from fleet_state import connect_state_db, upsert_serp_cache
-    import tempfile
 
     db_path = tempfile.mktemp(suffix=".db")
     conn = connect_state_db(db_path)
@@ -1141,17 +1141,16 @@ def test_refit_from_state_db_trains_and_predicts_on_real_cache_shapes():
 
 
 def test_url_inspection_state_roundtrip_budget_and_ttl():
+    import tempfile
     from datetime import datetime, timedelta, timezone
 
     from fleet_state import (
+        connect_state_db,
         inspection_calls_remaining,
         load_url_inspections,
         record_inspection_calls,
         save_url_inspections,
     )
-    import tempfile
-
-    from fleet_state import connect_state_db
 
     conn = connect_state_db(tempfile.mktemp(suffix=".db"))
     now = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
@@ -1189,7 +1188,6 @@ def test_inspect_coverage_states_enriches_caches_and_skips_failures():
     import tempfile
 
     from collect_features import inspect_coverage_states
-
     from fleet_state import connect_state_db
 
     conn = connect_state_db(tempfile.mktemp(suffix=".db"))
@@ -1268,7 +1266,7 @@ def test_ensure_candidate_depth_engages_three_way_on_exhaustion():
             "source": "gsc",
         }
     ]
-    three_way_fn = lambda need: [  # noqa: E731
+    three_way_fn = lambda need: [
         {
             "query": f"tw {i}",
             "page": f"https://a.com/tw-{i}/",
@@ -1514,9 +1512,10 @@ def test_orphan_detector_never_emits_sitemap_index_files():
 
 
 def test_volume_backfill_unlocks_the_surrogate_volume_head():
+    import tempfile
+
     from dfs_surrogate import backfill_volumes_from_keywords_data, refit_from_state_db
     from fleet_state import connect_state_db, upsert_serp_cache
-    import tempfile
 
     db_path = tempfile.mktemp(suffix=".db")
     conn = connect_state_db(db_path)

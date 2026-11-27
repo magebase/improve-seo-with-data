@@ -346,7 +346,11 @@ def register_page_contract(conn: Any, contract: dict[str, Any]) -> dict[str, Any
             str(contract.get("tier") or "B").upper(),
             contract.get("data_source_hash"),
             int(contract.get("unique_data_fields") or 0),
-            float(contract.get("stripped_overlap_score") or 1.0),
+            float(
+                contract["stripped_overlap_score"]
+                if contract.get("stripped_overlap_score") is not None
+                else 1.0
+            ),
             int(contract.get("planned_indexed_inlinks") or 0),
             contract.get("rendered_at") or stamp,
             "VALID" if validation["valid"] else "INVALID",
@@ -760,10 +764,16 @@ def record_cohort_measurement(
     rate = round(indexed / total, 4) if total else 0.0
     column = {7: "day7_indexed", 14: "day14_indexed", 21: "day21_indexed"}.get(day)
     if column:
-        conn.execute(
-            f"UPDATE cohorts SET {column} = ?, updated_at = ? WHERE cohort_id = ?",
-            (rate, _now(), cohort_id),
-        )
+        if day == 21 and float(impressions or 0) > 0:
+            conn.execute(
+                f"UPDATE cohorts SET {column} = ?, day45_impressions = COALESCE(day45_impressions, ?), updated_at = ? WHERE cohort_id = ?",
+                (rate, float(impressions), _now(), cohort_id),
+            )
+        else:
+            conn.execute(
+                f"UPDATE cohorts SET {column} = ?, updated_at = ? WHERE cohort_id = ?",
+                (rate, _now(), cohort_id),
+            )
     else:
         conn.execute(
             "UPDATE cohorts SET day45_impressions = ?, updated_at = ? WHERE cohort_id = ?",
@@ -783,12 +793,39 @@ def advance_cohort(conn: Any, cohort_id: str) -> dict[str, Any]:
     template_id, stage, day7, day14, day21, day45_imp = row
     reasons: list[str] = []
     new_stage = stage
+    crawl_survival_prob_28d: float | None = None
+    try:
+        from crawl_survival_analytics import analyze_fleet_crawl_survival
+
+        rows_for_km = conn.execute(
+            "SELECT domain, route_family, shipped_at, created_at FROM atomic_task_backlog WHERE domain = (SELECT domain FROM cohorts WHERE cohort_id = ?)",
+            (cohort_id,),
+        ).fetchall()
+        if len(rows_for_km) >= 10:
+            km_records = [
+                {
+                    "domain": r[0],
+                    "route_family": r[1],
+                    "shipped_at": r[2],
+                    "created_at": r[3],
+                    "recrawl_detected_at": None,
+                }
+                for r in rows_for_km
+            ]
+            km = analyze_fleet_crawl_survival(km_records)
+            crawl_survival_prob_28d = km["fleet_survival"].get("prob_recrawled_at_28d")
+    except Exception:
+        crawl_survival_prob_28d = None
+
     if (
         day21 is not None
         and float(day21) >= MIN_PILOT_INDEX_RATE
         and float(day45_imp or 0) > 0
     ):
-        new_stage = "SCALING"
+        if crawl_survival_prob_28d is not None and crawl_survival_prob_28d < 0.25 and float(day45_imp or 0) <= 0:
+            reasons.append("crawl_survival_28d_stalled")
+        else:
+            new_stage = "SCALING"
     elif day21 is not None and float(day21) < FREEZE_TEMPLATE_RATE:
         new_stage = "FROZEN"
         reasons.append("day21_indexation_below_fifty_percent")
@@ -821,6 +858,7 @@ def advance_cohort(conn: Any, cohort_id: str) -> dict[str, Any]:
         "day14_indexed": day14,
         "day21_indexed": day21,
         "day45_impressions": day45_imp,
+        "crawl_survival_prob_28d": crawl_survival_prob_28d,
     }
 
 

@@ -371,12 +371,12 @@ class IsotonicCalibrator:
             while len(stack_y) > 1 and stack_y[-2] > stack_y[-1]:
                 y2, y1 = stack_y.pop(), stack_y.pop()
                 w2, w1 = stack_w.pop(), stack_w.pop()
-                x2 = stack_x.pop()
+                x2, x1 = stack_x.pop(), stack_x.pop()
                 merged_w = w1 + w2
                 stack_y.append((y1 * w1 + y2 * w2) / merged_w)
                 stack_w.append(merged_w)
-                # keep the smaller x as the knot anchor
-                stack_x.append(stack_x.pop() if False else x2)
+                # Keep the smaller x as the knot anchor for the merged block.
+                stack_x.append(x1)
         # Collapse consecutive identical x anchors (keep first).
         knots_x: list[float] = []
         knots_y: list[float] = []
@@ -635,13 +635,11 @@ def record_shipped(
 
 
 def _registered_domain(page: str) -> str:
-    """Lower-case registered domain from a URL (namespace-tolerant)."""
+    """Lower-case registered domain from a URL (PSL/multi-part ccTLD aware)."""
     try:
-        from urllib.parse import urlparse
+        from seo_shared import extract_registered_domain
 
-        host = (urlparse(page).hostname or page).lower()
-        parts = host.split(".")
-        return ".".join(parts[-2:]) if len(parts) > 2 else host
+        return extract_registered_domain(page) or page.lower()
     except Exception:  # noqa: BLE001 - ledger keys degrade to the raw string
         return page.lower()
 

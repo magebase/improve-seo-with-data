@@ -27,15 +27,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-
 from cursor_hygiene import (
+    active_locked_prefixes,
     is_clean_english_query,
     is_probably_non_english,
     preflight_hygiene,
     register_worktree_locks,
-    active_locked_prefixes,
-    release_worktree_locks,
     release_deferred_leases_on_closeout,
+    release_worktree_locks,
 )
 from fleet_state import (
     DEFAULT_TYPE_CAPS,

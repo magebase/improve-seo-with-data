@@ -20,7 +20,6 @@ import urllib.error
 import urllib.request
 
 import pytest
-
 from improve_seo_rewarm import RewarmResult, RewarmSummary, RewarmTargets, rewarm_urls
 
 

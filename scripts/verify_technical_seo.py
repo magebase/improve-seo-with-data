@@ -34,7 +34,7 @@ from urllib.parse import urlparse
 CHAR_WIDTHS_AVG: dict[str, float] = {
     "W": 13.0, "M": 13.0, "m": 11.0, "w": 10.0,
     "i": 4.0, "l": 4.0, "I": 4.0, "t": 5.0, "f": 5.0, "j": 4.0, "r": 5.0,
-    " ": 4.5, "|": 4.0, "—": 12.0, "-": 5.5, ":": 4.5, "—": 12.0,
+    " ": 4.5, "|": 4.0, "—": 12.0, "-": 5.5, ":": 4.5,
 }
 
 
@@ -190,9 +190,9 @@ def audit_html_technical_seo(
         canonical_match = re.search(r"<link[^>]+href=['\"]([^'\"]+)['\"][^>]+rel=['\"]canonical['\"][^>]*>", html, re.IGNORECASE)
     canonical_url = canonical_match.group(1).strip() if canonical_match else ""
     canonical_passed = bool(canonical_url and canonical_url.startswith("http"))
-    canon_host = urlparse(canonical_url).hostname or ""
-    expected_host = parsed_url.hostname or ""
-    host_match = (expected_canonical_policy != "host_match") or (not expected_host) or (expected_host in canon_host)
+    canon_host = (urlparse(canonical_url).hostname or "").lower()
+    expected_host = (parsed_url.hostname or "").lower()
+    host_match = (expected_canonical_policy != "host_match") or (not expected_host) or (canon_host == expected_host)
     gates.append(TechnicalSeoGateResult(
         name="canonical_url_consistency",
         passed=canonical_passed and host_match,
@@ -274,9 +274,9 @@ def audit_html_technical_seo(
         functional_details = f"Product: {func_res.product_type}; Test: {func_res.test_name}; Details: {func_res.details}"
         func_issues = func_res.issues
     except Exception as e:
-        functional_passed = True
+        functional_passed = False
         functional_details = f"Functional dispatch error: {e}"
-        func_issues = []
+        func_issues = [f"Functional verification error: {e}"]
 
     severity = "ERROR" if archetype in ("tool", "comparison") or "openfileconverter" in url or "incomecanvas" in url else "WARNING"
 
@@ -308,12 +308,11 @@ def audit_html_technical_seo(
 
 def audit_remote_url(url: str, timeout: float = 10.0) -> TechnicalSeoAuditResult:
     """Fetches a live URL over HTTP and runs the technical SEO audit."""
+    from seo_shared import sign_sweep_headers
+
     req = urllib.request.Request(
         url,
-        headers={
-            "User-Agent": "saas-factory-seo-verifier/2.0 (outcome-engine; +https://adstim.net)",
-            "X-SEO-Verify": "1",
-        },
+        headers=sign_sweep_headers(url),
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:

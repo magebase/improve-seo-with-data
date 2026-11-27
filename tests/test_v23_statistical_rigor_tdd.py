@@ -12,33 +12,28 @@ Verifies the 5 pillars of the Outcome-Driven SEO Engine v2.3 upgrade:
 from __future__ import annotations
 
 import datetime
-import math
-import numpy as np
-import pytest
 
+from crawl_survival_analytics import (
+    analyze_fleet_crawl_survival,
+    compute_kaplan_meier_survival,
+)
 from did_simulation_validator import (
     compute_welch_satterthwaite_df,
     get_did_critical_value,
-    simulate_single_did_trial,
     run_did_monte_carlo_battery,
-)
-from multiple_testing import (
-    apply_benjamini_hochberg,
-    apply_holm_bonferroni,
-    evaluate_cluster_effectiveness_with_fdr,
-    SequentialEvaluationHorizonGuard,
-)
-from crawl_survival_analytics import (
-    compute_kaplan_meier_survival,
-    analyze_fleet_crawl_survival,
 )
 from experiment_power_calculator import (
     calculate_minimum_detectable_effect,
     calculate_required_sample_size,
     classify_experiment_outcome,
 )
+from multiple_testing import (
+    SequentialEvaluationHorizonGuard,
+    apply_benjamini_hochberg,
+    apply_holm_bonferroni,
+    evaluate_cluster_effectiveness_with_fdr,
+)
 from score_backlog import compute_prior_sensitivity_analysis
-
 
 # ==============================================================================
 # 1. DiD Simulation & Welch-Satterthwaite Effective Degrees of Freedom

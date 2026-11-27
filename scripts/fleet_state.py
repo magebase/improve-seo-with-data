@@ -472,14 +472,12 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         "SELECT COUNT(*) FROM atomic_task_backlog WHERE (domain IS NULL OR domain = '') AND page LIKE 'http%'"
     ).fetchone()[0]
     if stale_domains:
-        from urllib.parse import urlparse
+        from seo_shared import extract_registered_domain
 
         for task_id, page in conn.execute(
             "SELECT id, page FROM atomic_task_backlog WHERE (domain IS NULL OR domain = '') AND page LIKE 'http%'"
         ):
-            host = (urlparse(str(page)).hostname or "").lower()
-            parts = host.split(".")
-            domain = ".".join(parts[-2:]) if len(parts) > 2 else host
+            domain = extract_registered_domain(str(page))
             conn.execute(
                 "UPDATE atomic_task_backlog SET domain = ? WHERE id = ?",
                 (domain, task_id),
@@ -785,11 +783,9 @@ def enqueue_tasks(
         page = str(task.get("page") or task.get("url") or "")
         domain = str(task.get("domain") or "")
         if not domain and page:
-            from urllib.parse import urlparse
+            from seo_shared import extract_registered_domain
 
-            host = (urlparse(page).hostname or "").lower()
-            parts = host.split(".")
-            domain = ".".join(parts[-2:]) if len(parts) > 2 else host
+            domain = extract_registered_domain(page)
         if domain and page and page.startswith("http"):
             from candidate_hygiene import is_valid_property_host
 
@@ -960,6 +956,10 @@ def lease_tasks(
         "  FROM ranked_pending"
         f"  WHERE ({family_where})"
         "    AND page_rank = 1"
+        "    AND page NOT IN ("
+        "        SELECT DISTINCT bp.page FROM atomic_task_backlog bp"
+        "        WHERE bp.status = 'LEASED' AND bp.page IS NOT NULL AND bp.page != ''"
+        "    )"
         "    AND (file_target IS NULL OR file_target = '' OR file_target NOT IN ("
         "        SELECT DISTINCT bt.file_target FROM atomic_task_backlog bt"
         "        WHERE bt.status = 'LEASED' AND bt.file_target IS NOT NULL "
@@ -1200,8 +1200,13 @@ def record_shipped_experiments(
                 """
                 SELECT DISTINCT page FROM atomic_task_backlog
                 WHERE domain = ? AND page != ? AND route_family = ?
-                  AND status = 'SHIPPED'
-                  AND id NOT IN (SELECT task_id FROM experiment_ledger WHERE domain = ? AND status = 'CRAWL_PENDING')
+                  AND status IN ('PENDING', 'OBSERVE', 'HELD_OUT')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM experiment_ledger el
+                      WHERE el.task_id = atomic_task_backlog.id
+                        AND el.domain = ?
+                        AND el.status = 'CRAWL_PENDING'
+                  )
                 LIMIT 5
                 """,
                 (domain, page, route_family, domain),
@@ -1763,10 +1768,11 @@ def update_experiment_outcomes(
         )
         inc_impr = max(0.0, p_impr - base_impr)
 
-        # Statistical safeguards & Standard Error calculation (v2.2.1 P0.3)
+        # Statistical safeguards & Standard Error calculation (overdispersion-adjusted DiD)
         n_controls = len(valid_controls)
+        denom_c0 = max(ctrl_base_clicks, 1.0)
         ctrl_lifts = [
-            (c_clicks - ctrl_base_clicks) / max(ctrl_base_clicks, 1.0)
+            (c_clicks - ctrl_base_clicks) / denom_c0
             for c_clicks in ctrl_p_clicks_list
         ]
         if len(ctrl_lifts) > 1:
@@ -1774,12 +1780,16 @@ def update_experiment_outcomes(
             var_c = sum((l - mean_c_lift) ** 2 for l in ctrl_lifts) / (
                 len(ctrl_lifts) - 1
             )
+            mean_cp = max(1.0, sum(ctrl_p_clicks_list) / len(ctrl_p_clicks_list))
+            var_cp_raw = sum((c - mean_cp) ** 2 for c in ctrl_p_clicks_list) / (
+                len(ctrl_p_clicks_list) - 1
+            )
+            phi_hat = max(1.0, var_cp_raw / mean_cp)
         else:
             var_c = max(0.01, abs(control_lift) * 0.05)
-        # Poisson-Normal count rate variance without arbitrary scaling:
-        # Var(T_lift) = (Y_T1 + Y_T0) / max(Y_T0, 1)^2
-        # Var(C_lift_mean) = s_C^2 / max(1, N_c)
-        var_t = (p_clicks + base_clicks) / (max(base_clicks, 1.0) ** 2)
+            phi_hat = 1.0
+        var_t_poisson = (p_clicks + base_clicks) / (max(base_clicks, 1.0) ** 2)
+        var_t = max(var_t_poisson * phi_hat, var_c * 0.5)
         se = math.sqrt(max(0.0001, var_t + (var_c / max(1, n_controls))))
         t_crit = get_t_critical_value(n_controls)
         ci_lower = net_lift - t_crit * se

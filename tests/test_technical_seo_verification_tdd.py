@@ -13,9 +13,6 @@ Verifies:
 
 from __future__ import annotations
 
-import pytest
-
-from improve_seo_rewarm import RewarmTargets, rewarm_urls
 from verify_technical_seo import (
     audit_html_technical_seo,
     estimate_title_pixel_width,

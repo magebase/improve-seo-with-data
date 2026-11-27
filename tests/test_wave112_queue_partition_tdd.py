@@ -24,8 +24,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from cursor_hygiene import is_clean_english_query  # noqa: E402
-from ltr_ranker import (  # noqa: E402
+from cursor_hygiene import is_clean_english_query
+from ltr_ranker import (
     is_route_rescue_row,
     partition_demand_and_rescue,
     split_action_queue,

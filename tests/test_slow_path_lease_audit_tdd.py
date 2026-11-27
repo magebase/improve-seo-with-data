@@ -6,8 +6,6 @@ the fast path does (wave-63 gap: the executor could not see the lease).
 
 import json
 
-import pytest
-
 from score_backlog import merge_leased_into_output
 
 

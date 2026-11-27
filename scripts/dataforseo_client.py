@@ -201,7 +201,9 @@ def _item_domain(item: dict[str, Any]) -> str:
         for prefix in ("https://", "http://"):
             if token.startswith(prefix):
                 token = token[len(prefix) :]
-        token = token.split("/")[0].lstrip("www.")
+        from seo_shared import strip_www
+
+        token = strip_www(token.split("/")[0])
         if _valid_domain(token) and token not in {"google.com", "www.google.com"}:
             return token
 
@@ -229,7 +231,9 @@ def _item_domain(item: dict[str, Any]) -> str:
     for prefix in ("https://", "http://"):
         if url.startswith(prefix):
             url = url[len(prefix) :]
-    host = url.split("/")[0].lstrip("www.")
+    from seo_shared import strip_www
+
+    host = strip_www(url.split("/")[0])
     if host in {"google.com", "www.google.com"}:
         return ""
     return host
@@ -310,10 +314,10 @@ def serp_vulnerability_score(items: list[dict[str, Any]], query: str) -> dict[st
     forum_share_top5 = forum_ugc_count / len(items) if items else 0.0
     score = int(
         round(
-            40 * forum_share_top5
-            + 40 * (1.0 - title_match_rate)
-            + 10 * min(crowding_penalty, 2) / 2
+            45 * forum_share_top5
+            + 45 * (1.0 - title_match_rate)
             + 10 * (1.0 if forum_ugc_count >= 3 else 0.0)
+            - 10 * min(crowding_penalty, 2) / 2
         )
     )
     score = max(0, min(100, score))
@@ -765,7 +769,16 @@ class DataForSEOClient:
             )
             for kw in keywords
         ]
-        return self._post("/serp/google/organic/task_post", payload)
+        if len(payload) <= 100:
+            return self._post("/serp/google/organic/task_post", payload)
+        combined: dict[str, Any] = {"status_code": 20000, "tasks": [], "cost": 0.0}
+        for i in range(0, len(payload), 100):
+            resp = self._post("/serp/google/organic/task_post", payload[i : i + 100])
+            combined["tasks"].extend(resp.get("tasks") or [])
+            combined["cost"] += float(resp.get("cost") or 0.0)
+            if resp.get("status_code") and resp.get("status_code") != 20000:
+                combined["status_code"] = resp["status_code"]
+        return combined
 
     def fetch_serp_live(
         self,
@@ -801,7 +814,12 @@ class DataForSEOClient:
 
     # ------------------------------------------------------------------ queue
 
-    def collect_ready_tasks(self) -> list[dict[str, Any]]:
+    def collect_ready_tasks(
+        self,
+        *,
+        allowed_task_ids: set[str] | None = None,
+        expected_tag: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Single sweep of the Standard Queue; returns completed SERP results.
 
         Queue turnaround is typically ~5 minutes; this method never blocks —
@@ -837,6 +855,10 @@ class DataForSEOClient:
                 self.last_queue_state["pending"] += 1
             for task in descriptors:
                 task_id = str(task.get("id", ""))
+                if allowed_task_ids is not None and task_id not in allowed_task_ids:
+                    continue
+                if expected_tag is not None and str(task.get("tag") or "") != expected_tag:
+                    continue
                 endpoint = (
                     task.get("endpoint_advanced")
                     or task.get("endpoint_regular")

@@ -37,11 +37,6 @@
       "price": "0.00",
       "priceCurrency": "USD",
       "availability": "https://schema.org/InStock"
-    },
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.9",
-      "ratingCount": "128"
     }
   },
   "faq_page": {
@@ -85,8 +80,8 @@
       {
         "@type": "ListItem",
         "position": 3,
-        "name": "SMS Segment Calculator",
-        "item": "https://example.com/tools/sms-segment-calculator/"
+        "name": "Online Calculator Utility",
+        "item": "https://example.com/tools/utility/"
       }
     ]
   }

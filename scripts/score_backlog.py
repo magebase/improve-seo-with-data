@@ -113,7 +113,7 @@ def _train_on_the_fly(rows: list[dict[str, Any]], models_dir: str) -> dict[str, 
             heuristic_base_score(
                 impressions=r.get("impressions", 0),
                 current_pos=r.get("current_pos", 50),
-                current_ctr=r.get("current_ctr", 0.0),
+                current_ctr=r.get("current_ctr", r.get("ctr", 0.0)),
                 conv_value=r.get("conv_value", 1.0),
             )
             for r in rows
@@ -542,7 +542,7 @@ def evaluate_temporal_holdout_calibration(
                 "clicks_30d": base_c,
                 "impressions": 100.0,
             },
-            conn=conn,
+            conn=None,
             domain=dom,
             config=cfg,
         )
@@ -873,6 +873,19 @@ def score_rows(
     )
     X = np.array([[float(r["features"][f]) for f in bundle["features"]] for r in rows])
     raw_scores = bundle["model"].predict(X)
+    if bundle.get("used_init_score"):
+        base_scores = np.array(
+            [
+                heuristic_base_score(
+                    impressions=r.get("impressions", 0),
+                    current_pos=r.get("current_pos", 50),
+                    current_ctr=r.get("current_ctr", r.get("ctr", 0.0)),
+                    conv_value=r.get("conv_value", 1.0),
+                )
+                for r in rows
+            ]
+        )
+        raw_scores = raw_scores + base_scores
 
     # SHAP contributions: (n, n_features + 1); last column is the bias term.
     shap_matrix = bundle["model"].predict(X, pred_contrib=True)
@@ -931,7 +944,7 @@ def score_rows(
 
 
 def extract_top_shap_string(task: dict[str, Any], top_n: int = 3) -> str:
-    """Extracts or formats top SHAP driver features for display."""
+    """Extracts or formats real TreeSHAP driver features for display (never fabricates)."""
     shap = task.get("shap")
     if isinstance(shap, dict) and shap:
         sorted_feats = sorted(
@@ -949,18 +962,7 @@ def extract_top_shap_string(task: dict[str, Any], top_n: int = 3) -> str:
     ):
         return str(target_comp)
 
-    action = str(task.get("action_code") or task.get("prescribed_action") or "").upper()
-    if "TITLE" in action or "H2" in action:
-        return "+0.35 title_match_deficit, -0.28 striking_dist_pos"
-    elif "TABLE" in action or "SPEC" in action:
-        return "+0.42 missing_data_table_gap, +0.31 commercial_intent"
-    elif "INLINK" in action or "HUB" in action or "CLUSTER" in action:
-        return "-0.38 parent_hub_internal_links, +0.25 cluster_authority"
-    elif "CTR" in action or "SCHEMA" in action:
-        return "+0.45 impression_volume, -0.39 zero_click_ctr_deficit"
-    elif "ROUTE" in action or "PROGRAMMATIC" in action:
-        return "+0.50 uncaptured_serp_demand, +0.30 high_opportunity_margin"
-    return "+0.25 opportunity_score, -0.15 position_margin"
+    return "shap_unavailable (heuristic_fast_path)"
 
 
 def extract_selection_rationale(task: dict[str, Any]) -> str:
@@ -1266,6 +1268,7 @@ def main(argv: list[str] | None = None) -> int:
                 json.dump(
                     {
                         "fast_path": True,
+                        "scoring_mode": "heuristic_prior",
                         "hygiene": hygiene,
                         "leased": leased,
                         "growth_plan": growth_plan,

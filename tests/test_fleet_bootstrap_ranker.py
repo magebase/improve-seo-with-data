@@ -33,21 +33,21 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from bootstrap_labels import (  # noqa: E402
+import score_backlog
+import train_ranker
+from bootstrap_labels import (
     DEEP_HEAD_TRAP_TITLE_MATCH,
     DEEP_HEAD_TRAP_VOLUME_FLOOR,
     generate_bootstrap_grades,
     opportunity_score,
 )
-from fleet_ingest import harmonize_fleet_history  # noqa: E402
-from ltr_ranker import (  # noqa: E402
+from fleet_ingest import harmonize_fleet_history
+from ltr_ranker import (
     FEATURES,
     MIN_TRAINABLE_ROWS,
     load_bundle,
     train_seo_ranker,
 )
-import score_backlog  # noqa: E402
-import train_ranker  # noqa: E402
 
 
 def _feat_row(query="sms verification", page="https://x.com/tools/lookup/", pos=12.0,

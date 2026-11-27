@@ -11,7 +11,6 @@ Verifies:
 from __future__ import annotations
 
 import pytest
-
 from fleet_state import (
     connect_state_db,
     get_query_owner,

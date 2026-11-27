@@ -24,7 +24,8 @@ from types import ModuleType
 
 import pytest
 
-ENGINE = (
+_LOCAL_ENGINE = Path(__file__).resolve().parents[1] / "scripts" / "seo_growth_intelligence.py"
+_SKILL_ENGINE = (
     Path(__file__).resolve().parents[2]
     / ".agents"
     / "skills"
@@ -32,6 +33,7 @@ ENGINE = (
     / "scripts"
     / "seo_growth_intelligence.py"
 )
+ENGINE = _LOCAL_ENGINE if _LOCAL_ENGINE.exists() else _SKILL_ENGINE
 
 pytestmark = pytest.mark.skipif(
     not ENGINE.exists(), reason="skill engine not provisioned on this checkout"

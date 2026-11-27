@@ -52,9 +52,9 @@ MIN_TITLE_POSITION = 4.0
 MAX_TITLE_POSITION = 20.0
 #: Reviews below this baseline volume cannot detect a meaningful lift.
 MIN_REVIEW_IMPRESSIONS = 200
-#: Known Google core/spam rollout windows. A review whose observation window
-#: overlaps one is quarantined instead of poisoning action effectiveness.
-CORE_UPDATE_WINDOWS = (
+#: Historical Google core/spam rollout windows; can be overridden via
+#: SEO_CORE_UPDATE_WINDOWS env JSON, and supplemented by live volatility detection.
+CORE_UPDATE_WINDOWS: tuple[tuple[str, str], ...] = (
     ("2026-11-01", "2026-11-24"),
     ("2026-12-01", "2026-12-31"),
 )
@@ -164,11 +164,9 @@ def _sigmoid(value: float) -> float:
 
 
 def _domain_from_url(value: str) -> str:
-    host = (urlparse(value).hostname or "").lower()
-    if not host:
-        return ""
-    parts = host.split(".")
-    return ".".join(parts[-2:]) if len(parts) > 2 else host
+    from seo_shared import extract_registered_domain
+
+    return extract_registered_domain(value)
 
 
 def _normalize_page(value: str) -> str:
@@ -1494,13 +1492,47 @@ def due_growth_actions(
     return [dict(zip(columns, row)) for row in rows]
 
 
+def _active_core_update_windows() -> tuple[tuple[str, str], ...]:
+    import os
+
+    raw_env = os.environ.get("SEO_CORE_UPDATE_WINDOWS", "").strip()
+    if raw_env:
+        try:
+            parsed = json.loads(raw_env)
+            return tuple((str(a), str(b)) for a, b in parsed)
+        except Exception:
+            pass
+    return CORE_UPDATE_WINDOWS
+
+
+def detect_volatility_quarantine(
+    observations: dict[str, dict[str, Any]],
+    threshold_abs_shift: float = 0.35,
+    min_pages: int = 5,
+) -> bool:
+    """Detects site-wide abnormal volatility from observed baseline->post shifts."""
+    shifts: list[float] = []
+    for obs in (observations or {}).values():
+        if not isinstance(obs, dict):
+            continue
+        base_c = obs.get("baseline_clicks")
+        cur_c = obs.get("clicks")
+        if base_c is not None and cur_c is not None and float(base_c) >= 10.0:
+            shifts.append((float(cur_c) - float(base_c)) / max(1.0, float(base_c)))
+    if len(shifts) < min_pages:
+        return False
+    shifts.sort()
+    median_shift = shifts[len(shifts) // 2]
+    return abs(median_shift) >= threshold_abs_shift
+
+
 def _window_overlaps_core_update(start: str, end: str) -> bool:
     try:
         start_dt = datetime.fromisoformat(start)
         end_dt = datetime.fromisoformat(end)
     except (TypeError, ValueError):
         return False
-    for window_start, window_end in CORE_UPDATE_WINDOWS:
+    for window_start, window_end in _active_core_update_windows():
         update_start = datetime.fromisoformat(f"{window_start}T00:00:00+00:00")
         update_end = datetime.fromisoformat(f"{window_end}T23:59:59+00:00")
         if start_dt <= update_end and end_dt >= update_start:
@@ -1528,8 +1560,8 @@ def review_growth_actions(
     for row in due_growth_actions(conn, domain=domain, now=now):
         key = row["page"]
         obs = (
-            observations.get(key)
-            or observations.get(f"{key}|{row['query']}")
+            observations.get(f"{key}|{row['query']}")
+            or observations.get(key)
             or observations.get(row["query"])
         )
         if not obs:

@@ -274,38 +274,54 @@ def append_labeled_rows(
     history_path: str,
 ) -> int:
     """Appends (features -> realized outcome) training rows; returns rows added."""
+    from ltr_ranker import FEATURES
+
+    def _dedupe_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
+        base = outcome_key(row.get("query", ""), row.get("page", ""))
+        action = str(row.get("action_code") or row.get("prescribed_action") or "").strip().upper()
+        deployed = str(row.get("deployed_at") or "").strip()
+        return (base, action, deployed, str(row.get("source") or ""))
+
     existing = set()
     if os.path.exists(history_path):
         for row in load_history(history_path):
-            existing.add(outcome_key(row.get("query", ""), row.get("page", "")))
+            existing.add(_dedupe_key(row))
 
     added = 0
     os.makedirs(os.path.dirname(history_path) or ".", exist_ok=True)
     with open(history_path, "a", encoding="utf-8") as fh:
         for entry in executed_queue:
             key = outcome_key(entry.get("query", ""), entry.get("page", ""))
-            if key in existing:
-                continue  # idempotent: never double-log an outcome
+            dkey = _dedupe_key(entry)
+            if dkey in existing:
+                continue  # idempotent per (query, page, action, deployed_at, source)
             fresh = outcomes.get(key)
             if not fresh:
                 print(f"  SKIP (no fresh GSC data): {entry.get('query', '?')!r}")
                 continue
+            raw_feats = entry.get("features")
+            feats = (
+                {f: float(raw_feats.get(f, 0.0)) for f in FEATURES}
+                if isinstance(raw_feats, dict) and raw_feats
+                else {f: float(entry.get(f, 0.0)) for f in FEATURES}
+            )
             record = {
                 "query": entry.get("query"),
                 "page": entry.get("page"),
                 "cluster_id": entry.get("cluster_id", "root"),
-                "features": entry.get("features")
-                or {f: entry.get(f, 0.0) for f in entry.get("features", {})},
+                "action_code": entry.get("action_code") or entry.get("prescribed_action") or "",
+                "deployed_at": entry.get("deployed_at") or "",
+                "features": feats,
                 "clicks_30d": fresh["clicks_30d"],
                 "conversions_30d": float(conversions.get(key, 0)),
                 "impressions": fresh["impressions"],
                 "current_pos": fresh["current_pos"],
                 "current_ctr": fresh["ctr"],
                 "conv_value": 1.0,
-                "source": entry.get("slot", "unknown"),
+                "source": entry.get("slot", "outcome"),
             }
             fh.write(json.dumps(record) + "\n")
-            existing.add(key)
+            existing.add(dkey)
             added += 1
     return added
 

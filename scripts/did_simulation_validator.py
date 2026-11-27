@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 from typing import Any
+
 import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 
@@ -130,24 +131,41 @@ def simulate_single_did_trial(
     c_lift = (mean_c1 - mean_c0) / max(1.0, mean_c0)
     did_point_estimate = t_lift - c_lift
 
-    # Control cohort empirical lift variance
-    ctrl_lifts = [(c1 - c0) / max(1.0, c0) for c0, c1 in zip(y_c0_list, y_c1_list)]
+    # Estimate empirical overdispersion multiplier phi >= 1.0 from control cohort
+    # Under Poisson, Var(Y) == E[Y] -> phi ~= 1.0.
+    # Under NB (Var = mu + alpha*mu^2), phi captures (1 + alpha*mu) automatically.
+    mean_c_pooled = max(1.0, 0.5 * (mean_c0 + mean_c1))
+    if n_c > 1:
+        var_c0_raw = float(np.var(y_c0_list, ddof=1))
+        var_c1_raw = float(np.var(y_c1_list, ddof=1))
+        phi_hat = max(1.0, (0.5 * (var_c0_raw + var_c1_raw)) / mean_c_pooled)
+    else:
+        phi_hat = 1.0
+
+    # Control cohort empirical lift variance (normalized by cohort baseline mean
+    # to avoid heavy-tailed ratio blowup under overdispersion).
+    denom_c0 = max(1.0, mean_c0)
+    ctrl_lifts = [(c1 - c0) / denom_c0 for c0, c1 in zip(y_c0_list, y_c1_list)]
     if n_c > 1:
         var_c = float(np.var(ctrl_lifts, ddof=1))
     else:
         var_c = max(0.01, abs(c_lift) * 0.1)
 
-    # Treatment variance
+    # Treatment variance: scale Poisson variance by empirical overdispersion phi_hat.
     if n_t > 1:
-        trt_lifts = [(t1 - t0) / max(1.0, t0) for t0, t1 in zip(y_t0_list, y_t1_list)]
+        denom_t0 = max(1.0, mean_t0)
+        trt_lifts = [(t1 - t0) / denom_t0 for t0, t1 in zip(y_t0_list, y_t1_list)]
         var_t = float(np.var(trt_lifts, ddof=1))
+        df_ws = compute_welch_satterthwaite_df(var_t, n_t, var_c, n_c)
     else:
-        var_t = (mean_t1 + mean_t0) / (max(1.0, mean_t0) ** 2)
+        var_t_poisson = (mean_t1 + mean_t0) / (max(1.0, mean_t0) ** 2)
+        var_t = max(var_t_poisson * phi_hat, var_c * 0.5)
+        # Single treatment unit borrows its dispersion degrees of freedom from N_c - 1.
+        df_ws = float(max(1, n_c - 1))
 
     se = math.sqrt(max(1e-6, (var_t / max(1, n_t)) + (var_c / max(1, n_c))))
 
-    # 1. Welch-Satterthwaite effective df
-    df_ws = compute_welch_satterthwaite_df(var_t, n_t, var_c, n_c)
+    # 1. Overdispersion-adjusted Welch-Satterthwaite effective df
     t_crit_ws = get_did_critical_value(df_ws, alpha=0.05)
     ci_lower_ws = did_point_estimate - (t_crit_ws * se)
     ci_upper_ws = did_point_estimate + (t_crit_ws * se)

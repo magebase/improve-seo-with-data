@@ -113,13 +113,12 @@ def _rewarm_one(
     path = urlparse(url).path or "/"
     for attempt in range(1, max_attempts + 1):
         try:
+            from seo_shared import sign_sweep_headers
+
             request = urllib.request.Request(
                 url,
                 method="GET",
-                headers={
-                    VERIFY_HEADER: VERIFY_VALUE,
-                    "User-Agent": SWEEP_USER_AGENT,
-                },
+                headers=sign_sweep_headers(url, user_agent=SWEEP_USER_AGENT),
             )
             response = opener.open(request, timeout=timeout_seconds)
             body_content: str | None = None

@@ -34,7 +34,6 @@ import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -48,17 +47,11 @@ from fleet_state import (
     calculate_serp_jaccard_overlap,
     classify_cannibalization_risk,
     connect_state_db,
-    enqueue_tasks,
     get_action_effectiveness,
-    get_fleet_action_effectiveness,
-    get_position_tier,
-    get_query_owner,
     get_t_critical_value,
-    lease_tasks,
     record_action_effectiveness,
     record_experiment,
     update_experiment_outcomes,
-    update_experiment_recrawl,
 )
 from score_backlog import (
     EconomicConfig,
@@ -66,11 +59,8 @@ from score_backlog import (
     evaluate_temporal_holdout_calibration,
 )
 from verify_product_functionality import (
-    FunctionalTestResult,
     verify_calculator_functionality,
     verify_converter_functionality,
-    verify_directory_functionality,
-    verify_product_functionality,
     verify_smsriver_functionality,
 )
 from verify_technical_seo import audit_html_technical_seo
@@ -721,6 +711,7 @@ def test_figiva_gpa_collegiate_engine():
 def test_execute_converter_pipeline():
     """Validates genuine byte conversion and magic byte inspection."""
     import struct
+
     from verify_product_functionality import execute_converter_pipeline
 
     # BMP to PNG
@@ -921,7 +912,6 @@ def test_event_study_parallel_trends():
 
 def test_validate_wave_close_waiver_reason(tmp_path: Path):
     """Validates that --allow-dirty requires an explicit waiver reason when dirty files exist."""
-    import subprocess
     from validate_wave_close import validate_report_content
 
     # Valid report markdown
@@ -1019,9 +1009,8 @@ def test_verify_dom_structural_integrity():
 
 def test_commit_range_inclusive_start_commit(tmp_path: Path):
     """Verifies that commit ranges (A..B) inclusively capture files committed in start_sha (P1 fix)."""
-    import subprocess
-    from validate_wave_close import get_git_changed_files
     from generate_wave_changelog import get_git_commit_files
+    from validate_wave_close import get_git_changed_files
 
     repo = tmp_path / "git_range_repo"
     repo.mkdir()

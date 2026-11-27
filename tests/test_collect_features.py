@@ -11,7 +11,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from collect_features import extract_special_blocks  # noqa: E402
+from collect_features import extract_special_blocks
 
 
 def _items(*types):

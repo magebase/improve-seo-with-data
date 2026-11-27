@@ -193,8 +193,10 @@ def extract_launch_features(row: dict[str, Any]) -> dict[str, float]:
 
     search_volume_log = _as_float(_nested_value(row, ["search_volume_log"], 0.0), 0.0)
     if search_volume_log <= 0.0:
+        from seo_shared import search_volume_to_log
+
         volume = _as_float(_nested_value(row, ["search_volume"], 0.0), 0.0)
-        search_volume_log = math.log1p(max(0.0, volume))
+        search_volume_log = search_volume_to_log(volume)
 
     template_index_rate = _as_float(
         _nested_value(row, ["template_index_rate", "family_index_rate"], 0.5), 0.5

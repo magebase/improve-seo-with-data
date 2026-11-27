@@ -19,7 +19,6 @@ clicks first (Google's own verdict), then position, then impressions.
 
 from __future__ import annotations
 
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -27,8 +26,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from fleet_state import connect_state_db, get_query_owner  # noqa: E402
-from seed_query_ownership import derive_ownership, seed_ownership  # noqa: E402
+from fleet_state import connect_state_db, get_query_owner
+from seed_query_ownership import derive_ownership, seed_ownership
 
 
 def _row(page: str, query: str, *, clicks: float, impressions: float, pos: float) -> dict:

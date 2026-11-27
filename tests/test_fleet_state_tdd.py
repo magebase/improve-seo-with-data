@@ -10,12 +10,10 @@ Covers:
 
 from __future__ import annotations
 
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-
 from fleet_state import (
     DailyBudgetGate,
     connect_state_db,
@@ -31,7 +29,6 @@ from fleet_state import (
     release_stale_leases,
     save_gsc_snapshot,
     save_serp_volumes,
-    save_url_inspections,
     upsert_serp_cache,
 )
 

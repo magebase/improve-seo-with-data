@@ -9,9 +9,8 @@ and stability on low-click pages.
 from __future__ import annotations
 
 import math
-import numpy as np
-import pytest
 
+import numpy as np
 from fleet_state import get_t_critical_value
 
 

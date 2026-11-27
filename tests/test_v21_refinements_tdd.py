@@ -13,10 +13,9 @@ Verifies:
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -31,7 +30,6 @@ from content_usefulness_gate import (
     compute_shingle_distinctiveness,
     verify_content_usefulness,
 )
-from evaluate_experiments import evaluate_domain_experiments
 from fleet_state import (
     connect_state_db,
     get_action_effectiveness,

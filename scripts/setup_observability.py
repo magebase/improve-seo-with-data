@@ -393,17 +393,31 @@ def main() -> int:
 
     if args.export_manifest:
         import datetime
+        import os
+
+        gsc_configured = bool(
+            os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+            or os.environ.get("GSC_CREDENTIALS_PATH")
+            or os.environ.get("SEO_GSC_SITE")
+        )
+        cf_configured = bool(
+            os.environ.get("CLOUDFLARE_API_TOKEN")
+            and (os.environ.get("CLOUDFLARE_ZONE_ID") or os.environ.get("CLOUDFLARE_ACCOUNT_ID"))
+        )
+        posthog_detected = bool(scan_results.get("posthog", {}).get("detected", False))
+        clarity_detected = bool(scan_results.get("microsoft_clarity", {}).get("detected", False))
+        cwv_detected = bool(scan_results.get("core_web_vitals", {}).get("detected", False))
         manifest = {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "site": args.url or "local_project",
             "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "sources": {
                 "gsc": {
-                    "connected": True,
+                    "connected": gsc_configured,
                     "property": args.url,
-                    "freshness_watermark": datetime.date.today().isoformat(),
-                    "days_available": 28,
-                    "dimensions_available": ["query", "page", "country", "device", "search_appearance", "date"]
+                    "freshness_watermark": datetime.date.today().isoformat() if gsc_configured else None,
+                    "days_available": 28 if gsc_configured else 0,
+                    "dimensions_available": ["query", "page", "country", "device", "search_appearance", "date"] if gsc_configured else []
                 },
                 "ga4": {
                     "connected": scan_results.get("google_analytics", {}).get("detected", False),
@@ -412,30 +426,30 @@ def main() -> int:
                     "freshness_watermark": datetime.date.today().isoformat()
                 },
                 "posthog": {
-                    "connected": scan_results.get("posthog", {}).get("detected", False),
-                    "funnels_tracked": ["onboarding_flow", "calculation_to_signup"],
-                    "experiments_enabled": True
+                    "connected": posthog_detected,
+                    "funnels_tracked": ["onboarding_flow", "calculation_to_signup"] if posthog_detected else [],
+                    "experiments_enabled": posthog_detected
                 },
                 "clarity": {
-                    "connected": scan_results.get("microsoft_clarity", {}).get("detected", False),
+                    "connected": clarity_detected,
                     "project_id": scan_results.get("microsoft_clarity", {}).get("matches", [None])[0],
-                    "heatmaps_enabled": True
+                    "heatmaps_enabled": clarity_detected
                 },
                 "cloudflare": {
-                    "connected": True,
-                    "zone_id": "auto_detected",
-                    "logpush_enabled": True,
-                    "workers_analytics_enabled": True
+                    "connected": cf_configured,
+                    "zone_id": os.environ.get("CLOUDFLARE_ZONE_ID") or None,
+                    "logpush_enabled": False,
+                    "workers_analytics_enabled": cf_configured
                 },
                 "betterstack": {
                     "connected": scan_results.get("sentry_or_betterstack", {}).get("detected", False),
-                    "heartbeats_tracked": 1,
+                    "heartbeats_tracked": 1 if scan_results.get("sentry_or_betterstack", {}).get("detected", False) else 0,
                     "active_incidents": 0
                 },
                 "grafana": {
-                    "connected": scan_results.get("core_web_vitals", {}).get("detected", False),
-                    "rum_faro_enabled": True,
-                    "cwv_telemetry_active": scan_results.get("core_web_vitals", {}).get("detected", False)
+                    "connected": cwv_detected,
+                    "rum_faro_enabled": cwv_detected,
+                    "cwv_telemetry_active": cwv_detected
                 }
             }
         }

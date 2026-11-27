@@ -28,7 +28,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from ltr_ranker import (  # noqa: E402
+from ltr_ranker import (
     FEATURES,
     MONOTONE_CONSTRAINTS,
     IsotonicCalibrator,
@@ -37,7 +37,6 @@ from ltr_ranker import (  # noqa: E402
     cold_start_depth_multiplier,
     cold_start_score,
     expected_ctr,
-    heuristic_base_score,
     load_bundle,
     position_adjusted_clicks,
     prescribe_action,

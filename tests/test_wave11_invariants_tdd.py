@@ -5,8 +5,8 @@
 4. Em-dash SERP pixel width modeling in estimate_title_display_width (Invariant H).
 """
 
-from unittest.mock import patch, MagicMock
 import json
+from unittest.mock import MagicMock, patch
 
 
 def test_unbuilt_routes_collapse_triplets():

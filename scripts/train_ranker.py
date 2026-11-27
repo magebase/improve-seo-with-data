@@ -125,7 +125,7 @@ def train_from_history(
             heuristic_base_score(
                 impressions=r.get("impressions", 0),
                 current_pos=r.get("current_pos", 50),
-                current_ctr=r.get("current_ctr", 0.0),
+                current_ctr=r.get("current_ctr", r.get("ctr", 0.0)),
                 conv_value=r.get("conv_value", 1.0),
             ) for r in rows
         ])
@@ -147,6 +147,8 @@ def train_from_history(
     clicked_val = int((clicks[val_mask] > 0).sum()) if val_mask.any() else 0
     if val_mask.any() and meta["best_iteration"] and clicked_val >= 20:
         raw_val = booster.predict(X[val_mask])
+        if init_score is not None:
+            raw_val = raw_val + init_score[val_mask]
         realized_val = np.array([
             position_adjusted_clicks(c, r.get("current_pos", 50))
             for c, r in zip(clicks[val_mask], [rows[i] for i in np.where(val_mask)[0]])
@@ -161,6 +163,22 @@ def train_from_history(
                   "bundle ships uncalibrated margins.")
 
     importances = booster.feature_importance(importance_type="gain")
+    active_features = int((importances > 0).sum())
+    num_trees = int(booster.num_trees())
+    degrade_reasons: list[str] = []
+    if active_features < 4:
+        degrade_reasons.append(f"active_features={active_features}<4")
+    if num_trees < 5:
+        degrade_reasons.append(f"num_trees={num_trees}<5")
+    if calibrator is None:
+        degrade_reasons.append("uncalibrated")
+    meta["active_features"] = active_features
+    meta["num_trees"] = num_trees
+    meta["degraded"] = bool(degrade_reasons)
+    meta["degrade_reasons"] = degrade_reasons
+    if degrade_reasons:
+        print(f"[MODEL_DEGRADED] Ranker quality gate flagged: {', '.join(degrade_reasons)}")
+
     order = np.argsort(importances)[::-1]
     print("Gain importances:")
     for idx in order:
@@ -175,6 +193,10 @@ def train_from_history(
         "objective": objective,
         "label_mode": label_meta["label_mode"],
         "min_data_in_leaf": meta["min_data_in_leaf"],
+        "active_features": active_features,
+        "num_trees": num_trees,
+        "degraded": bool(degrade_reasons),
+        "degrade_reasons": degrade_reasons,
     }
 
 

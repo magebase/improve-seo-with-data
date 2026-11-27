@@ -361,9 +361,9 @@ When running `score_backlog.py` (or executing an autonomous wave), the tool outp
 MACHINE LEARNING MODEL DECISION & SHAP ATTRIBUTION SUMMARY
 ================================================================================
 Engine Objective: LGBMRanker (rank_xendcg) | Mode: trained_model
-Bundle Path: models/seo_lgbm_ranker.txt (14 engineered ranking features)
+Bundle Path: models/seo_lgbm_ranker.txt (8 engineered ranking features)
 Residual Baseline: init_score = log10(impressions + 1) * (TargetCTR - CurrentCTR) * ConvValue
-Monotone Constraints: [+1 impressions, -1 current_pos, +1 centroid_sim, +1 hub_links, -1 forum_ratio]
+Monotone Constraints: [+1 centroid_sim, +1 forum_ratio, -1 title_exact_match, -1 pixel_crowding, +1 hub_links, 0 current_pos, +1 volume_log, +1 conversion_intent]
 --------------------------------------------------------------------------------
 Task ID   Slot      Action                           Score   EV ($)  Top SHAP Drivers                Rationale
 --------------------------------------------------------------------------------
@@ -381,7 +381,8 @@ Task ID   Slot      Action                           Score   EV ($)  Top SHAP Dr
 All SEO improvements across the fleet follow an immutable 6-stage lifecycle:
 
 1. **Stage 1: Multi-Source Feature Collection (`collect_features.py`)**  
-   Pulls empirical GSC query performance (`dimensions: ["page", "query", "device"]`), crawls competitor DOMs for semantic gaps, inspects coverage states, and calculates the 14-feature ranking matrix.
+   Pulls empirical GSC query performance (`dimensions: ["page", "query", "device"]`), crawls competitor DOMs for semantic gaps, inspects coverage states, and calculates the 8-feature ranking matrix (`ltr_ranker.FEATURES`).
+   *(Sibling delegation: use `seo` MCP for ad-hoc site crawls/AI-readiness reports, and `dc-gyc` for AdSense NNLS RPM & TECP abandonment guardrails.)*
 2. **Stage 2: Learning-to-Rank Opportunity Scoring & Stratified Leasing (`score_backlog.py`)**  
    Scores candidates with the `LGBMRanker` (`rank_xendcg`) booster, extracts Tree SHAP contributions (`pred_contrib=True`), maps actions to bottlenecks, evaluates expected commercial value, and draws an 85/15 exploit/explore wave cursor partition.
 3. **Stage 3: Design-Driven ATDD & Atomic Implementation**  

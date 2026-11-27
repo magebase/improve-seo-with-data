@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from datetime import datetime, timezone
@@ -40,8 +41,8 @@ from fleet_state import (
 
 def format_two_part_scorecard(
     domain: str,
-    execution_score: float,
-    execution_breakdown: dict[str, float],
+    execution_score: float | None,
+    execution_breakdown: dict[str, float] | None,
     summary: dict[str, Any],
     top_experiments: list[dict[str, Any]] | None = None,
 ) -> str:
@@ -50,24 +51,32 @@ def format_two_part_scorecard(
         f"# SEO Scorecard: {domain}",
         "",
         "## Part 1: Engineering Execution Quality",
-        f"**Execution Grade:** **{execution_score:.1f} / 10.0**",
-        "",
-        "| Subsystem / Gate | Weight | Score | Verdict |",
-        "| :--- | :---: | :---: | :--- |",
     ]
+    if execution_score is None or not execution_breakdown:
+        lines.extend([
+            "**Execution Grade:** **NOT MEASURED**",
+            "> No verified execution gate telemetry was supplied for this run.",
+        ])
+    else:
+        lines.extend([
+            f"**Execution Grade:** **{execution_score:.1f} / 10.0**",
+            "",
+            "| Subsystem / Gate | Weight | Score | Verdict |",
+            "| :--- | :---: | :---: | :--- |",
+        ])
 
-    weights = {
-        "Data Integrity & Multi-Tenant Isolation": (0.15, execution_breakdown.get("isolation", 10.0)),
-        "Opportunity Quality & Intent Mapping": (0.15, execution_breakdown.get("opportunity", 10.0)),
-        "Content Uniqueness & Usefulness": (0.20, execution_breakdown.get("content", 10.0)),
-        "Technical SEO & Indexability": (0.15, execution_breakdown.get("technical", 10.0)),
-        "Deployment Hygiene & Cache Re-warm": (0.15, execution_breakdown.get("deploy", 10.0)),
-        "Quality, TDD & Product Functionality": (0.20, execution_breakdown.get("tdd", 10.0)),
-    }
+        weights = {
+            "Data Integrity & Multi-Tenant Isolation": (0.15, execution_breakdown.get("isolation", 0.0)),
+            "Opportunity Quality & Intent Mapping": (0.15, execution_breakdown.get("opportunity", 0.0)),
+            "Content Uniqueness & Usefulness": (0.20, execution_breakdown.get("content", 0.0)),
+            "Technical SEO & Indexability": (0.15, execution_breakdown.get("technical", 0.0)),
+            "Deployment Hygiene & Cache Re-warm": (0.15, execution_breakdown.get("deploy", 0.0)),
+            "Quality, TDD & Product Functionality": (0.20, execution_breakdown.get("tdd", 0.0)),
+        }
 
-    for name, (weight, score) in weights.items():
-        verdict = "PASSED" if score >= 8.5 else ("NEEDS_WORK" if score >= 6.0 else "FAILED")
-        lines.append(f"| {name} | {int(weight*100)}% | {score:.1f} / 10 | {verdict} |")
+        for name, (weight, score) in weights.items():
+            verdict = "PASSED" if score >= 8.5 else ("NEEDS_WORK" if score >= 6.0 else "FAILED")
+            lines.append(f"| {name} | {int(weight*100)}% | {score:.1f} / 10 | {verdict} |")
 
     lines.extend([
         "",
@@ -160,9 +169,87 @@ def evaluate_domain_experiments(
         outcomes_result = {"graded": 0, "observing": 0}
 
     summary = get_experiment_summary(conn, domain)
+
+    # Wire BH FDR control, MDE/ROPE power check, and horizon guard telemetry
+    fdr_summary: list[dict[str, Any]] = []
+    rope_classifications: list[dict[str, Any]] = []
+    horizon_status: list[dict[str, Any]] = []
+    try:
+        from experiment_power_calculator import (
+            calculate_minimum_detectable_effect,
+            classify_experiment_outcome,
+        )
+        from multiple_testing import (
+            SequentialEvaluationHorizonGuard,
+            apply_benjamini_hochberg,
+        )
+        from scipy import stats as _scipy_stats  # type: ignore[import-untyped]
+
+        exp_rows = conn.execute(
+            """
+            SELECT id, page, recrawl_detected_at, did_ci_lower, did_ci_upper,
+                   baseline_clicks_28d, status
+            FROM experiment_ledger
+            WHERE domain = ?
+            ORDER BY id DESC
+            LIMIT 200
+            """,
+            (domain,),
+        ).fetchall()
+
+        p_vals: list[float] = []
+        eval_meta: list[dict[str, Any]] = []
+        for eid, page_url, recrawl_ts, ci_lo, ci_hi, base_c, st in exp_rows:
+            can_eval, reason = SequentialEvaluationHorizonGuard.can_evaluate_statistically(
+                recrawl_ts, now_dt=now
+            )
+            horizon_status.append({
+                "experiment_id": eid,
+                "page": page_url,
+                "can_evaluate": can_eval,
+                "reason": reason,
+            })
+            if st not in ("CRAWL_PENDING", "MEASUREMENT_PENDING") and ci_lo is not None and ci_hi is not None:
+                net_lift = 0.5 * (float(ci_lo) + float(ci_hi))
+                se_est = max(1e-6, (float(ci_hi) - float(ci_lo)) / (2.0 * 1.96))
+                z_stat = abs(net_lift) / se_est
+                p_val = float(2.0 * (1.0 - _scipy_stats.norm.cdf(z_stat)))
+                p_vals.append(min(1.0, max(0.0, p_val)))
+                eval_meta.append({
+                    "experiment_id": eid,
+                    "page": page_url,
+                    "net_lift": net_lift,
+                    "ci_lower": float(ci_lo),
+                    "ci_upper": float(ci_hi),
+                    "baseline_clicks": float(base_c or 0.0),
+                })
+
+        if p_vals:
+            bh_res = apply_benjamini_hochberg(p_vals, fdr_q=0.05)
+            for item, bh in zip(eval_meta, bh_res):
+                fdr_summary.append({**item, **bh})
+                mde_info = calculate_minimum_detectable_effect(
+                    base_mu=max(1.0, item["baseline_clicks"]),
+                    base_std=max(1.0, math.sqrt(max(1.0, item["baseline_clicks"]))),
+                    n_t=1,
+                    n_c=5,
+                )
+                rope = classify_experiment_outcome(
+                    point_estimate=item["net_lift"],
+                    ci_lower_95=item["ci_lower"],
+                    ci_upper_95=item["ci_upper"],
+                    mde_percentage=max(0.05, mde_info["mde_percentage_lift"]),
+                )
+                rope_classifications.append({"experiment_id": item["experiment_id"], **rope})
+    except Exception:
+        pass
+
     return {
         "summary": summary,
         "outcomes": outcomes_result,
+        "fdr_summary": fdr_summary,
+        "rope_classifications": rope_classifications,
+        "horizon_status": horizon_status,
     }
 
 
@@ -196,15 +283,8 @@ def main(argv: list[str] | None = None) -> int:
 
     scorecard = format_two_part_scorecard(
         domain=args.domain,
-        execution_score=9.8,
-        execution_breakdown={
-            "isolation": 10.0,
-            "opportunity": 9.5,
-            "content": 9.8,
-            "technical": 10.0,
-            "deploy": 9.8,
-            "tdd": 10.0,
-        },
+        execution_score=None,
+        execution_breakdown=None,
         summary=summary,
     )
     print(scorecard)

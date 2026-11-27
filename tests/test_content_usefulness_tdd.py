@@ -12,8 +12,6 @@ Verifies:
 
 from __future__ import annotations
 
-import pytest
-
 from content_usefulness_gate import (
     compute_shingle_distinctiveness,
     verify_content_usefulness,

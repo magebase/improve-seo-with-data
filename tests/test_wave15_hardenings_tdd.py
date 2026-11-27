@@ -7,13 +7,14 @@
 
 from __future__ import annotations
 
-import sqlite3
 import pytest
-
 from candidate_hygiene import is_valid_property_host
-from cursor_hygiene import auto_graduate_shipped_query_siblings, enforce_url_title_lock, preflight_hygiene
+from cursor_hygiene import (
+    enforce_url_title_lock,
+    preflight_hygiene,
+)
 from fleet_state import DailyBudgetGate, connect_state_db
-from ltr_ranker import is_truly_unbuilt_route, compile_wave_backlog
+from ltr_ranker import compile_wave_backlog, is_truly_unbuilt_route
 
 
 @pytest.fixture

@@ -22,8 +22,8 @@ from pathlib import Path
 
 # Add scripts directory to path
 SCRIPTS_DIR = Path(__file__).resolve().parent
-SAAS_FACTORY_ROOT = Path("/home/aqua/Projects/saas-factory")
-SKILL_ROOT = Path("/home/aqua/skills/improve-seo-with-data")
+SKILL_ROOT = SCRIPTS_DIR.parent
+SAAS_FACTORY_ROOT = Path(os.environ.get("SAAS_FACTORY_ROOT", "") or Path.cwd())
 
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
@@ -207,11 +207,11 @@ def run_wave_close_report_gate(
     """Gate 4: Validates wave report structure, math, and git change reconciliation."""
     print(f"\n=== [Gate 4/4] Running Wave Close Validation on {report_path.name} ===")
     
-    from validate_wave_close import validate_report_file
+    from validate_wave_close import validate_wave_close
 
-    passed, errors, warnings = validate_report_file(
-        report_path=report_path,
-        repo_path=repo_path,
+    passed, errors, warnings = validate_wave_close(
+        report_path=str(report_path),
+        repo_path=str(repo_path),
         commit_range=commit_range,
         allow_dirty=allow_dirty,
         waiver_reason=waiver_reason,

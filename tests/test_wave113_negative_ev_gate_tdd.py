@@ -25,7 +25,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from score_backlog import (  # noqa: E402
+from score_backlog import (
     EconomicConfig,
     compute_opportunity_intelligence,
 )

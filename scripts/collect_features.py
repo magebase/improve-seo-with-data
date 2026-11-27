@@ -2151,10 +2151,21 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"      URL inspection skipped ({exc}).")
 
     # Domain topical centroid: token profile of our own winning pages' queries.
+    # Cold-start fallback: on zero-click sites, seed from impressed queries & sitemap slugs
+    # so domain_centroid_sim does not collapse to 0.0 for every candidate.
     domain_counter: Counter = Counter()
     for cand in candidates:
         if cand["clicks_30d"] >= 1:
             domain_counter.update(tokenize(cand["query"]))
+    if not domain_counter:
+        for cand in candidates:
+            if float(cand.get("impressions") or 0.0) >= 1.0:
+                domain_counter.update(tokenize(cand["query"]))
+        from urllib.parse import urlparse
+
+        for sm_url in (sitemap_urls if "sitemap_urls" in locals() else [])[:250]:
+            slug_text = urlparse(sm_url).path.replace("/", " ").replace("-", " ").replace("_", " ")
+            domain_counter.update(tokenize(slug_text))
 
     login, password = (None, None)
     if not args.gsc_only:
@@ -2320,9 +2331,12 @@ def main(argv: list[str] | None = None) -> int:
         volume = volume_by_query.get(str(cand["query"]).strip().lower())
         volume_log = math.log10(volume + 1) if volume and volume > 0 else 0.0
 
-        cluster_path = cand["page"].split("://", 1)[-1].split("/")
-        cluster_id = cluster_path[1] if len(cluster_path) > 1 else "root"
-        prefix = ("/" + "/".join(cluster_path[:2])).rstrip("/").lower()
+        from urllib.parse import urlparse
+
+        url_path = urlparse(cand["page"]).path.strip("/")
+        cluster_segs = [seg for seg in url_path.split("/") if seg]
+        cluster_id = cluster_segs[0] if cluster_segs else "root"
+        prefix = ("/" + cluster_segs[0]).lower() if cluster_segs else "/"
         hub_count = hub_links.get(
             prefix, hub_links.get(cand["page"].rstrip("/").lower(), 0.0)
         )
@@ -2436,7 +2450,9 @@ def main(argv: list[str] | None = None) -> int:
                     "parent_hub_internal_links": float(hub_count),
                     "current_pos": cand["current_pos"],
                     "search_volume_log": round(volume_log, 6),
-                    "conversion_intent_score": 0.0,
+                    "conversion_intent_score": __import__("seo_shared").score_conversion_intent(
+                        cand["query"]
+                    ),
                 },
             }
         )
@@ -2446,7 +2462,7 @@ def main(argv: list[str] | None = None) -> int:
         json.dump(
             {
                 "site": args.site,
-                "generated_at": __import__("datetime").datetime.now().isoformat(),
+                "generated_at": __import__("seo_shared").utc_iso_now(),
                 "gsc_rows": len(candidates),
                 "dataforseo_enriched": len(serp_by_query),
                 "rows": feature_rows,

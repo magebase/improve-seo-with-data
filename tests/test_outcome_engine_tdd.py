@@ -10,24 +10,17 @@ Verifies:
 
 from __future__ import annotations
 
-import sqlite3
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from evaluate_experiments import evaluate_domain_experiments, format_two_part_scorecard
 from fleet_state import (
-    _SCHEMA,
     connect_state_db,
     enqueue_tasks,
     get_action_effectiveness,
     get_experiment_summary,
-    get_fleet_action_effectiveness,
     lease_tasks,
-    mark_shipped,
-    record_action_effectiveness,
     record_experiment,
-    record_shipped_experiments,
     update_experiment_outcomes,
     update_experiment_recrawl,
 )

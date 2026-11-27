@@ -27,7 +27,6 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from generate_wave_changelog import (
-    calculate_engineering_score,
     generate_wave_changelog_markdown,
 )
 from validate_wave_close import (
@@ -373,7 +372,6 @@ def test_validate_wave_close_detects_missing_shap_table(valid_report_markdown):
 
 def test_validate_wave_close_supports_commit_range(valid_report_markdown, monkeypatch):
     """Verifies multi-commit range reconciliation in validate_report_content."""
-    from validate_wave_close import get_git_changed_files
 
     # Mock get_git_changed_files to return files matching Section 4 of valid_report_markdown
     monkeypatch.setattr(

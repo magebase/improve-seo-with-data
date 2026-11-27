@@ -142,17 +142,12 @@ def is_probably_non_english(query: str) -> bool:
     return bool(tokens & _NON_ENGLISH_MARKERS)
 
 
-def is_clean_english_query(query: str) -> bool:
-    """True when a query is single-heading-addressable English work.
-
-    Rejects: operator/URL junk, uppercase Boolean operators, negation terms,
-    phone numbers and bare numeric prefixes, queries outside the 4-60 char /
-    <=10 word band, >15% non-ASCII text, and probable non-English queries.
-    """
+def is_clean_query(query: str, *, allow_multilingual: bool = True) -> bool:
+    """Locale-aware query hygiene filter rejecting operator/lookup junk."""
     if not query or not query.strip():
         return False
     query = query.strip()
-    if len(query) < 4 or len(query) > 60:
+    if len(query) < 4 or len(query) > 80:
         return False
     if len(query.split()) > 10:
         return False
@@ -160,12 +155,26 @@ def is_clean_english_query(query: str) -> bool:
         return False
     if is_lookup_query(query):
         return False
+    if allow_multilingual:
+        return True
     letters = [c for c in query if c.isalpha()]
     if letters:
         non_ascii = sum(1 for c in letters if ord(c) > 127)
         if non_ascii / len(letters) > 0.15:
             return False
     return not is_probably_non_english(query)
+
+
+def is_clean_english_query(query: str) -> bool:
+    """True when a query is single-heading-addressable English work.
+
+    Rejects: operator/URL junk, uppercase Boolean operators, negation terms,
+    phone numbers and bare numeric prefixes, queries outside the 4-60 char /
+    <=10 word band, >15% non-ASCII text, and probable non-English queries.
+    """
+    if not query or len(query.strip()) > 60:
+        return False
+    return is_clean_query(query, allow_multilingual=False)
 
 
 # --------------------------------------------------------------- pre-flight
@@ -216,8 +225,12 @@ def enforce_url_title_lock(conn: sqlite3.Connection, cooldown_days: int = 21) ->
     Downgrades pending title mutations on recently shipped URLs to H2/table-only enrichments,
     merging secondary queries and keeping max priority_score to prevent token loss on deduplication.
     """
+    from datetime import datetime, timedelta, timezone
+    from seo_shared import utc_iso_now
+
     auto_graduate_shipped_query_siblings(conn)
     cur = conn.cursor()
+    cutoff_iso = utc_iso_now(datetime.now(timezone.utc) - timedelta(days=cooldown_days))
     # Find all recently shipped pages with title mutations
     cur.execute(
         """
@@ -225,9 +238,9 @@ def enforce_url_title_lock(conn: sqlite3.Connection, cooldown_days: int = 21) ->
         FROM atomic_task_backlog
         WHERE status = 'SHIPPED'
           AND action_code IN ('INJECT_EXACT_TITLE_AND_H2', 'REWRITE_SNIPPET_AND_TOP_300PX', 'CREATE_PROGRAMMATIC_ROUTE')
-          AND shipped_at >= datetime('now', ?)
+          AND shipped_at >= ?
         """,
-        (f"-{cooldown_days} days",),
+        (cutoff_iso,),
     )
     shipped_pages = {row[0] for row in cur.fetchall()}
     if not shipped_pages:

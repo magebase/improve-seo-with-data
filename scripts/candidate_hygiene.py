@@ -159,6 +159,9 @@ def is_lookup_query(query: str) -> bool:
     letters = sum(1 for c in text if c.isalpha())
     if digits == 0:
         return False
+    # Allow statutory/tax form codes (e.g. "form 1040", "1099 nec") when paired with text.
+    if letters >= 3 and digits <= 4:
+        return False
     # Bare numeric prefix, or a dialable number with at most two stray letters.
     return letters == 0 or (digits >= 7 and letters <= 2)
 
