@@ -79,6 +79,22 @@ from ltr_ranker import (
 )
 
 
+def scope_rows_to_urls(
+    rows: list[dict[str, Any]], allowed_urls: set[str] | None
+) -> list[dict[str, Any]]:
+    """Keep only rows whose page belongs to the declared indexable footprint.
+
+    ``--keep-urls`` and ``--sitemap`` exist because a curated footprint is the
+    only set Google can see. The queue and the state-DB cursor must obey the
+    same scope; otherwise retired noindex pages keep collecting title/inlink
+    tasks and consume cursor capacity.
+    """
+    if allowed_urls is None:
+        return rows
+    allowed = {str(url).strip() for url in allowed_urls if str(url).strip()}
+    return [row for row in rows if str(row.get("page") or "").strip() in allowed]
+
+
 def _train_on_the_fly(rows: list[dict[str, Any]], models_dir: str) -> dict[str, Any]:
     """Always-on fallback: trains a bootstrap-grade ranker on the very rows
     being scored (and persists it so later runs reuse the bundle)."""
@@ -1429,6 +1445,18 @@ def main(argv: list[str] | None = None) -> int:
             "(net expected value <= 0 - an expected loss is never shippable work)."
         )
 
+    # Curated-footprint scope: never let a retired/noindex page consume a
+    # queue slot or a state-DB cursor slot just because it still has GSC rows.
+    if growth_urls is not None:
+        before = len(queue)
+        queue = scope_rows_to_urls(queue, growth_urls)
+        rescue_rows = scope_rows_to_urls(rescue_rows, growth_urls)
+        if before != len(queue):
+            print(
+                f"Footprint scope: {before} -> {len(queue)} queue task(s) "
+                "inside the declared keep list."
+            )
+
     # Per-domain quota: a big property must not crowd young properties out of
     # the queue; slice the globally ranked queue per registered domain.
     if args.per_domain_top > 0:
@@ -1509,6 +1537,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.state_db:
         conn = connect_state_db(args.state_db)
         pending = full_backlog + queue if args.compile_wave > 0 else queue
+        if growth_urls is not None:
+            pending = scope_rows_to_urls(pending, growth_urls)
         added = enqueue_tasks(conn, pending)
         recorded_launches = record_launches_from_tasks(conn, pending)
         if recorded_launches:
