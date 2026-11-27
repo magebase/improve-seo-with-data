@@ -317,6 +317,7 @@ The planner never emits a `LAUNCH_*` action as a fallback. A zero-evidence domai
 
 **Stateful rules**
 
+- `score_backlog --keep-urls/--sitemap` scopes the emitted queue **and** the state-DB cursor to the declared indexable footprint. A retired/noindex page with residual GSC rows never gets a title, inlink, or launch task.
 - `growth_actions.action_key = hash(domain, page, query, action_code, target)`. An `OPEN` or recently `SHIPPED` key is never re-emitted inside the cooldown.
 - `plan --record` writes the run and opens its actions; `complete` marks the shipped action and sets a 21-day review date; `review` compares clicks/position against the recorded baseline and marks `SUCCESS` or `FAILED`.
 - A successful action raises the measured prior for that action/route family; a failed action is not repeated by the next run.
