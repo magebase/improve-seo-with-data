@@ -30,7 +30,7 @@ import json
 import math
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -38,7 +38,15 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from bootstrap_labels import generate_bootstrap_grades
-from collect_features import fetch_sitemap_urls
+from fleet_state import (
+    DEFAULT_TYPE_CAP_FALLBACK,
+    DEFAULT_TYPE_CAPS,
+    connect_state_db,
+    domain_indexed_rate,
+    enqueue_tasks,
+    lease_tasks,
+    pending_count,
+)
 from indexation_forecast import MODEL_PATH as INDEXATION_MODEL_PATH
 from indexation_forecast import (
     IndexationModel,
@@ -46,36 +54,28 @@ from indexation_forecast import (
     domain_health_gate,
     record_launches_from_tasks,
 )
-from fleet_state import (
-    DEFAULT_TYPE_CAPS,
-    DEFAULT_TYPE_CAP_FALLBACK,
-    connect_state_db,
-    domain_indexed_rate,
-    enqueue_tasks,
-    lease_tasks,
-    pending_count,
-)
 from ltr_ranker import (
     EXPLOIT_SLOTS,
     EXPLORE_SLOTS,
     FEATURES,
     MIN_TRAINABLE_ROWS,
     compile_wave_backlog,
+    derive_sibling_counts,
     detect_cannibalization,
+    detect_feature_drift_psi,
     filter_cooldown,
     filter_launch_queue,
     heuristic_base_score,
     load_bundle,
     load_cooldown_keys,
+    partition_demand_and_rescue,
     prescribe_action,
     prescribe_all_actions,
     record_shipped,
     save_bundle,
     slice_per_domain,
     split_action_queue,
-    partition_demand_and_rescue,
     train_seo_ranker,
-    derive_sibling_counts,
 )
 
 
@@ -872,6 +872,31 @@ def score_rows(
         f"Scoring {len(rows)} candidates with trained {bundle['objective']} model ..."
     )
     X = np.array([[float(r["features"][f]) for f in bundle["features"]] for r in rows])
+    bundle_meta = bundle.get("meta") or {}
+    drift_report: dict[str, Any] = {"drifted": False, "max_psi": 0.0, "feature_psi": {}}
+    ref_sample = bundle_meta.get("reference_sample")
+    if isinstance(ref_sample, list) and ref_sample:
+        drift_report = detect_feature_drift_psi(np.asarray(ref_sample, dtype=float), X)
+        if drift_report.get("drifted"):
+            print(
+                f"WARNING: Feature distribution drift detected (max PSI={drift_report['max_psi']} > 0.25); "
+                "consider retraining ranker on fresh fleet outcomes."
+            )
+
+    stale_bundle = False
+    trained_at_raw = str(bundle_meta.get("trained_at") or "").strip()
+    if trained_at_raw:
+        try:
+            from datetime import datetime, timezone
+
+            dt = datetime.fromisoformat(trained_at_raw.replace("Z", "+00:00"))
+            age_days = (datetime.now(timezone.utc) - dt).total_seconds() / 86400.0
+            stale_bundle = age_days > 30.0
+        except Exception:
+            stale_bundle = False
+    if stale_bundle:
+        print("WARNING: Ranker bundle is >30 days old (stale_bundle=True); schedule train_ranker.py.")
+
     raw_scores = bundle["model"].predict(X)
     if bundle.get("used_init_score"):
         base_scores = np.array(
@@ -940,7 +965,13 @@ def score_rows(
             row["ranking_probability"] = estimate_ranking_probability(row)
         except Exception:
             row["ranking_probability"] = {"model": "unavailable", "p_top10": None}
-    return {"mode": "trained_model", "label_mode": label_mode, "rows": rows}
+    return {
+        "mode": "trained_model",
+        "label_mode": label_mode,
+        "rows": rows,
+        "drift_report": drift_report,
+        "stale_bundle": stale_bundle,
+    }
 
 
 def extract_top_shap_string(task: dict[str, Any], top_n: int = 3) -> str:
@@ -982,7 +1013,7 @@ def extract_selection_rationale(task: dict[str, Any]) -> str:
     elif "TABLE" in action or "SPEC" in action:
         return f"Competitor DOM analysis indicates structured data table deficit for '{query}'; prioritized for search conversion."
     elif "INLINK" in action or "HUB" in action or "CLUSTER" in action:
-        return f"Negative hub internal linking attribution detected; contextual link injection elevates PageRank equity."
+        return "Negative hub internal linking attribution detected; contextual link injection elevates PageRank equity."
     elif "CTR" in action or "SCHEMA" in action:
         return f"High impressions with zero clicks indicates snippet presentation failure for '{query}'; hook rewrite unlocks CTR."
     elif "ROUTE" in action or "PROGRAMMATIC" in action:
@@ -1060,6 +1091,32 @@ def merge_leased_into_output(output_path: str, leased: list, hygiene: dict) -> N
     payload["hygiene"] = hygiene
     with open(output_path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
+
+
+def _enforce_growth_guarantee(output_path: str, plan: dict[str, Any]) -> int:
+    """Drop title/CTR queue tasks when the plan is not a positive-lift plan.
+
+    A queue task and a growth plan that disagree is worse than either alone:
+    the planner can say ``indexation_prerequisite`` while the executor still
+    receives sixteen title rewrites. Keep the artifact internally consistent.
+    """
+    if plan.get("guarantee") == "positive_expected_click_lift":
+        return 0
+    try:
+        with open(output_path, encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception:
+        return 0
+    suppressed = len(payload.get("queue") or []) + len(payload.get("leased") or [])
+    if not suppressed:
+        return 0
+    payload["queue"] = []
+    payload["leased"] = []
+    payload["suppressed_queue_count"] = suppressed
+    payload["suppressed_reason"] = plan.get("guarantee")
+    with open(output_path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2)
+    return suppressed
 
 
 def _attach_growth_plan(output_path: str, plan: dict[str, Any]) -> None:
@@ -1221,7 +1278,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.state_db and args.lease_size > 0:
         from fleet_state import (
             connect_state_db as _connect,
+        )
+        from fleet_state import (
             lease_tasks as _lease,
+        )
+        from fleet_state import (
             pending_count as _pending,
         )
 
@@ -1300,6 +1361,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             _print_growth_plan(growth_plan)
+            if _enforce_growth_guarantee(args.output, growth_plan):
+                print("  Queue suppressed: plan is not positive_expected_click_lift.")
             fast_conn.close()
             return 0
         fast_conn.close()
@@ -1402,7 +1465,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 sitemap_urls: list[str] = []
                 try:
-                    sitemap_urls = fetch_sitemap_urls(target_domain or "")
+                    sitemap_urls = list(fetch_sitemap_urls(target_domain or ""))
                 except Exception:
                     sitemap_urls = []
                 health = domain_indexed_rate(
@@ -1524,6 +1587,8 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "site": payload.get("site"),
                 "scoring_mode": result["mode"],
+                "drift_report": result.get("drift_report"),
+                "stale_bundle": result.get("stale_bundle", False),
                 "queue": queue,
                 "route_rescue": rescue_rows[:50],
                 "consolidation": consolidation_tasks,
@@ -1624,6 +1689,11 @@ def main(argv: list[str] | None = None) -> int:
         _print_growth_plan(growth_plan)
         conn.close()
         _attach_growth_plan(args.output, growth_plan)
+        if _enforce_growth_guarantee(args.output, growth_plan):
+            queue = []
+            leased = []
+            rescue_rows = []
+            print("  Queue suppressed: plan is not positive_expected_click_lift.")
     else:
         from growth_loop import build_growth_plan
 
@@ -1636,6 +1706,10 @@ def main(argv: list[str] | None = None) -> int:
         print(format_model_decision_summary([], queue=queue, model_mode=result["mode"]))
         _print_growth_plan(growth_plan)
         _attach_growth_plan(args.output, growth_plan)
+        if _enforce_growth_guarantee(args.output, growth_plan):
+            queue = []
+            rescue_rows = []
+            print("  Queue suppressed: plan is not positive_expected_click_lift.")
     if consolidation_tasks:
         print(
             f"\nCannibalization: {len(consolidation_tasks)} CONSOLIDATE_CANNIBALIZED_URLS task(s):"
