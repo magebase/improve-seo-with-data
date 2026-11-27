@@ -17,7 +17,7 @@ from collect_features import (
     inspect_coverage_states,
     inspection_target_urls,
 )
-from fleet_state import connect_state_db, save_url_inspections
+from fleet_state import connect_state_db, load_url_inspections, save_url_inspections
 
 
 def _items(*types):
@@ -126,6 +126,10 @@ class TestForcedInspection(unittest.TestCase):
             self.assertEqual(calls, [url])
             self.assertEqual(
                 result[url]["coverage_state"], "Submitted and indexed"
+            )
+            persisted = load_url_inspections(conn, [url], max_age_hours=24 * 7)
+            self.assertEqual(
+                persisted[url]["coverage_state"], "Submitted and indexed"
             )
 
 if __name__ == "__main__":
